@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     mode: str
     # Database
     db_hostname: str
-    db_port: str
+    db_port: int
     db_name: str
     db_username: str
     db_password: str

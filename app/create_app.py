@@ -5,23 +5,27 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import root
-from app.routes import email
+# from app.routes import email
 from app.redis_client import redis_client
 from app.core.logger import get_logger
 from app.metrics import request_counter
 from app.metrics import response_counter
 from app.metrics import response_histogram
+from app.db.database import create_pool, close_pool
+
 
 logger = get_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     """FastApi lifecycle."""
+    await create_pool()
 
     yield
 
     try:
+        await close_pool()
         await redis_client.close()
         await redis_client.connection_pool.disconnect()
     except Exception as e:
@@ -40,6 +44,7 @@ def create_app() -> FastAPI:
         "https://wwww.athenax.co",
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:5173",
     ]
 
     @app.middleware("http")
@@ -75,6 +80,6 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(root.router)
-    app.include_router(email.router)
+    # app.include_router(email.router)
 
     return app
