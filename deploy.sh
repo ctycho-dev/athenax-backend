@@ -3,7 +3,7 @@
 git restore .
 git pull origin main
 
-docker build . -t leeblock_fastapi
+docker build . -t athenax-backend
 
 docker-compose down
 docker-compose up -d
