@@ -1,31 +1,59 @@
 version: "3.8"
 
 services:
-  web:
-    image: athenax-backend  # Specify the image name (if you're building this image locally)
-    build: .  # This will build the image from the Dockerfile in the current directory
-    restart: always
-    env_file:
-      - .env  # This will load environment variables from the .env file
-    ports:
-      - "8000:8000"  # Expose FastAPI app on port 8000
-    depends_on:
-      - redis  # Ensure the Redis container starts before the FastAPI app
-    networks:
-      - backend-network
-    environment:
-      - REDIS_URL=redis://redis:6379  # Use Redis service name as the hostname
+  # web:
+  #   image: athenax-backend  # Specify the image name (if you're building this image locally)
+  #   build: .  # This will build the image from the Dockerfile in the current directory
+  #   restart: always
+  #   env_file:
+  #     - .env  # This will load environment variables from the .env file
+  #   ports:
+  #     - "8000:8000"  # Expose FastAPI app on port 8000
+  #   depends_on:
+  #     - redis  # Ensure the Redis container starts before the FastAPI app
+  #   networks:
+  #     - athenax_network
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379  # Use Redis service name as the hostname
 
+  # redis:
+  #   image: redis:alpine3.20  # Use the official Redis image
+  #   container_name: redis-server
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"  # Expose Redis server on port 6379
+  #   networks:
+  #     - athenax_network  # Ensure both containers are on the same network
+  #   command: ["redis-server", "--bind", "0.0.0.0"]
+  
+  mongodb:
+    image: mongo:7.0.14
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    env_file:
+      - .env
+    networks:
+      - athenax_network
+    restart: always
+  
   redis:
-    image: redis:alpine3.20  # Use the official Redis image
+    image: redis:alpine3.20
     container_name: redis-server
     restart: always
     ports:
-      - "6379:6379"  # Expose Redis server on port 6379
+      - "6379:6379"
     networks:
-      - backend-network  # Ensure both containers are on the same network
+      - athenax_network
     command: ["redis-server", "--bind", "0.0.0.0"]
 
 networks:
-  backend-network:
-    driver: bridge  # Create a network to allow communication between services
+  athenax_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:

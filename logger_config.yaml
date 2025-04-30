@@ -17,7 +17,7 @@ handlers:
     filename: logout.log
 loggers:
   root:
-    level: DEBUG
+    level: INFO
     handlers: [file]
   sampleLogger:
     level: INFO
