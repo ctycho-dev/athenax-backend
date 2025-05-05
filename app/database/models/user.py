@@ -55,42 +55,26 @@ class User(Document):
         ]
 
     # ---- Password Methods (Class-contained security logic) ----
-    # def set_password(self, password: str):
-    #     """Securely hash and store password with Argon2"""
-    #     if len(password) < 12:
-    #         raise ValueError("Password must be at least 12 characters")
-    #     self.hashed_password = ph.hash(password)
+    def set_password(self, password: str):
+        """Securely hash and store password with Argon2"""
+        if len(password) < 12:
+            raise ValueError("Password must be at least 12 characters")
+        self.hashed_password = ph.hash(password)
         
-    # def verify_password(self, password: str) -> bool:
-    #     """Verify password against Argon2 hash"""
-    #     if not self.hashed_password:
-    #         return False
-    #     try:
-    #         return ph.verify(self.hashed_password, password)
-    #     except (exceptions.VerifyMismatchError, exceptions.InvalidHashError):
-    #         return False
+    def verify_password(self, password: str) -> bool:
+        """Verify password against Argon2 hash"""
+        if not self.hashed_password:
+            return False
+        try:
+            return ph.verify(self.hashed_password, password)
+        except (exceptions.VerifyMismatchError, exceptions.InvalidHashError):
+            return False
             
-    # def requires_rehash(self) -> bool:
-    #     """Check if hash needs updating (e.g., after algorithm upgrade)"""
-    #     if not self.hashed_password:
-    #         return False
-    #     return ph.check_needs_rehash(self.hashed_password)
-
-    # ---- Auth Validation ----
-    # @field_validator('email')
-    # def validate_email_domain(self, v):
-    #     if v and v.endswith('@athenax.co') and self.role == UserRole.USER:
-    #         # Auto-promote to BD role for company emails
-    #         self.role = UserRole.BD
-    #     return v
-
-    # @field_validator('linked_accounts')
-    # def validate_auth_methods(self, v, values):
-    #     """Ensure at least one auth method exists"""
-    #     if not values.get('privy_id') and not values.get('hashed_password'):
-    #         raise ValueError("User must have either Privy ID or password auth")
-    #     return v
-
+    def requires_rehash(self) -> bool:
+        """Check if hash needs updating (e.g., after algorithm upgrade)"""
+        if not self.hashed_password:
+            return False
+        return ph.check_needs_rehash(self.hashed_password)
 
 
 

@@ -15,7 +15,7 @@ async def rate_limiter(request: Request, call_next):
 
         # Get the endpoint path
         endpoint = request.url.path
-        logger.info(host, endpoint)
+        logger.info('Request from: %s, endpoint: %s', host, endpoint)
         
         # Create a unique key
         window = 60  # seconds

@@ -3,6 +3,7 @@ from app.core.dependencies import get_current_user, get_user_repo
 from app.schemas.user import UserCreate, UserOut
 from app.infrastructure.repository.user import UserRepository
 from app.core.logger import get_logger
+from app.services.user_service import UserService
 
 logger = get_logger()
 
@@ -87,16 +88,11 @@ async def create_user(
                 detail="User already exists"
             )
 
-        # Create new user
-        new_user = await db_repo.create(data)
-        if not new_user:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user"
-            )
-            
+        user_service = UserService(db_repo)
+        new_user = await user_service.create_user(data)
+
         return new_user
-        
+
     except HTTPException:
         # Re-raise known HTTP exceptions
         raise

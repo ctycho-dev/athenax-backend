@@ -1,8 +1,23 @@
 """ Configuration """
-from pydantic_settings import BaseSettings
+import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_DIR = '.env'
+
+if os.getenv('mode') == 'dev':
+    ENV_DIR = './.env.dev'
 
 
 class Settings(BaseSettings):
+    """Application settings."""
+
+    model_config = SettingsConfigDict(
+        env_file=['.env', ENV_DIR],
+        env_file_encoding='utf-8',
+        extra="allow",
+        case_sensitive=False,
+    )
+
     # FastAPI
     host: str
     port: int
@@ -46,9 +61,6 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
-
-    class Config:
-        env_file = '.env'
 
 
 settings = Settings()
