@@ -1,6 +1,10 @@
 import time
 from fastapi import Request, HTTPException
 from app.infrastructure.redis.redis_client import redis_client
+from app.core.logger import get_logger
+
+
+logger = get_logger()
 
 
 async def rate_limiter(request: Request, call_next):
@@ -8,10 +12,10 @@ async def rate_limiter(request: Request, call_next):
     try:
         # Get client host (works behind proxies if configured properly)
         host = request.client.host if request.client else "unknown_host"
-        print(host)
+
         # Get the endpoint path
         endpoint = request.url.path
-        print(endpoint)
+        logger.info(host, endpoint)
         
         # Create a unique key
         window = 60  # seconds
