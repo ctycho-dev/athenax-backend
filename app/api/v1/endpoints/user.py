@@ -106,3 +106,73 @@ async def create_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while creating user"
         ) from e
+    
+
+# from fastapi.security import OAuth2PasswordRequestForm
+# from datetime import timedelta
+
+# @router.post("/login/password")
+# async def login_with_password(
+#     form_data: OAuth2PasswordRequestForm = Depends(),
+#     db_repo: UserRepository = Depends(get_user_repo)
+# ) -> dict:
+#     """
+#     Authenticate with email/password
+    
+#     Args:
+#         form_data: Standard OAuth2 form with username=email
+#         db_repo: User repository
+        
+#     Returns:
+#         dict: Access token and user info
+        
+#     Raises:
+#         HTTPException: 401 for invalid credentials
+#     """
+#     try:
+#         # 1. Find user by email
+#         user = await db_repo.get_by_email(form_data.username)
+#         if not user:
+#             raise HTTPException(
+#                 status_code=status.HTTP_401_UNAUTHORIZED,
+#                 detail="Invalid credentials"
+#             )
+
+#         # 2. Verify password
+#         if not user.verify_password(form_data.password):
+#             raise HTTPException(
+#                 status_code=status.HTTP_401_UNAUTHORIZED,
+#                 detail="Invalid credentials"
+#             )
+
+#         # 3. Check email verification
+#         if not user.email_verified:
+#             raise HTTPException(
+#                 status_code=status.HTTP_403_FORBIDDEN,
+#                 detail="Email not verified"
+#             )
+
+#         # 4. Update login stats
+#         user.last_login_at = datetime.now()
+#         user.login_count += 1
+#         await user.save()
+
+#         # 5. Generate token
+#         access_token = create_access_token(
+#             data={"sub": user.email},
+#             expires_delta=timedelta(minutes=30)
+            
+#         return {
+#             "access_token": access_token,
+#             "token_type": "bearer",
+#             "user": UserOut.from_orm(user)
+#         }
+        
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error("Login error: %s", e)
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail="Login failed"
+#         )

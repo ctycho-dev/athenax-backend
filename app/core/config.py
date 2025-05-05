@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     email_to: str
 
     # Creds
+    AUTH_PEPPER: str
     secret_key: str
     algorithm: str
     access_token_expire_minutes: int
