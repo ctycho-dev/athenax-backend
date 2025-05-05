@@ -47,8 +47,10 @@ app.middleware('http')(rate_limiter)
 
 
 origins = [
-    "https://wwww.athenax.co",
+    "https://www.athenax.co",
     "http://localhost:5173",
+    "https://athenax-git-dev-ilnurs-projects-de603604.vercel.app",
+    "https://node23.ru",
 ]
 
 
