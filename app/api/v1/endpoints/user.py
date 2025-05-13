@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
+
+from app.middleware.rate_limiter import limiter
 from app.core.dependencies import get_current_user, get_user_repo
 from app.schemas.user import UserCreate, UserOut
 from app.infrastructure.repository.user import UserRepository
@@ -11,20 +13,22 @@ router = APIRouter()
 
 
 @router.get("/me/", response_model=UserOut)
-async def get_or_create_user(
+@limiter.limit("30/minute")
+async def get_user(
+    request: Request,
     privy_id: str = Depends(get_current_user),
     db_repo: UserRepository = Depends(get_user_repo)
 ) -> UserOut:
     """
     Get user details for the currently authenticated user.
-    
+
     Args:
         privy_id: The authenticated user's Privy ID obtained from the dependency
         db_repo: User repository instance for database operations
-        
+
     Returns:
         UserOut: The user details if found
-        
+
     Raises:
         HTTPException: 500 if there's an unexpected database error
     """
@@ -50,22 +54,24 @@ async def get_or_create_user(
 
 
 @router.post("/", response_model=UserOut)
+@limiter.limit("5/minute")
 async def create_user(
+    request: Request,
     data: UserCreate,
     privy_id: str = Depends(get_current_user),
     db_repo: UserRepository = Depends(get_user_repo)
 ) -> UserOut:
     """
     Create a new user after validating authorization.
-    
+
     Args:
         data: User creation data validated by UserCreate schema
         privy_id: The authenticated user's Privy ID obtained from the dependency
         db_repo: User repository instance for database operations
-        
+
     Returns:
         UserOut: The newly created user details
-        
+
     Raises:
         HTTPException: 
             - 403 if authorization fails

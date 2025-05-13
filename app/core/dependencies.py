@@ -4,7 +4,7 @@ import urllib
 import jwt
 from jwt import PyJWKClient
 from jose import JWTError
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.infrastructure.repository.wishlist import WishlistRepository
 from app.infrastructure.repository.audit import AuditRepository
@@ -32,6 +32,7 @@ jwks_client = PyJWKClient(
 
 
 async def get_current_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials = Depends(security)
 ) -> str:
     """
@@ -47,7 +48,7 @@ async def get_current_user(
 
     try:
         signing_key = jwks_client.get_signing_key_from_jwt(creds.credentials)
-        
+
         decoded = jwt.decode(
             creds.credentials,
             signing_key.key,
@@ -55,6 +56,8 @@ async def get_current_user(
             audience=settings.PRIVY_APP_ID,
             algorithms=["ES256"]
         )
+        user_id = decoded['sub']
+        request.state.user = user_id
         return decoded['sub']
     except urllib.error.URLError as e:
         logger.error("Network error accessing JWKS URL: %s", e)

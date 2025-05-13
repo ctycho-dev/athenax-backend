@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.routers import api_router
 from app.core.config import settings
@@ -8,7 +10,7 @@ from app.database.connection import db_manager
 from app.services.storj_services import storj_service
 from app.core.logger import get_logger, cleanup_logger
 from app.infrastructure.redis.redis_client import redis_client
-from app.middleware.rate_limiter import rate_limiter
+from app.middleware.rate_limiter import limiter, rate_limit_exceeded_handler
 
 logger = get_logger()
 
@@ -42,9 +44,11 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-
-app.middleware('http')(rate_limiter)
-
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    rate_limit_exceeded_handler
+)
 
 origins = [
     "https://www.athenax.co",
@@ -62,6 +66,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SlowAPIMiddleware)
+
 # Include API routers
 app.include_router(api_router, prefix=settings.api_version)
 
@@ -69,5 +75,6 @@ logger.info('Start application')
 
 
 @app.get("/health")
-async def health_check():
+@limiter.limit("5/minute")
+async def health_check(request: Request):
     return {"status": "healthy"}

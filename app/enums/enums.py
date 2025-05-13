@@ -1,6 +1,14 @@
 from enum import Enum
 
 
+class AppMode(str, Enum):
+    """App mode."""
+
+    PROD = "prod"
+    DEV = "dev"
+    TEST = "test"
+
+
 class UserRole(str, Enum):
     """Enum representing possible user roles in the system.
 
