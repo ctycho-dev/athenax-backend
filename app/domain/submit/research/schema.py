@@ -1,15 +1,19 @@
-from typing import Optional
+from uuid import (
+    uuid4,
+    UUID
+)
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, field_serializer
-from app.enums.enums import ReportState
-
-class StoredFile(BaseModel):
-    """File schema."""
-
-    bucket: str
-    key: str
-    original_filename: str
-    content_type: str
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    field_serializer,
+    Field
+)
+from app.enums.enums import (
+    ReportState,
+    UserRole
+)
+from app.infrastructure.storage.schema import StoredFile
 
 
 class Step1(BaseModel):
@@ -20,10 +24,10 @@ class Step1(BaseModel):
     contactEmail: str
     primaryContactName: str
     primaryContactRole: str
-    twitter: Optional[str] = None
-    discord: Optional[str] = None
-    telegram: Optional[str] = None
-    github: Optional[str] = None
+    twitter: str | None
+    discord: str | None
+    telegram: str | None
+    github: str | None
 
 
 class Step2(BaseModel):
@@ -38,7 +42,7 @@ class Step3(BaseModel):
     """Product and technical information"""
     productDesc: str
     useCases: str
-    techArchitecture: Optional[str] = None
+    techArchitecture: str | None
     integrations: str
 
 
@@ -85,21 +89,21 @@ class Step9(BaseModel):
     mediaCoverage: str
     communityContent: str
     brand: str
-    brandLink: Optional[str] = None
-    brandZip: Optional[StoredFile] = None
+    brandLink: str | None
+    brandZip: StoredFile | None
 
 
 class Step10(BaseModel):
     """Documentation and materials"""
     whitepaper: str
-    whitepaperLink: Optional[str] = None
-    whitepaperZip: Optional[StoredFile] = None
+    whitepaperLink: str | None
+    whitepaperZip: StoredFile | None
     faq: str
-    faqLink: Optional[str] = None
-    faqZip: Optional[StoredFile] = None
+    faqLink: str | None
+    faqZip: StoredFile | None
     materials: str
-    materialsLink: Optional[str] = None
-    materialsZip: Optional[StoredFile] = None
+    materialsLink: str | None
+    materialsZip: StoredFile | None
 
 
 class ResearchSteps(BaseModel):
@@ -117,13 +121,27 @@ class ResearchSteps(BaseModel):
     step10: Step10
 
 
+class Comment(BaseModel):
+    """"""
+    id: UUID = Field(
+        default_factory=uuid4,
+        description="Unique identifier."
+    )
+    role: UserRole = UserRole.USER
+    content: str
+    created_at: datetime = Field(
+        default_factory=datetime.now,
+        description="Timestamp when the record was created"
+    )
+
+
 class ResearchOut(BaseModel):
     """All steps."""
 
     id: str
     steps: ResearchSteps
     state: ReportState
-    admin_comment: Optional[str]
+    comments: Comment | None
     user_privy_id: str
     created_at: datetime
     updated_at: datetime
@@ -141,8 +159,8 @@ class ResearchOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ResearchFormSchema(BaseModel):
+class ResearchSubmitSchema(BaseModel):
     """Project audit schema."""
 
     steps: ResearchSteps
-    user_privy_id: Optional[str] = None
+    user_privy_id: str | None

@@ -6,12 +6,17 @@ from jwt import PyJWKClient
 from jose import JWTError
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.infrastructure.repository.wishlist import WishlistRepository
-from app.infrastructure.repository.audit import AuditRepository
-from app.infrastructure.repository.research import ResearchRepository
-from app.infrastructure.repository.user import UserRepository
+from app.domain.wishlist.repository import WishlistRepository
+from app.domain.submit.audit.repository import AuditRepository
+from app.domain.submit.research.repository import ResearchRepository
+from app.domain.user.repository import UserRepository
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.domain.user.model import User
+from app.domain.submit.audit.service import AuditService
+from app.domain.submit.research.service import ResearchService
+# from app.services.storj import StorjService
+from app.domain.user.service import UserService
 
 # Set the SSL certificate path explicitly
 os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
@@ -29,61 +34,6 @@ jwks_client = PyJWKClient(
     max_cached_keys=5,
     cache_keys=True
 )
-
-
-async def get_current_user(
-    request: Request,
-    creds: HTTPAuthorizationCredentials = Depends(security)
-) -> str:
-    """
-    Dependency that verifies Privy JWT and returns decoded token
-    Raises 401 if token is invalid
-    """
-    if not creds:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        signing_key = jwks_client.get_signing_key_from_jwt(creds.credentials)
-
-        decoded = jwt.decode(
-            creds.credentials,
-            signing_key.key,
-            issuer="privy.io",
-            audience=settings.PRIVY_APP_ID,
-            algorithms=["ES256"]
-        )
-        user_id = decoded['sub']
-        request.state.user = user_id
-        return decoded['sub']
-    except urllib.error.URLError as e:
-        logger.error("Network error accessing JWKS URL: %s", e)
-        raise HTTPException(
-            status_code=502,
-            detail="Authentication service unavailable"
-        ) from e
-    except jwt.PyJWKClientError as e:
-        logger.error("JWKS client error: %s", e)
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to retrieve signing keys"
-        ) from e
-    except JWTError as e:
-        logger.error('Invalid authentication credentials')
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from e
-    except Exception as e:
-        logger.error('Get Current User: %s', e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Token verification failed: {str(e)}"
-        ) from e
 
 
 def get_user_repo() -> UserRepository:
@@ -104,3 +54,91 @@ def get_audit_repo() -> AuditRepository:
 def get_research_repo() -> ResearchRepository:
 
     return ResearchRepository()
+
+
+async def get_current_user(
+    request: Request,
+    creds: HTTPAuthorizationCredentials = Depends(security),
+    user_repo: UserRepository = Depends(get_user_repo)
+) -> User:
+    """
+    Dependency that verifies Privy JWT and returns decoded token
+    Raises 401 if token is invalid
+    """
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        signing_key = jwks_client.get_signing_key_from_jwt(creds.credentials)
+
+        decoded = jwt.decode(
+            creds.credentials,
+            signing_key.key,
+            issuer="privy.io",
+            audience=settings.PRIVY_APP_ID,
+            algorithms=["ES256"],
+            leeway=10
+        )
+        user_id = decoded['sub']
+        request.state.user = user_id
+
+        user = await user_repo.get_by_privy_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        return user
+    except urllib.error.URLError as e:
+        logger.error("Network error accessing JWKS URL: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail="Authentication service unavailable"
+        ) from e
+    except jwt.PyJWKClientError as e:
+        logger.error("JWKS client error: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve signing keys"
+        ) from e
+    except JWTError as e:
+        logger.error('Invalid authentication credentials')
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error('Get Current User: %s', e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token verification failed: {str(e)}"
+        ) from e
+
+
+def get_user_service(
+    repo: UserRepository = Depends(get_user_repo),
+) -> UserService:
+    return UserService(repo)
+
+
+def get_audit_service(
+    repo: AuditRepository = Depends(get_audit_repo),
+    user: User = Depends(get_current_user),
+):
+    return AuditService(repo=repo, user=user)
+
+
+def get_research_service(
+    repo: ResearchRepository = Depends(get_research_repo),
+    user: User = Depends(get_current_user),
+):
+    return ResearchService(repo=repo, user=user)
+

@@ -1,12 +1,11 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
-    audit,
-    research,
     user,
     email,
     storj,
     wishlist
 )
+from app.api.v1.endpoints.submit import audit, research
 
 api_router = APIRouter()
 

@@ -7,7 +7,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.api.routers import api_router
 from app.core.config import settings
 from app.database.connection import db_manager
-from app.services.storj_services import storj_service
+from app.infrastructure.storage.storj.service import storj_service
+from app.infrastructure.storage.cloudflareR2.service import r2_service
 from app.core.logger import get_logger, cleanup_logger
 from app.infrastructure.redis.redis_client import redis_client
 from app.middleware.rate_limiter import limiter, rate_limit_exceeded_handler
@@ -27,7 +28,8 @@ async def lifespan(_: FastAPI):
             raise
 
         try:
-            storj_service.connect()
+            # storj_service.connect()
+            r2_service.connect()
         except Exception as e:
             logger.error("Error disconnecting storage: %s", e, exc_info=True)
 
@@ -38,7 +40,9 @@ async def lifespan(_: FastAPI):
         await db_manager.disconnect()
         await redis_client.close()
         await redis_client.connection_pool.disconnect()
-        storj_service.disconnect()
+        # storj_service.disconnect()
+        r2_service.disconnect()
+
         cleanup_logger()
 
 

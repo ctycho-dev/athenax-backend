@@ -1,6 +1,6 @@
-from app.infrastructure.repository.base import BaseRepository
-from app.database.models.wishlist import WishlistCollection
-from app.schemas.wishlist import WishlistIn
+from app.common.base_repository import BaseRepository
+from app.domain.wishlist.model import WishlistCollection
+from app.domain.wishlist.schema import WishlistIn
 
 
 class WishlistRepository(

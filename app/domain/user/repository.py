@@ -1,10 +1,10 @@
-from app.infrastructure.repository.base import BaseRepository
-from app.database.models.audit import AuditForm
-from app.schemas.audit import AuditOut, AuditFormSchema
+from app.common.base_repository import BaseRepository
+from app.domain.user.model import User
+from app.domain.user.schema import UserCreate, UserOut
 
 
-class AuditRepository(
-    BaseRepository[AuditForm, AuditOut, AuditFormSchema]
+class UserRepository(
+    BaseRepository[User, UserOut, UserCreate]
 ):
     """
     MongoDB repository implementation for managing users.
@@ -17,12 +17,12 @@ class AuditRepository(
         """
         Initializes the UserRepository with the UserCollection and UserOut schema.
         """
-        super().__init__(AuditForm, AuditOut, AuditFormSchema)
+        super().__init__(User, UserOut, UserCreate)
 
-    async def get_by_user(
+    async def get_by_privy_id(
         self,
         privy_id: str,
-    ) -> list[AuditOut] | None:
+    ) -> User | None:
         """
         Get user by privy_id with optional field projection.
 
@@ -33,6 +33,6 @@ class AuditRepository(
             User model instance or None if not found
 
         """
-        data = await AuditForm.find({"user_privy_id": privy_id}).to_list()
+        user = await User.find_one({"privy_id": privy_id})
 
-        return [AuditOut(**self._serialize(x.model_dump())) for x in data]
+        return user

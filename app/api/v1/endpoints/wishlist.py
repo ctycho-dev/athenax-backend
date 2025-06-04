@@ -3,9 +3,9 @@ from fastapi import (
     Response, Request, status
 )
 from app.middleware.rate_limiter import limiter
-from app.infrastructure.repository.wishlist import WishlistRepository
+from app.domain.wishlist.repository import WishlistRepository
 from app.core.dependencies import get_wislist_repo
-from app.schemas.wishlist import WishlistIn
+from app.domain.wishlist.schema import WishlistIn
 from app.core.config import settings
 from app.enums.enums import AppMode
 

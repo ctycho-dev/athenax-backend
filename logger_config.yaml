@@ -1,19 +1,20 @@
 version: 1
 disable_existing_loggers: False
 formatters:
-  default:
-    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    datefmt: '%Y-%m-%d %H:%M:%S'
+  json:
+    (): pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(levelname)s %(name)s %(message)s'
+    datefmt: '%Y-%m-%dT%H:%M:%S%z'
 handlers:
   console:
     class: logging.StreamHandler
     level: DEBUG
-    formatter: default
+    formatter: json
     stream: ext://sys.stdout
   file:
     class: logging.FileHandler
     level: DEBUG
-    formatter: default
+    formatter: json
     filename: logout.log
 loggers:
   root:
@@ -23,3 +24,30 @@ loggers:
     level: INFO
     handlers: [console]
     propagate: False
+
+
+# version: 1
+# disable_existing_loggers: False
+# formatters:
+#   default:
+#     format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+#     datefmt: '%Y-%m-%d %H:%M:%S'
+# handlers:
+#   console:
+#     class: logging.StreamHandler
+#     level: DEBUG
+#     formatter: default
+#     stream: ext://sys.stdout
+#   file:
+#     class: logging.FileHandler
+#     level: DEBUG
+#     formatter: default
+#     filename: logout.log
+# loggers:
+#   root:
+#     level: INFO
+#     handlers: [file]
+#   sampleLogger:
+#     level: INFO
+#     handlers: [console]
+#     propagate: False

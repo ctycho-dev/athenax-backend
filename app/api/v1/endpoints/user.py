@@ -1,11 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
-
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    Request
+)
 from app.middleware.rate_limiter import limiter
-from app.core.dependencies import get_current_user, get_user_repo
-from app.schemas.user import UserCreate, UserOut
-from app.infrastructure.repository.user import UserRepository
+from app.core.dependencies import get_current_user
+from app.domain.user.schema import UserCreate, UserOut
+from app.domain.user.model import User
 from app.core.logger import get_logger
-from app.services.user_service import UserService
+from app.core.dependencies import get_user_service
+from app.domain.user.service import UserService
+from app.utils.serialize import serialize
 
 logger = get_logger()
 
@@ -16,37 +23,19 @@ router = APIRouter()
 @limiter.limit("30/minute")
 async def get_user(
     request: Request,
-    privy_id: str = Depends(get_current_user),
-    db_repo: UserRepository = Depends(get_user_repo)
+    current_user: User = Depends(get_current_user),
 ) -> UserOut:
     """
     Get user details for the currently authenticated user.
-
-    Args:
-        privy_id: The authenticated user's Privy ID obtained from the dependency
-        db_repo: User repository instance for database operations
-
-    Returns:
-        UserOut: The user details if found
-
-    Raises:
-        HTTPException: 500 if there's an unexpected database error
     """
     try:
-        user = await db_repo.get_by_privy_id(privy_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        return user
-
+        user_dict = serialize(current_user.model_dump())
+        return UserOut(**user_dict)
     except HTTPException:
-        # Re-raise known HTTP exceptions
+        logger.error("Error fetching user %s: %s", current_user.privy_id, e, exc_info=True)
         raise
     except Exception as e:
-        logger.error("Error fetching user %s: %s", privy_id, e, exc_info=True)
+        logger.error("Error fetching user %s: %s", current_user.privy_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching user details"
@@ -58,8 +47,8 @@ async def get_user(
 async def create_user(
     request: Request,
     data: UserCreate,
-    privy_id: str = Depends(get_current_user),
-    db_repo: UserRepository = Depends(get_user_repo)
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service)
 ) -> UserOut:
     """
     Create a new user after validating authorization.
@@ -79,31 +68,13 @@ async def create_user(
             - 500 if there's an unexpected database error
     """
     try:
-        # Authorization check
-        if data.privy_id != privy_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
-                detail="Not authorized"
-            )
-
-        # Check for existing user
-        existing_user = await db_repo.get_by_privy_id(privy_id)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists"
-            )
-
-        user_service = UserService(db_repo)
-        new_user = await user_service.create_user(data)
-
-        return new_user
-
+        user_dict = serialize(current_user.model_dump())
+        return await service.create_user(data, UserOut(**user_dict))
     except HTTPException:
         # Re-raise known HTTP exceptions
         raise
     except Exception as e:
-        logger.error("Error creating user %s: %s", privy_id, e, exc_info=True)
+        logger.error("Error creating user %s: %s", current_user.privy_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while creating user"

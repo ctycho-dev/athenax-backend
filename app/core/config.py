@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     MONGO_INITDB_ROOT_PASSWORD: str
     MONGO_INITDB_DATABASE: str
 
+    # Cloudflare R2
+    R2_ACCESS_KEY: str
+    R2_SECRET_KEY: str
+    R2_ENDPOINT: str
+
     # STORJ
     STORJ_ACCESS_KEY: str
     STORJ_SECRET_KEY: str

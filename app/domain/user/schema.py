@@ -44,9 +44,6 @@ class LinkedAccount(BaseModel):
     chainType: Optional[str] = None
     connectorType: Optional[str] = None
     walletClientType: Optional[str] = None
-    # verified_at: Optional[datetime] = None
-    # first_verified_at: Optional[datetime] = None
-    # latest_verified_at: Optional[datetime] = None
 
 
 class Wallet(BaseModel):
@@ -78,7 +75,7 @@ class UserCreate(BaseModel):
     privy_id: str
     linked_accounts: list[LinkedAccount] = []
     # wallets: list[Wallet] = []
-    created_at: datetime = Field(default_factory=datetime.now)
+    # created_at: datetime = Field(default_factory=datetime.now)
     metadata: dict = Field(default_factory=dict)
     role: UserRole = UserRole.USER
     has_accepted_terms: bool = False
@@ -94,6 +91,7 @@ class UserOut(BaseModel):
         email (EmailStr): The user's email address.
         created_at (datetime): The timestamp when the user was created.
     """
+    id: str
     privy_id: str
     linked_accounts: Optional[list[LinkedAccount]]
     # wallets: Optional[list[Wallet]]

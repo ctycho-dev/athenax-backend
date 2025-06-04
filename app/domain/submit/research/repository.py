@@ -1,10 +1,10 @@
-from app.infrastructure.repository.base import BaseRepository
-from app.database.models.research import ResearchForm
-from app.schemas.research import ResearchFormSchema, ResearchOut
+from app.common.base_repository import BaseRepository
+from app.domain.submit.research.model import ResearchSubmit
+from app.domain.submit.research.schema import ResearchSubmitSchema, ResearchOut
 
 
 class ResearchRepository(
-    BaseRepository[ResearchForm, ResearchOut, ResearchFormSchema]
+    BaseRepository[ResearchSubmit, ResearchOut, ResearchSubmitSchema]
 ):
     """
     MongoDB repository implementation for managing users.
@@ -17,7 +17,7 @@ class ResearchRepository(
         """
         Initializes the UserRepository with the UserCollection and UserOut schema.
         """
-        super().__init__(ResearchForm, ResearchOut, ResearchFormSchema)
+        super().__init__(ResearchSubmit, ResearchOut, ResearchSubmitSchema)
 
     async def get_by_user(
         self,
@@ -33,6 +33,6 @@ class ResearchRepository(
             User model instance or None if not found
 
         """
-        data = await ResearchForm.find({"user_privy_id": privy_id}).to_list()
+        data = await ResearchSubmit.find({"user_privy_id": privy_id}).to_list()
 
         return [ResearchOut(**self._serialize(x.model_dump())) for x in data]

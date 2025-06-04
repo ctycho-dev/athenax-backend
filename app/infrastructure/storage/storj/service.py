@@ -1,9 +1,10 @@
 from uuid import uuid4
+from urllib.parse import quote
 import boto3
 from botocore.client import Config
 from fastapi import UploadFile, HTTPException
 
-from app.schemas.audit import StoredFile
+from app.domain.submit.audit.schema import StoredFile
 from app.core.config import settings
 from app.core.logger import get_logger
 
@@ -49,7 +50,7 @@ class StorjService:
 
     def make_permanent_url(self, bucket: str, key: str) -> str:
         """Generate a permanent public URL"""
-        return f"https://link.storjshare.io/raw/{self._access_key}/{bucket}/{key}"
+        return f"https://link.storjshare.io/raw/{self._access_key}/{bucket}/{quote(key, safe='')}"
 
     def make_temporary_url(self, bucket: str, key: str, expires_in: int = 604800) -> str:
         """Generate a temporary presigned URL"""
@@ -71,7 +72,7 @@ class StorjService:
         self,
         file: UploadFile,
         bucket: str,
-        make_public: bool = False
+        make_public: bool = True
     ) -> StoredFile:
         """Upload a file to Storj"""
         if not self.is_connected():
@@ -96,7 +97,8 @@ class StorjService:
                 bucket=bucket,
                 key=key,
                 original_filename=file.filename if file.filename else 'default',
-                content_type=file.content_type if file.content_type else 'application/txt'
+                content_type=file.content_type if file.content_type else 'application/txt',
+                url=self.make_permanent_url(bucket, key)
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")

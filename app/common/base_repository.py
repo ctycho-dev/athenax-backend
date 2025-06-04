@@ -5,6 +5,8 @@ from beanie import PydanticObjectId, Document
 from pydantic import BaseModel
 
 from app.exceptions import NotFoundError, DatabaseError
+from app.domain.user.schema import UserOut
+from app.domain.user.model import User
 
 
 T = TypeVar('T', bound=Document)
@@ -100,7 +102,12 @@ class BaseRepository(Generic[T, S, C]):
         except Exception as e:
             raise DatabaseError(f"Failed to retrieve all entities: {str(e)}") from e
 
-    async def create(self, entity: C, schema: Optional[Type[S]] = None) -> S:
+    async def create(
+        self,
+        entity: C,
+        schema: Optional[Type[S]] = None,
+        current_user: Optional[User] = None
+    ) -> S:
         """
         Create a new entity in the collection.
 
@@ -115,10 +122,15 @@ class BaseRepository(Generic[T, S, C]):
         """
         try:
             if isinstance(entity, BaseModel):
-                entity = self.collection(**entity.dict())
+                entity = self.collection(**entity.model_dump())
+                if current_user:
+                    if hasattr(entity, 'created_by'):
+                        entity.created_by = current_user
+                    if hasattr(entity, 'updated_by'):
+                        entity.updated_by = current_user
 
             created_entity = await self.collection.create(entity)
-            created_entity_dict = self._serialize(created_entity.dict())
+            created_entity_dict = self._serialize(created_entity.model_dump())
 
             return (schema or self.default_schema)(**created_entity_dict)
         except Exception as e:
@@ -128,7 +140,8 @@ class BaseRepository(Generic[T, S, C]):
         self,
         _id: str,
         update_data: Union[Dict[str, Any], BaseModel],
-        schema: Optional[Type[S]] = None
+        schema: Optional[Type[S]] = None,
+        current_user: Optional[User] = None
     ) -> S:
         """
         Update an entity in the collection.
@@ -137,6 +150,7 @@ class BaseRepository(Generic[T, S, C]):
             _id (str): The ID of the entity to update.
             update_data (Union[Dict[str, Any], BaseModel]): The data to update. Can be a dictionary or a Pydantic schema.
             schema (Optional[Type[S]]): The schema to use for serialization. If None, uses the default schema.
+            current_user (Optional[User]): The current user performing the update.
 
         Returns:
             S: The updated entity model.
@@ -151,7 +165,7 @@ class BaseRepository(Generic[T, S, C]):
                     exclude_unset=True,
                     exclude={'created_at', 'id'}
                 )
-            
+
             entity = await self.collection.get(PydanticObjectId(_id))
             if not entity:
                 raise NotFoundError(f"Entity with ID {_id} not found")
@@ -160,7 +174,12 @@ class BaseRepository(Generic[T, S, C]):
                 if key not in {'created_at', 'id'}:
                     setattr(entity, key, value)
 
-            setattr(entity, 'updated_at', datetime.now())
+            if hasattr(entity, 'updated_at'):
+                entity.updated_at = datetime.now()
+
+            if current_user and hasattr(entity, 'updated_by'):
+                entity.updated_by = current_user
+
             await entity.save()
 
             updated_entity_dict = self._serialize(entity.model_dump())
