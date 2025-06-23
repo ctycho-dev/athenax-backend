@@ -1,12 +1,12 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
-    audit,
-    research,
     user,
     email,
     storj,
+    article,
     wishlist
 )
+from app.api.v1.endpoints.submit import audit, research
 
 api_router = APIRouter()
 
@@ -20,6 +20,12 @@ api_router.include_router(
     research.router,
     prefix="/research",
     tags=["Research"]
+)
+
+api_router.include_router(
+    article.router,
+    prefix="/article",
+    tags=["Article"]
 )
 
 api_router.include_router(

@@ -1,6 +1,14 @@
 from enum import Enum
 
 
+class AppMode(str, Enum):
+    """App mode."""
+
+    PROD = "prod"
+    DEV = "dev"
+    TEST = "test"
+
+
 class UserRole(str, Enum):
     """Enum representing possible user roles in the system.
 
@@ -55,3 +63,10 @@ class ReportState(str, Enum):
     def get_default(cls) -> 'ReportState':
         """Returns the default state (SUBMITTED)."""
         return cls.SUBMITTED
+
+
+class ArticleState(str, Enum):
+
+    DRAFT = "Draft"
+    PUBLISHED = "Published"
+    ARCHIVED = "Archived"

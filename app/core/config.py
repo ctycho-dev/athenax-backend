@@ -2,23 +2,24 @@
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ENV_DIR = '.env'
 
-if os.getenv('mode') == 'dev':
-    ENV_DIR = './.env.dev'
+def get_env_file():
+    mode = os.getenv('mode', 'prod')
+    return f'.env.{mode}' if mode in ['dev', 'test'] else '.env'
 
 
 class Settings(BaseSettings):
     """Application settings."""
 
     model_config = SettingsConfigDict(
-        env_file=['.env', ENV_DIR],
+        env_file=['.env', get_env_file()],
         env_file_encoding='utf-8',
         extra="allow",
         case_sensitive=False,
     )
 
     # FastAPI
+    mode: str = os.getenv('mode', 'prod')
     host: str
     port: int
     api_version: str
@@ -34,6 +35,11 @@ class Settings(BaseSettings):
     MONGO_INITDB_ROOT_PASSWORD: str
     MONGO_INITDB_DATABASE: str
 
+    # Cloudflare R2
+    R2_ACCESS_KEY: str
+    R2_SECRET_KEY: str
+    R2_ENDPOINT: str
+
     # STORJ
     STORJ_ACCESS_KEY: str
     STORJ_SECRET_KEY: str
@@ -42,14 +48,13 @@ class Settings(BaseSettings):
     # Redis
     redis_host: str
     redis_port: int
-    mode: str
 
     # Database
-    db_hostname: str
-    db_port: int
-    db_name: str
-    db_username: str
-    db_password: str
+    # db_hostname: str
+    # db_port: int
+    # db_name: str
+    # db_username: str
+    # db_password: str
 
     # Email
     email_from: str

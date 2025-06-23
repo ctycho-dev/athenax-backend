@@ -1,10 +1,11 @@
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.core.config import settings
-from app.database.models.wishlist import WishlistCollection
-from app.database.models.audit import AuditForm
-from app.database.models.research import ResearchForm
-from app.database.models.user import User
+from app.domain.wishlist.model import WishlistCollection
+from app.domain.submit.audit.model import AuditSubmit
+from app.domain.submit.research.model import ResearchSubmit
+from app.domain.article.model import Article
+from app.domain.user.model import User
 
 
 class DatabaseManager:
@@ -26,9 +27,10 @@ class DatabaseManager:
             database=self.client.get_database(settings.MONGO_INITDB_DATABASE),
             document_models=[
                 WishlistCollection,
-                AuditForm,
-                ResearchForm,
-                User
+                AuditSubmit,
+                ResearchSubmit,
+                User,
+                Article
             ],
         )
 

@@ -1,0 +1,88 @@
+version: "3.8"
+
+x-healthcheck-mongodb-template: &mongodbhealthcheck
+  healthcheck:
+    test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+    interval: 30s
+    timeout: 30s
+    retries: 3
+
+x-healthcheck-redis-template: &redishealthcheck
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 30s
+    timeout: 30s
+    retries: 3
+
+services:
+  mongodb:
+    image: mongo:7.0.14
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    env_file:
+      - .env.dev
+    networks:
+      - athenax_network
+    restart: always
+    <<: *mongodbhealthcheck
+
+  redis:
+    image: redis:alpine3.20
+    container_name: redis-server
+    restart: always
+    ports:
+      - "6379:6379"
+    env_file:
+      - .env.dev
+    networks:
+      - athenax_network
+    command: ["redis-server", "--bind", "0.0.0.0"]
+    <<: *redishealthcheck
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - athenax_network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - athenax_network
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /Users/ilnurgumerov/development/onekey/athenax-backend:/logs:ro
+    depends_on:
+      - elasticsearch
+    networks:
+      - athenax_network
+
+networks:
+  athenax_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:

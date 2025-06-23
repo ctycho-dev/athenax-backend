@@ -1,0 +1,24 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /logs/logout.log
+    fields:
+      service: athenax
+    multiline.pattern: '^\d{4}-\d{2}-\d{2}'   # Starts with a date (for multiline logs)
+    multiline.negate: true
+    multiline.match: after
+
+    # Since your logs will be JSON now, better to use json decoding:
+    json.keys_under_root: true       # Put JSON keys at root level
+    json.add_error_key: true         # Add error key if JSON parsing fails
+
+    # You can keep dissect if your logs are not JSON, but recommended to switch to JSON format for logs as previously suggested.
+
+# Elasticsearch output
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+# Kibana config
+setup.kibana:
+  host: "http://kibana:5601"

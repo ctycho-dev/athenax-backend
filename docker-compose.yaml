@@ -1,5 +1,26 @@
 version: "3.8"
 
+x-healthcheck-mongodb-template: &mongodbhealthcheck
+  healthcheck:
+    test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+    interval: 30s
+    timeout: 30s
+    retries: 3
+
+x-healthcheck-redis-template: &redishealthcheck
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 30s
+    timeout: 30s
+    retries: 3
+
+x-healthcheck-backend: &backendhealthcheck
+  healthcheck:
+    test: ["CMD", "sh", "-c", "echo 'Checking backend health via /health' && curl -f http://localhost:8000/health || exit 1"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
+
 services:
   web:
     image: athenax-backend
@@ -10,10 +31,14 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - athenax_network
-  
+    <<: *backendhealthcheck
+
   mongodb:
     image: mongo:7.0.14
     container_name: mongodb
@@ -27,7 +52,8 @@ services:
     networks:
       - athenax_network
     restart: always
-  
+    <<: *mongodbhealthcheck
+
   redis:
     image: redis:alpine3.20
     container_name: redis-server
@@ -37,6 +63,7 @@ services:
     networks:
       - athenax_network
     command: ["redis-server", "--bind", "0.0.0.0"]
+    <<: *redishealthcheck
 
 networks:
   athenax_network:
