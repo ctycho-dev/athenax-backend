@@ -12,14 +12,14 @@ from app.middleware.rate_limiter import limiter
 from app.exceptions import NotFoundError
 from app.domain.submit.audit.schema import (
     AuditSubmitSchema,
-    CommentCreateSchema
+    CommentCreateSchema,
+    StateUpdateSchema
 )
 from app.core.dependencies import get_audit_service
 from app.core.logger import get_logger
 from app.core.config import settings
 from app.enums.enums import AppMode
 from app.domain.submit.audit.service import AuditService
-from app.enums.enums import ReportState
 
 
 logger = get_logger()
@@ -36,21 +36,21 @@ async def get_audits(
     Retrieve all audit records.
 
     Args:
-        request (Request): Incoming HTTP request
-        service (AuditService): Injected audit service with repo and user context
+        request (Request): Incoming HTTP request.
+        service (AuditService): Injected audit service.
 
     Returns:
-        List[AuditOut]: List of audit records
+        List[AuditOut]: List of all audits.
 
     Raises:
-        HTTPException: 500 Internal Server Error on unexpected failure
+        HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
         return await service.get_all()
     except Exception as e:
-        logger.error("Unexpected error in get_audits: %s", e)
+        logger.error("[get_audits] Unexpected error: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Internal server error"
         ) from e
 
@@ -62,28 +62,27 @@ async def get_audits_by_user(
     service: AuditService = Depends(get_audit_service),
 ):
     """
-    Retrieve all audit records associated with the authenticated user.
+    Retrieve audit records submitted by the current user.
 
     Args:
-        request (Request): Incoming HTTP request
-        service (AuditService): Audit service instance
-        current_user (UserOut): Currently authenticated user
+        request (Request): Incoming HTTP request.
+        service (AuditService): Injected audit service.
 
     Returns:
-        List[AuditOut]: User-specific audit records
+        List[AuditOut]: List of audits by the user.
 
     Raises:
-        HTTPException: 500 Internal Server Error on unexpected failure
+        HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
         return await service.get_by_user()
     except Exception as e:
-        logger.error("Unexpected error in get_audits_by_user: %s", e)
+        logger.error("[get_audits_by_user] Unexpected error: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Internal server error"
         ) from e
-    
+
 
 @router.get("/state/{state}")
 @limiter.limit("100/minute")
@@ -93,27 +92,28 @@ async def get_audits_by_state(
     service: AuditService = Depends(get_audit_service),
 ):
     """
-    Retrieve all audit records in a specific state, sorted from newest to oldest.
+    Retrieve audit records filtered by a specific state.
 
     Args:
-        request (Request): Incoming HTTP request
-        state (ReportState): State to filter audits by
-        service (AuditService): Audit service instance
+        request (Request): Incoming HTTP request.
+        state (str): The audit state to filter by.
+        service (AuditService): Injected audit service.
 
     Returns:
-        List[AuditOut]: Audit records matching the given state
+        List[AuditOut]: List of audits matching the given state.
 
     Raises:
-        HTTPException: 500 Internal Server Error on unexpected failure
+        HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
         return await service.get_by_state(state)
     except Exception as e:
-        logger.error("Unexpected error in get_audits_by_state: %s", e)
+        logger.error("[get_audits_by_state] Unexpected error: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Internal server error"
         ) from e
+
 
 @router.get("/{audit_id}")
 @limiter.limit("100/minute")
@@ -123,52 +123,65 @@ async def get_audit(
     service: AuditService = Depends(get_audit_service),
 ):
     """
-    Retrieve a specific audit record by ID.
+    Retrieve a specific audit record by its ID.
 
     Args:
-        request (Request): Incoming HTTP request
-        audit_id (str): UUID of the audit record
-        service (AuditService): Audit service instance
+        request (Request): Incoming HTTP request.
+        audit_id (str): UUID of the audit.
+        service (AuditService): Injected audit service.
 
     Returns:
-        AuditOut: Audit record matching the given ID
+        AuditOut: The requested audit record.
 
     Raises:
-        HTTPException: 404 if not found
-        HTTPException: 500 Internal Server Error on unexpected failure
+        HTTPException: 404 if audit not found.
+        HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
         return await service.get_by_id(audit_id)
     except NotFoundError as e:
-        logger.error("Audit not found: %s", audit_id)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
-        ) from e
-    except HTTPException:
-        raise
+        logger.error("[get_audit] Audit not found: %s", audit_id)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("Unexpected error in get_audit: %s", e)
+        logger.error("[get_audit] Unexpected error: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Internal server error"
         ) from e
 
 
-# @router.patch("/{audit_id}/state")
-# @limiter.limit("5/minute")
-# async def update_audit_state(
-#     audit_id: str,
-#     data: StateUpdateSchema,
-#     service: AuditService = Depends(get_audit_service),
-# ):
-#     try:
-#         await service.update_state(audit_id, data.state)
-#         return JSONResponse(status_code=200, content={"success": True})
-#     except NotFoundError as e:
-#         raise HTTPException(status_code=404, detail=str(e))
-#     except Exception as e:
-#         logger.error("Error updating state: %s", e)
-#         raise HTTPException(status_code=500, detail="Internal server error")
+@router.patch("/{audit_id}/state")
+@limiter.limit("5/minute")
+async def update_audit_state(
+    request: Request,
+    audit_id: str,
+    data: StateUpdateSchema,
+    service: AuditService = Depends(get_audit_service),
+):
+    """
+    Update the state of a specific audit record.
+
+    Args:
+        audit_id (str): UUID of the audit.
+        data (StateUpdateSchema): New state value.
+        service (AuditService): Injected audit service.
+
+    Returns:
+        JSONResponse: {"success": True} on success.
+
+    Raises:
+        HTTPException: 404 if audit not found.
+        HTTPException: 500 Internal Server Error on unexpected failure.
+    """
+    try:
+        await service.update_state(audit_id, data.state)
+        return JSONResponse(status_code=200, content={"success": True})
+    except NotFoundError as e:
+        logger.error("[update_audit_state] Audit not found: %s", audit_id)
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.error("[update_audit_state] Unexpected error: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/{audit_id}/comment")
@@ -179,14 +192,31 @@ async def add_audit_comment(
     data: CommentCreateSchema,
     service: AuditService = Depends(get_audit_service),
 ):
+    """
+    Add a comment to a specific audit record.
+
+    Args:
+        request (Request): Incoming HTTP request.
+        audit_id (str): UUID of the audit.
+        data (CommentCreateSchema): Comment payload.
+        service (AuditService): Injected audit service.
+
+    Returns:
+        JSONResponse: {"success": True} on success.
+
+    Raises:
+        HTTPException: 404 if audit not found.
+        HTTPException: 500 Internal Server Error on unexpected failure.
+    """
     try:
         await service.add_comment(audit_id, data.comment)
         return JSONResponse(status_code=200, content={"success": True})
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("[add_audit_comment] Audit not found: %s", audit_id)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("Error adding comment: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error("[add_audit_comment] Unexpected error: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.patch("/{audit_id}")
@@ -198,41 +228,38 @@ async def update_audit(
     service: AuditService = Depends(get_audit_service),
 ):
     """
-    Update an existing audit record.
-
-    Only the owner of the audit can perform the update.
+    Update an existing audit record. Only the audit owner may perform this operation.
 
     Args:
-        request (Request): Incoming HTTP request
-        audit_id (str): UUID of the audit to update
-        data (AuditSubmitSchema): New data to update
-        service (AuditService): Audit service instance
-        current_user (UserOut): Currently authenticated user
+        request (Request): Incoming HTTP request.
+        audit_id (str): UUID of the audit.
+        data (AuditSubmitSchema): Updated audit data.
+        service (AuditService): Injected audit service.
 
     Returns:
-        JSONResponse: { "success": True } on success
+        JSONResponse: {"success": True} on success.
 
     Raises:
-        HTTPException: 401 if not authorized
-        HTTPException: 404 if audit not found
-        HTTPException: 422 on validation error
-        HTTPException: 500 Internal Server Error on unexpected failure
+        HTTPException: 401 if unauthorized.
+        HTTPException: 404 if audit not found.
+        HTTPException: 422 on validation error.
+        HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
         await service.update(audit_id, data)
         return JSONResponse(status_code=200, content={"success": True})
     except ValueError as e:
-        logger.error("Validation error in update_audit: %s", e)
+        logger.error("[update_audit] Validation error: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail=str(e)
         ) from e
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Unexpected error in update_audit: %s", e)
+        logger.error("[update_audit] Unexpected error: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail="Internal server error"
         ) from e
 
@@ -248,35 +275,29 @@ async def create_audit(
     Create a new audit record.
 
     Args:
-        request (Request): Incoming HTTP request
-        data (AuditSubmitSchema): Data for the new audit
-        service (AuditService): Audit service instance
-        current_user (UserOut): Currently authenticated user
+        request (Request): Incoming HTTP request.
+        data (AuditSubmitSchema): Payload for the new audit.
+        service (AuditService): Injected audit service.
 
     Returns:
-        JSONResponse: { "success": True } on success
+        JSONResponse: {"success": True} on success.
 
     Raises:
-        HTTPException: 422 on validation error
-        HTTPException: 500 Internal Server Error on unexpected failure
+        HTTPException: 422 on validation error.
+        HTTPException: 500 Internal Server Error on unexpected failure.
     """
     try:
         if settings.mode == AppMode.TEST:
-            return Response(status_code=status.HTTP_200_OK)
+            return Response(status_code=200)
 
         await service.create(data)
         return JSONResponse(status_code=200, content={"success": True})
     except ValueError as e:
-        logger.error("Validation error in create_audit: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        ) from e
-    except HTTPException:
+        logger.error("[create_audit] Validation error: %s", e)
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except HTTPException as e:
+        logger.error("[create_audit] HTTPException: %s", e)
         raise
     except Exception as e:
-        logger.error("Unexpected error in create_audit: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        ) from e
+        logger.error("[create_audit] Unexpected error: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e

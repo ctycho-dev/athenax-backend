@@ -63,3 +63,10 @@ class ReportState(str, Enum):
     def get_default(cls) -> 'ReportState':
         """Returns the default state (SUBMITTED)."""
         return cls.SUBMITTED
+
+
+class ArticleState(str, Enum):
+
+    DRAFT = "Draft"
+    PUBLISHED = "Published"
+    ARCHIVED = "Archived"

@@ -47,9 +47,9 @@ async def get_user(
 async def create_user(
     request: Request,
     data: UserCreate,
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),
     service: UserService = Depends(get_user_service)
-) -> UserOut:
+) -> UserOut | None:
     """
     Create a new user after validating authorization.
 
@@ -68,13 +68,13 @@ async def create_user(
             - 500 if there's an unexpected database error
     """
     try:
-        user_dict = serialize(current_user.model_dump())
-        return await service.create_user(data, UserOut(**user_dict))
-    except HTTPException:
+        return await service.create_user(data)
+    except HTTPException as e:
+        logger.error("Error creating user %s: %s", data.privy_id, e, exc_info=True)
         # Re-raise known HTTP exceptions
-        raise
+        raise e
     except Exception as e:
-        logger.error("Error creating user %s: %s", current_user.privy_id, e, exc_info=True)
+        logger.error("Error creating user %s: %s", data.privy_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while creating user"

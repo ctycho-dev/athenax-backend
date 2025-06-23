@@ -31,25 +31,10 @@ class UserService:
     async def create_user(
         self,
         data: UserCreate,
-        current_user: UserOut
+        # current_user: UserOut
     ) -> UserOut:
         """Create user."""
         try:
-            # Authorization check
-            if data.privy_id != current_user.privy_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, 
-                    detail="Not authorized"
-                )
-
-            # Check for existing user
-            existing_user = await self.get_user_by_privy_id(current_user.privy_id)
-            if existing_user:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="User already exists"
-                )
-
             # Check user role
             has_bd_account = any(
                 account.type == "google_oauth"

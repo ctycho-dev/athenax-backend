@@ -133,7 +133,12 @@ class AuditSubmitSchema(BaseModel):
 
     steps: AuditSteps
     user_privy_id: str | None = None
-    state: ReportState | None = None
+    state: ReportState = ReportState.SUBMITTED
+
+
+class StateUpdateSchema(BaseModel):
+
+    state: ReportState
 
 
 class CommentCreateSchema(BaseModel):

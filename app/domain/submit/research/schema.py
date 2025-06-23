@@ -141,7 +141,7 @@ class ResearchOut(BaseModel):
     id: str
     steps: ResearchSteps
     state: ReportState
-    comments: Comment | None
+    comments: list[Comment] | None
     user_privy_id: str
     created_at: datetime
     updated_at: datetime
@@ -163,4 +163,14 @@ class ResearchSubmitSchema(BaseModel):
     """Project audit schema."""
 
     steps: ResearchSteps
-    user_privy_id: str | None
+    user_privy_id: str | None = None
+    state: ReportState = ReportState.SUBMITTED
+
+
+class StateUpdateSchema(BaseModel):
+
+    state: ReportState
+
+
+class CommentCreateSchema(BaseModel):
+    comment: str

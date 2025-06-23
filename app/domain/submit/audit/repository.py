@@ -23,15 +23,15 @@ class AuditRepository(
     BaseRepository[AuditSubmit, AuditOut, AuditSubmitSchema]
 ):
     """
-    MongoDB repository implementation for managing users.
+    MongoDB repository implementation for managing audit submissions.
 
-    This class extends the BaseRepository and implements the BaseRepository interface for the UserCollection,
-    providing CRUD operations and additional methods specific to users.
+    Extends BaseRepository to provide CRUD operations and custom query methods
+    for the AuditSubmit model.
     """
 
     def __init__(self):
         """
-        Initializes the UserRepository with the UserCollection and UserOut schema.
+        Initializes the AuditRepository with the AuditSubmit model and its associated schema.
         """
         super().__init__(AuditSubmit, AuditOut, AuditSubmitSchema)
 
@@ -40,31 +40,29 @@ class AuditRepository(
         privy_id: str,
     ) -> list[AuditOut] | None:
         """
-        Get user by privy_id with optional field projection.
+        Retrieve all audit submissions associated with a given user's privy_id.
 
         Args:
-            privy_id: The user's privy_id
+            privy_id (str): The user's privy ID.
 
         Returns:
-            User model instance or None if not found
-
+            list[AuditOut] | None: List of audits submitted by the user, or None if none found.
         """
         data = await AuditSubmit.find({"user_privy_id": privy_id}).to_list()
-
         return [AuditOut(**self._serialize(x.model_dump())) for x in data]
-    
+
     async def get_by_state(
         self,
         state: str,
     ) -> list[AuditOut]:
         """
-        Retrieve audits filtered by their report state, ordered by created_at descending.
+        Retrieve audit submissions filtered by report state, ordered by newest first.
 
         Args:
-            state (ReportState): The desired audit state.
+            state (str): Desired state to filter audits by.
 
         Returns:
-            List[AuditOut]: List of audits in the given state, newest first.
+            list[AuditOut]: List of audits in the given state.
         """
         data = (
             await AuditSubmit.find(Eq(AuditSubmit.state, state))
@@ -73,6 +71,43 @@ class AuditRepository(
         )
         return [AuditOut(**self._serialize(x.model_dump())) for x in data]
 
+    async def update_state(
+        self,
+        _id: str,
+        state: ReportState,
+        current_user: User | None
+    ) -> AuditOut:
+        """
+        Update the state of an audit submission by its ID.
+
+        Optionally updates metadata like `updated_at` and `updated_by`.
+
+        Args:
+            _id (str): The ID of the audit submission to update.
+            state (ReportState): The new state to assign.
+            current_user (User | None): The user performing the update.
+
+        Returns:
+            AuditOut: The updated audit submission.
+
+        Raises:
+            NotFoundError: If no audit with the specified ID is found.
+        """
+        doc = await self.collection.find_one({"_id": PydanticObjectId(_id)})
+        if not doc:
+            raise NotFoundError(f"Audit with ID {_id} not found")
+
+        doc.state = state
+
+        if hasattr(doc, 'updated_at'):
+            doc.updated_at = datetime.now()
+
+        if current_user and hasattr(doc, 'updated_by'):
+            doc.updated_by = current_user
+
+        await doc.save()
+        return AuditOut(**self._serialize(doc.model_dump()))
+
     async def add_comment(
         self,
         _id: str,
@@ -80,15 +115,27 @@ class AuditRepository(
         current_user: User | None
     ) -> Comment:
         """
-        Add a message to the workspace's messages array.
-        Update the last message and then append the new one.
+        Add a comment to an audit submission and update state if role is BD.
+
+        Also updates metadata like `updated_at` and `updated_by` if applicable.
+
+        Args:
+            _id (str): The ID of the audit submission to comment on.
+            comment (Comment): The comment to add.
+            current_user (User | None): The user performing the action.
+
+        Returns:
+            Comment: The comment that was added.
+
+        Raises:
+            NotFoundError: If the audit submission with the specified ID is not found.
         """
         doc = await self.collection.find_one({"_id": PydanticObjectId(_id)})
         if not doc:
-            raise NotFoundError(f"Workspace with ID {_id} not found")
+            raise NotFoundError(f"Audit with ID {_id} not found")
 
-        # Append the new message
         doc.comments.append(comment)
+
         if comment.role == UserRole.BD:
             doc.state = ReportState.UPDATE_INFO
 
@@ -99,5 +146,4 @@ class AuditRepository(
             doc.updated_by = current_user
 
         await doc.save()
-
         return comment

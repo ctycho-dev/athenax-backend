@@ -17,6 +17,8 @@ from app.domain.submit.audit.service import AuditService
 from app.domain.submit.research.service import ResearchService
 # from app.services.storj import StorjService
 from app.domain.user.service import UserService
+from app.domain.article.repository import ArticleRepository
+from app.domain.article.service import ArticleService
 
 # Set the SSL certificate path explicitly
 os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
@@ -54,6 +56,10 @@ def get_audit_repo() -> AuditRepository:
 def get_research_repo() -> ResearchRepository:
 
     return ResearchRepository()
+
+def get_article_repo() -> ArticleRepository:
+
+    return ArticleRepository()
 
 
 async def get_current_user(
@@ -123,6 +129,25 @@ async def get_current_user(
         ) from e
 
 
+async def get_optional_user(
+    request: Request,
+    creds: HTTPAuthorizationCredentials = Depends(security),
+    user_repo: UserRepository = Depends(get_user_repo)
+) -> User | None:
+    if not creds:
+        return None
+
+    try:
+        return await get_current_user(request, creds, user_repo)
+    except HTTPException as e:
+        if e.status_code in {401, 404, 502}:
+            return None  # Treat as unauthenticated
+        raise
+    except Exception as e:
+        logger.warning("Optional user failed: %s", e)
+        return None
+
+
 def get_user_service(
     repo: UserRepository = Depends(get_user_repo),
 ) -> UserService:
@@ -142,3 +167,16 @@ def get_research_service(
 ):
     return ResearchService(repo=repo, user=user)
 
+
+def get_article_service_with_auth(
+    repo: ArticleRepository = Depends(get_article_repo),
+    user: User = Depends(get_current_user)
+) -> ArticleService:
+    return ArticleService(repo=repo, user=user)
+
+
+def get_article_service_optional(
+    repo: ArticleRepository = Depends(get_article_repo),
+    user: User | None = Depends(get_optional_user)
+) -> ArticleService:
+    return ArticleService(repo=repo, user=user)

@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.domain.wishlist.model import WishlistCollection
 from app.domain.submit.audit.model import AuditSubmit
 from app.domain.submit.research.model import ResearchSubmit
+from app.domain.article.model import Article
 from app.domain.user.model import User
 
 
@@ -28,7 +29,8 @@ class DatabaseManager:
                 WishlistCollection,
                 AuditSubmit,
                 ResearchSubmit,
-                User
+                User,
+                Article
             ],
         )
 
