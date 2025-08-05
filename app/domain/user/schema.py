@@ -73,13 +73,40 @@ class UserCreate(BaseModel):
         password (str): The user's password.
     """
     privy_id: str
+    email: EmailStr | None = None
     linked_accounts: list[LinkedAccount] = []
     # wallets: list[Wallet] = []
-    # created_at: datetime = Field(default_factory=datetime.now)
     metadata: dict = Field(default_factory=dict)
     role: UserRole = UserRole.USER
     has_accepted_terms: bool = False
     is_guest: bool = False
+
+
+class UserUpdate(BaseModel):
+    """
+    Schema for updating user profile, bio, and social links.
+    All fields are optional for PATCH-style updates.
+    """
+    # --- Profile ---
+    name: Optional[str] = None
+    username: Optional[str] = None
+    bio: Optional[str] = None
+    location: Optional[str] = None
+    profile_image: Optional[str] = None
+
+    # --- Social usernames (flat) ---
+    github: Optional[str] = None
+    twitter: Optional[str] = None
+    linkedin: Optional[str] = None
+    instagram: Optional[str] = None
+    discord: Optional[str] = None
+
+    # --- Accept terms, guest status (not commonly updated, but included for completeness) ---
+    has_accepted_terms: Optional[bool] = None
+    is_guest: Optional[bool] = None
+
+    # --- Role (should only be modifiable by admins, so optional and use with care) ---
+    role: Optional[UserRole] = None
 
 
 class UserOut(BaseModel):
@@ -92,9 +119,27 @@ class UserOut(BaseModel):
         created_at (datetime): The timestamp when the user was created.
     """
     id: str
-    privy_id: str
-    linked_accounts: Optional[list[LinkedAccount]]
-    # wallets: Optional[list[Wallet]]
+    privy_id: str | None
+    email: EmailStr | None
+
+    # Public profile
+    username: str | None
+    name: str | None
+    bio: str | None
+    location: str | None
+    profile_image: str | None
+
+    # Soacial accounts
+    github: str | None
+    twitter: str | None
+    linkedin: str | None
+    instagram: str | None
+    discord: str | None
+
+    linked_accounts: list[LinkedAccount] | None
+    wallets: list[Wallet] | None
+    # metadata: dict | None
+
     role: UserRole
     has_accepted_terms: bool
     is_guest: bool
