@@ -25,6 +25,28 @@ This document outlines the backend design for the **ScholarX Research module**, 
 
 ---
 
+### Project Architecture
+athenax-backend/
+├── app/
+│   ├── api/             # API route definitions (e.g., hackathons, users)
+│   ├── common/          # Shared logic and response models
+│   ├── core/            # Configurations, logging, and startup
+│   ├── database/        # DB models, CRUD, and session management
+│   ├── domain/          # Core business entities (e.g., Hackathon, Project)
+│   ├── enums/           # Enum definitions (e.g., roles, statuses)
+│   ├── exceptions/      # Custom exception handlers
+│   ├── infrastructure/  # IPFS, external APIs, JWT, email, etc.
+│   ├── middleware/      # Authentication, error handling, etc.
+│   ├── tests/           # Unit and integration tests
+│   └── utils/           # Helper utilities
+├── Dockerfile           # Docker container setup
+├── docker-compose.yaml  # Docker services config
+├── start.sh             # Shell script to run the app
+├── requirements.txt     # Python dependencies
+├── README.md            # Project documentation
+
+---
+
 ### 👤 Users
 | Method | Endpoint | Description | Rate Limit |
 |--------|----------|-------------|------------|
