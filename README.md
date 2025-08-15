@@ -34,7 +34,7 @@ This document outlines the backend design for the **ScholarX Research module**, 
 
 ---
 
-### Research
+### 📚 Research
 | Method | Endpoint | Description | Rate Limit |
 |--------|----------|-------------|------------|
 | GET | /api/v1/research/ | Get all research records | `60/min` |
@@ -45,17 +45,6 @@ This document outlines the backend design for the **ScholarX Research module**, 
 | PATCH | /api/v1/research/{research_id}/state | Update research state | `10/min` |
 | POST | /api/v1/research/{research_id}/comment | Add comment to research | `15/min` |
 | GET | /api/v1/research/state/{state} | Get research by state | `30/min` |
-
----
-
-### 📝 Article
-| Method | Endpoint | Description | Rate Limit |
-|--------|----------|-------------|------------|
-| GET | `/api/v1/article/` | Get all articles | `60/min` |
-| POST | `/api/v1/article/` | Submit new article | `10/min` |
-| GET | `/api/v1/article/user/` | Get current user's articles | `30/min` |
-| GET | `/api/v1/article/{article_id}` | Get article by ID | `30/min` |
-| GET | `/api/v1/article/state/{state}` | Get articles by state | `30/min` |
 
 ---
 
