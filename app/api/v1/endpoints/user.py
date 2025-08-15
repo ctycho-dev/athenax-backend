@@ -7,7 +7,11 @@ from fastapi import (
 )
 from app.middleware.rate_limiter import limiter
 from app.core.dependencies import get_current_user
-from app.domain.user.schema import UserCreate, UserOut
+from app.domain.user.schema import (
+    UserCreate,
+    UserOut,
+    UserUpdate
+)
 from app.domain.user.model import User
 from app.core.logger import get_logger
 from app.core.dependencies import get_user_service
@@ -31,11 +35,14 @@ async def get_user(
     try:
         user_dict = serialize(current_user.model_dump())
         return UserOut(**user_dict)
-    except HTTPException:
-        logger.error("Error fetching user %s: %s", current_user.privy_id, e, exc_info=True)
-        raise
+    except ValueError as e:
+        logger.error('[get_user] ValueError: %s', e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException as e:
+        logger.error('[get_user] HTTPException: %s', e)
+        raise e
     except Exception as e:
-        logger.error("Error fetching user %s: %s", current_user.privy_id, e, exc_info=True)
+        logger.error('[get_user] Exception: %s', e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching user details"
@@ -69,17 +76,60 @@ async def create_user(
     """
     try:
         return await service.create_user(data)
+    except ValueError as e:
+        logger.error('[create_user] ValueError: %s', e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException as e:
-        logger.error("Error creating user %s: %s", data.privy_id, e, exc_info=True)
-        # Re-raise known HTTP exceptions
+        logger.error('[create_user] HTTPException: %s', e)
         raise e
     except Exception as e:
-        logger.error("Error creating user %s: %s", data.privy_id, e, exc_info=True)
+        logger.error('[create_user] Exception: %s', e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while creating user"
+            detail="An error occurred while fetching user details"
         ) from e
-    
+
+
+@router.patch("/")
+@limiter.limit("15/minute")
+async def update_user(
+    request: Request,
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service)
+):
+    """
+    Update profile, bio, or social links for the current user.
+    Only provided fields will be updated.
+
+    Args:
+        data: Fields to update, validated by UserUpdate schema.
+
+    Returns:
+        UserOut: The updated user object.
+
+    Raises:
+        HTTPException:
+            - 400 for validation errors
+            - 404 if user not found
+            - 500 for unexpected errors
+    """
+    try:
+        updated_user = await service.update(str(current_user.id), data)
+        return updated_user
+    except ValueError as e:
+        logger.error('[update_user] ValueError: %s', e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException as e:
+        logger.error('[update_user] HTTPException: %s', e)
+        raise e
+    except Exception as e:
+        logger.error('[update_user] Exception: %s', e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while updating user details"
+        ) from e
+
 
 # from fastapi.security import OAuth2PasswordRequestForm
 # from datetime import timedelta

@@ -5,7 +5,10 @@ from beanie import Document, Indexed
 from pydantic import Field, EmailStr, field_validator
 from argon2 import PasswordHasher, exceptions
 from app.enums.enums import UserRole
-from app.domain.user.schema import LinkedAccount
+from app.domain.user.schema import (
+    LinkedAccount,
+    Wallet
+)
 
 
 # Initialize Argon2 with production-grade parameters
@@ -22,23 +25,38 @@ class User(Document):
     """Enhanced user model supporting both Privy and email/password auth"""
     
     # Authentication fields
-    privy_id: Optional[Indexed(str, unique=True)] = None
-    email: Optional[Indexed(EmailStr, unique=True)] = None
-    hashed_password: Optional[str] = Field(
+    privy_id: Indexed(str, unique=True) | None = None
+    email: Indexed(EmailStr, unique=True) | None = None
+    hashed_password: str | None = Field(
         None,
         pattern=r"^\$argon2id\$v=\d+\$m=\d+,t=\d+,p=\d+\$.{64}$"  # Enforce Argon2 format
     )
     
     # Security fields
-    password_reset_token: Optional[str] = None
-    password_reset_expires: Optional[datetime] = None
+    password_reset_token: str | None = None
+    password_reset_expires: datetime | None = None
     email_verified: bool = False
-    verification_token: Optional[str] = None
-    last_login_at: Optional[datetime] = None
+    verification_token: str | None = None
+    last_login_at: datetime | None = None
     login_count: int = 0
+
+    # Public profile
+    name: str | None = Field(None, description="Full name for profile display")
+    username: Indexed(str, unique=True) | None = None
+    location: str | None = None
+    bio: str | None = None
+    profile_image: str | None = None
+
+    # Soacial accounts
+    github: str | None = None
+    twitter: str | None = None
+    linkedin: str | None = None
+    instagram: str | None = None
+    discord: str | None = None
     
     # Existing fields
     linked_accounts: list[LinkedAccount] = []
+    wallets: list[Wallet] = []
     metadata: dict = Field(default_factory=dict)
     role: UserRole = UserRole.USER
     has_accepted_terms: bool = False
