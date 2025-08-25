@@ -1,5 +1,6 @@
 *.egg-info
 .env
+.env.dev
 .venv
 __pycache__
 # Redis DB
