@@ -63,7 +63,7 @@ async def create_profile(
         ) from e
 
 
-@router.patch("/{profile_id}")
+@router.patch("/{profile_id}/")
 @limiter.limit("15/minute")
 async def update_profile(
     request: Request,
