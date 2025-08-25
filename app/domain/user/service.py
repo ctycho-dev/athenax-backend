@@ -38,40 +38,39 @@ class UserService:
         # current_user: UserOut
     ) -> UserOut:
         """Create user."""
-        try:
-            # Set email if not set but found in linked accounts
-            if not getattr(data, "email", None):
-                email_from_linked = None
-                for account in data.linked_accounts:
-                    # Prefer a non-null email in the linked_account (OAuth or otherwise)
-                    if getattr(account, "email", None):
-                        email_from_linked = account.email
-                        break
-                    # Fallback: for "email" provider, check 'address'
-                    if account.type == "email" and getattr(account, "address", None):
-                        email_from_linked = account.address
-                        break
-                if email_from_linked:
-                    data.email = email_from_linked
-            
-            # Business logic for role
-            has_bd_account = any(
-                account.type == "google_oauth"
-                and account.email
-                and account.email.endswith('@athenax.co')
-                for account in data.linked_accounts
-            )
+        # Set email if not set but found in linked accounts
+        if not getattr(data, "email", None):
+            email_from_linked = None
+            for account in data.linked_accounts:
+                # Prefer a non-null email in the linked_account (OAuth or otherwise)
+                if getattr(account, "email", None):
+                    email_from_linked = account.email
+                    break
+                # Fallback: for "email" provider, check 'address'
+                if account.type == "email" and getattr(account, "address", None):
+                    email_from_linked = account.address
+                    break
+            if email_from_linked:
+                data.email = email_from_linked
+        
+        # Business logic for role
+        has_bd_account = any(
+            account.type == "google_oauth"
+            and account.email
+            and account.email.endswith('@athenax.co')
+            for account in data.linked_accounts
+        )
 
-            # Set role to BD if criteria met and current role is USER
-            if has_bd_account and data.role == UserRole.USER:
-                data.role = UserRole.BD
+        # Set role to BD if criteria met and current role is USER
+        if has_bd_account and data.role == UserRole.USER:
+            data.role = UserRole.BD
 
-            new_user = await self.repo.create(data)
-            if not new_user:
-                raise ValueError('User creation error.')
-            return new_user
-        except Exception as e:
-            raise e
+        new_user = await self.repo.create(data)
+        if not new_user:
+            raise ValueError('User creation error.')
+        return new_user
+    
+    # github_oauth
     
     async def update(
         self,
@@ -86,6 +85,7 @@ class UserService:
             data
         )
         return updated
+
     # async def delete_user(
     #     self,
     #     user_id_to_delete: str,

@@ -4,7 +4,8 @@ from app.api.v1.endpoints import (
     email,
     storj,
     article,
-    wishlist
+    wishlist,
+    profile
 )
 from app.api.v1.endpoints.submit import audit, research
 
@@ -31,7 +32,13 @@ api_router.include_router(
 api_router.include_router(
     user.router,
     prefix="/users",
-    tags=["users"]
+    tags=["Users"]
+)
+
+api_router.include_router(
+    profile.router,
+    prefix="/profiles",
+    tags=["Profiles"]
 )
 
 api_router.include_router(

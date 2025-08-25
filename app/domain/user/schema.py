@@ -1,9 +1,11 @@
-from typing import Optional
+from typing import Literal
 from pydantic import BaseModel, EmailStr, ConfigDict, field_serializer
 from datetime import datetime
 from pydantic import Field, EmailStr
-
 from app.enums.enums import UserRole, WalletChains, AuthProvider
+
+
+AccountType = Literal["publisher", "project", "personal"]
 
 
 class VerificationInfo(BaseModel):
@@ -35,15 +37,15 @@ class LinkedAccount(BaseModel):
         primary: Whether this is the primary linked account.
     """
     type: AuthProvider
-    subject: Optional[str] = None  # For OAuth providers
-    address: Optional[str] = None  # For email
-    username: Optional[str] = None  # For Discord
-    name: Optional[str] = None  # For Google
-    email: Optional[EmailStr] = None
+    subject: str | None = None  # For OAuth providers
+    address: str | None = None  # For email
+    username: str | None = None  # For Discord
+    name: str | None = None  # For Google
+    email: EmailStr | None = None
     primary: bool = False
-    chainType: Optional[str] = None
-    connectorType: Optional[str] = None
-    walletClientType: Optional[str] = None
+    chainType: str | None = None
+    connectorType: str | None = None
+    walletClientType: str | None = None
 
 
 class Wallet(BaseModel):
@@ -61,7 +63,7 @@ class Wallet(BaseModel):
     chain: WalletChains
     verified: bool = False
     primary: bool = False
-    verification: Optional[VerificationInfo] = None
+    verification: VerificationInfo | None = None
 
 
 class UserCreate(BaseModel):
@@ -87,26 +89,11 @@ class UserUpdate(BaseModel):
     Schema for updating user profile, bio, and social links.
     All fields are optional for PATCH-style updates.
     """
-    # --- Profile ---
-    name: Optional[str] = None
-    username: Optional[str] = None
-    bio: Optional[str] = None
-    location: Optional[str] = None
-    profile_image: Optional[str] = None
+    account_type: str | None
+    has_profile: bool
 
-    # --- Social usernames (flat) ---
-    github: Optional[str] = None
-    twitter: Optional[str] = None
-    linkedin: Optional[str] = None
-    instagram: Optional[str] = None
-    discord: Optional[str] = None
-
-    # --- Accept terms, guest status (not commonly updated, but included for completeness) ---
-    has_accepted_terms: Optional[bool] = None
-    is_guest: Optional[bool] = None
-
-    # --- Role (should only be modifiable by admins, so optional and use with care) ---
-    role: Optional[UserRole] = None
+    has_accepted_terms: bool
+    is_guest: bool
 
 
 class UserOut(BaseModel):
@@ -122,23 +109,12 @@ class UserOut(BaseModel):
     privy_id: str | None
     email: EmailStr | None
 
-    # Public profile
-    username: str | None
-    name: str | None
-    bio: str | None
-    location: str | None
-    profile_image: str | None
-
-    # Soacial accounts
-    github: str | None
-    twitter: str | None
-    linkedin: str | None
-    instagram: str | None
-    discord: str | None
-
     linked_accounts: list[LinkedAccount] | None
     wallets: list[Wallet] | None
     # metadata: dict | None
+
+    account_type: str | None
+    has_profile: bool
 
     role: UserRole
     has_accepted_terms: bool

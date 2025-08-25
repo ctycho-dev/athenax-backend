@@ -44,6 +44,7 @@ class AuthProvider(str, Enum):
     """
     GOOGLE = "google_oauth"
     DISCORD = "discord_oauth"
+    GITHUB = "github_oauth"
     TWITTER = "twitter_oauth"
     EMAIL = "email"
     WALLET = "wallet"
