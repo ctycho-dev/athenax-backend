@@ -27,11 +27,11 @@ async def lifespan(_: FastAPI):
             logger.critical("Connection failed: %s", conn_err, exc_info=True)
             raise
 
-        try:
-            # storj_service.connect()
-            r2_service.connect()
-        except Exception as e:
-            logger.error("Error disconnecting storage: %s", e, exc_info=True)
+        # try:
+        #     # storj_service.connect()
+        #     r2_service.connect()
+        # except Exception as e:
+        #     logger.error("Error disconnecting storage: %s", e, exc_info=True)
 
         logger.info("App started")
         yield
@@ -41,7 +41,7 @@ async def lifespan(_: FastAPI):
         await redis_client.close()
         await redis_client.connection_pool.disconnect()
         # storj_service.disconnect()
-        r2_service.disconnect()
+        # r2_service.disconnect()
 
         cleanup_logger()
 
