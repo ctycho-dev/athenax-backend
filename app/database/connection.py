@@ -6,6 +6,7 @@ from app.domain.submit.audit.model import AuditSubmit
 from app.domain.submit.research.model import ResearchSubmit
 from app.domain.article.model import Article
 from app.domain.user.model import User
+from app.domain.profile.model import Profile
 
 
 class DatabaseManager:
@@ -30,7 +31,8 @@ class DatabaseManager:
                 AuditSubmit,
                 ResearchSubmit,
                 User,
-                Article
+                Article,
+                Profile
             ],
         )
 

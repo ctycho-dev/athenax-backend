@@ -6,7 +6,10 @@ from fastapi import (
     Request
 )
 from app.middleware.rate_limiter import limiter
-from app.core.dependencies import get_current_user
+from app.core.dependencies import (
+    get_current_user,
+    get_current_user_out
+)
 from app.domain.user.schema import (
     UserCreate,
     UserOut,
@@ -54,7 +57,6 @@ async def get_user(
 async def create_user(
     request: Request,
     data: UserCreate,
-    # current_user: User = Depends(get_current_user),
     service: UserService = Depends(get_user_service)
 ) -> UserOut | None:
     """
@@ -95,7 +97,7 @@ async def create_user(
 async def update_user(
     request: Request,
     data: UserUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: UserOut = Depends(get_current_user_out),
     service: UserService = Depends(get_user_service)
 ):
     """
@@ -115,7 +117,7 @@ async def update_user(
             - 500 for unexpected errors
     """
     try:
-        updated_user = await service.update(str(current_user.id), data)
+        updated_user = await service.update(current_user.id, data)
         return updated_user
     except ValueError as e:
         logger.error('[update_user] ValueError: %s', e)

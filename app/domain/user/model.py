@@ -24,52 +24,32 @@ ph = PasswordHasher(
 class User(Document):
     """Enhanced user model supporting both Privy and email/password auth"""
     
-    # Authentication fields
+    # Privy identity (and optional email if you collect it)
     privy_id: Indexed(str, unique=True) | None = None
     email: Indexed(EmailStr, unique=True) | None = None
-    hashed_password: str | None = Field(
-        None,
-        pattern=r"^\$argon2id\$v=\d+\$m=\d+,t=\d+,p=\d+\$.{64}$"  # Enforce Argon2 format
-    )
     
-    # Security fields
-    password_reset_token: str | None = None
-    password_reset_expires: datetime | None = None
-    email_verified: bool = False
-    verification_token: str | None = None
+    # Usage / telemetry
     last_login_at: datetime | None = None
     login_count: int = 0
 
-    # Public profile
-    name: str | None = Field(None, description="Full name for profile display")
-    username: Indexed(str, unique=True) | None = None
-    location: str | None = None
-    bio: str | None = None
-    profile_image: str | None = None
-
-    # Soacial accounts
-    github: str | None = None
-    twitter: str | None = None
-    linkedin: str | None = None
-    instagram: str | None = None
-    discord: str | None = None
-    
-    # Existing fields
+    # Existing
     linked_accounts: list[LinkedAccount] = []
     wallets: list[Wallet] = []
     metadata: dict = Field(default_factory=dict)
+    
+    # System roles (authorization)
     role: UserRole = UserRole.USER
+
+    # Product flags
     has_accepted_terms: bool = False
     is_guest: bool = False
 
-    created_at: datetime = Field(
-        default_factory=datetime.now,
-        description="Timestamp when the record was created"
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.now,
-        description="Timestamp when the record was last updated"
-    )
+    # Onboarded
+    account_type: str | None = None
+    has_profile: bool = False
+
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     class Settings:
         name = "user"
@@ -81,24 +61,16 @@ class User(Document):
             "linked_accounts.email",
         ]
 
-    # ---- Password Methods (Class-contained security logic) ----
-    def set_password(self, password: str):
-        """Securely hash and store password with Argon2"""
-        if len(password) < 12:
-            raise ValueError("Password must be at least 12 characters")
-        self.hashed_password = ph.hash(password)
-        
-    def verify_password(self, password: str) -> bool:
-        """Verify password against Argon2 hash"""
-        if not self.hashed_password:
-            return False
-        try:
-            return ph.verify(self.hashed_password, password)
-        except (exceptions.VerifyMismatchError, exceptions.InvalidHashError):
-            return False
-            
-    def requires_rehash(self) -> bool:
-        """Check if hash needs updating (e.g., after algorithm upgrade)"""
-        if not self.hashed_password:
-            return False
-        return ph.check_needs_rehash(self.hashed_password)
+    # # Public profile
+    # name: str | None = Field(None, description="Full name for profile display")
+    # username: Indexed(str, unique=True) | None = None
+    # location: str | None = None
+    # bio: str | None = None
+    # profile_image: str | None = None
+
+    # # Soacial accounts
+    # github: str | None = None
+    # twitter: str | None = None
+    # linkedin: str | None = None
+    # instagram: str | None = None
+    # discord: str | None = None

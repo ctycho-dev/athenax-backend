@@ -10,6 +10,8 @@ from app.domain.wishlist.repository import WishlistRepository
 from app.domain.submit.audit.repository import AuditRepository
 from app.domain.submit.research.repository import ResearchRepository
 from app.domain.user.repository import UserRepository
+from app.domain.profile.repository import ProfileRepository
+from app.domain.user.schema import UserOut
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.domain.user.model import User
@@ -17,8 +19,10 @@ from app.domain.submit.audit.service import AuditService
 from app.domain.submit.research.service import ResearchService
 # from app.services.storj import StorjService
 from app.domain.user.service import UserService
+from app.domain.profile.service import ProfileService
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.service import ArticleService
+from app.utils.serialize import serialize
 
 # Set the SSL certificate path explicitly
 os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
@@ -41,6 +45,11 @@ jwks_client = PyJWKClient(
 def get_user_repo() -> UserRepository:
 
     return UserRepository()
+
+
+def get_profile_repo() -> ProfileRepository:
+
+    return ProfileRepository()
 
 
 def get_wislist_repo() -> WishlistRepository:
@@ -129,6 +138,14 @@ async def get_current_user(
         ) from e
 
 
+def get_current_user_out(
+    user: User = Depends(get_current_user),
+) -> UserOut:
+
+    user_dict = serialize(user.model_dump())
+    return UserOut(**user_dict)
+
+
 async def get_optional_user(
     request: Request,
     creds: HTTPAuthorizationCredentials = Depends(security),
@@ -180,3 +197,11 @@ def get_article_service_optional(
     user: User | None = Depends(get_optional_user)
 ) -> ArticleService:
     return ArticleService(repo=repo, user=user)
+
+
+def get_profile_service(
+    repo: ProfileRepository = Depends(get_profile_repo),
+    user_repo: UserRepository = Depends(get_user_repo),
+    user: UserOut = Depends(get_current_user_out)
+) -> ProfileService:
+    return ProfileService(repo=repo, user_repo=user_repo, user=user)
