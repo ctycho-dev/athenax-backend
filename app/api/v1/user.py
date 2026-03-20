@@ -10,7 +10,7 @@ from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.middleware.rate_limiter import limiter
 from app.domain.user.schema import (
-    UserCreateSchema,
+    UserSignupSchema,
     UserOutSchema,
     Token
 )
@@ -68,7 +68,7 @@ async def delete_user(
 @limiter.limit("5/minute")
 async def create_user(
     request: Request,
-    data: UserCreateSchema,
+    data: UserSignupSchema,
     db: AsyncSession = Depends(get_db),
     _: UserOutSchema = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
@@ -82,7 +82,7 @@ async def create_user(
 async def signup(
     request: Request,
     response: Response,
-    data: UserCreateSchema,
+    data: UserSignupSchema,
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):

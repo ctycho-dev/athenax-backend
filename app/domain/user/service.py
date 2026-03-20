@@ -2,7 +2,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import (
-    UserCreateSchema,
+    UserSignupSchema,
+    UserCreateDBSchema,
     UserOutSchema,
     UserCredsSchema
 )
@@ -19,17 +20,20 @@ class UserService:
     def __init__(self, repo: UserRepository):
         self.repo = repo
 
-    async def create_admin_user(self, db: AsyncSession):
+    async def create_admin_user(
+        self,
+        db: AsyncSession,
+    ) -> UserCredsSchema | UserOutSchema:
         user = await self.repo.get_by_email(db, settings.ADMIN_LOGIN)
         if user:
             return user
 
-        data = {
-            "name": "Admin",
-            "email": settings.ADMIN_LOGIN,
-            "password_hash": hash_password(settings.ADMIN_PWD),
-            "role": UserRole.USER,
-        }
+        data = UserCreateDBSchema(
+            name="Admin",
+            email=settings.ADMIN_LOGIN,
+            password_hash=hash_password(settings.ADMIN_PWD),
+            role=UserRole.USER,
+        )
         new_user = await self.repo.create(db, data)
         return new_user
     
@@ -48,7 +52,7 @@ class UserService:
         user = await self.repo.get_by_email(db, email)
         return user
 
-    async def create_user(self, db: AsyncSession, user: UserCreateSchema) -> UserOutSchema | None:
+    async def create_user(self, db: AsyncSession, user: UserSignupSchema) -> UserOutSchema:
         existing_user = await self.repo.get_by_email(db, user.email)
         if existing_user:
             raise HTTPException(
@@ -56,12 +60,21 @@ class UserService:
                 detail='User already exists'
             )
 
-        data = user.model_dump(exclude={"password"})
-        data["password_hash"] = hash_password(user.password)
+        data = UserCreateDBSchema(
+            name=user.name,
+            email=user.email,
+            password_hash=hash_password(user.password),
+            role=user.role,
+            external_id=user.external_id,
+            university_id=user.university_id,
+            lab_id=user.lab_id,
+            bio=user.bio,
+            organization=user.organization,
+        )
         new_user = await self.repo.create(db, data)
         return new_user
 
-    async def signup_user(self, db: AsyncSession, user: UserCreateSchema) -> UserOutSchema | None:
+    async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> UserOutSchema:
         """
         Public signup path.
 

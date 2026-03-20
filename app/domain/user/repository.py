@@ -8,14 +8,14 @@ from sqlalchemy import exists
 from app.common.base_repository import BaseRepository
 from app.domain.user.model import User
 from app.domain.user.schema import (
-    UserCreateSchema,
+    UserCreateDBSchema,
     UserCredsSchema,
     UserOutSchema,
 )
 from app.exceptions.exceptions import DatabaseError
 
 
-class UserRepository(BaseRepository[User, UserOutSchema, UserCreateSchema]):
+class UserRepository(BaseRepository[User, UserOutSchema, UserCreateDBSchema]):
     """
     PostgreSQL repository for User using SQLAlchemy (async).
 
@@ -24,7 +24,7 @@ class UserRepository(BaseRepository[User, UserOutSchema, UserCreateSchema]):
     """
 
     def __init__(self) -> None:
-        super().__init__(User, UserOutSchema, UserCreateSchema)
+        super().__init__(User, UserOutSchema, UserCreateDBSchema)
 
     # ---------- Custom queries ---------- #
 
