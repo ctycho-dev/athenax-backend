@@ -77,6 +77,34 @@ async def create_user(
     return new_user
 
 
+@router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=Token)
+@limiter.limit("5/minute")
+async def signup(
+    request: Request,
+    response: Response,
+    data: UserCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    user = await user_service.signup_user(db, data)
+
+    access_token = oauth2.create_access_token(data={"user_id": str(user.id)})
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        path="/"
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
 @router.post('/verify')
 @limiter.limit("60/minute")
 async def verify(
@@ -96,7 +124,7 @@ async def login(
     user_service: UserService = Depends(get_user_service)
 ):
     user = await user_service.get_by_email(db, user_credentials.username)
-    if not user or not oauth2.verify_password(user_credentials.password, user.password):
+    if not user or not oauth2.verify_password(user_credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid credentials",

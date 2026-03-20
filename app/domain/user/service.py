@@ -24,11 +24,12 @@ class UserService:
         if user:
             return user
 
-        data = UserCreateSchema(
-            email=settings.ADMIN_LOGIN,
-            password=hash_password(settings.ADMIN_PWD),
-            role=UserRole.ADMIN,
-        )
+        data = {
+            "name": "Admin",
+            "email": settings.ADMIN_LOGIN,
+            "password_hash": hash_password(settings.ADMIN_PWD),
+            "role": UserRole.USER,
+        }
         new_user = await self.repo.create(db, data)
         return new_user
     
@@ -41,11 +42,8 @@ class UserService:
         return user
 
     async def delete_by_id(self, db: AsyncSession, current_user: UserOutSchema, user_id: int) -> None:
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(status_code=403, detail='Forbidden.')
-        
-        if current_user.id == user_id:
-            raise HTTPException(status_code=403, detail='Cannot delete yourself.')
+        if current_user.id != user_id:
+            raise HTTPException(status_code=403, detail='Can only delete your own account.')
 
         await self.repo.delete_by_id(db, user_id)
 
@@ -60,7 +58,17 @@ class UserService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail='User already exists'
             )
-        
-        user.password = hash_password(user.password)
-        new_user = await self.repo.create(db, user)
+
+        data = user.model_dump(exclude={"password"})
+        data["password_hash"] = hash_password(user.password)
+        new_user = await self.repo.create(db, data)
         return new_user
+
+    async def signup_user(self, db: AsyncSession, user: UserCreateSchema) -> UserOutSchema | None:
+        """
+        Public signup path.
+
+        Force the default user role so the client cannot self-assign elevated roles.
+        """
+        signup_data = user.model_copy(update={"role": UserRole.USER})
+        return await self.create_user(db, signup_data)

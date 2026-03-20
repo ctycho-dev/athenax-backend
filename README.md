@@ -23,24 +23,24 @@ cp .env.example .env
 
 2. Adjust values in `.env` if needed.
 
-## Run With Docker (Production Style)
+## Run With Make
 
-Build and start app + postgres + redis:
+Start the app and follow logs:
 
 ```bash
-docker compose up -d --build
+make dev
 ```
 
-Check status:
+Build, start, and follow logs:
 
 ```bash
-docker compose ps
+make dev-build
 ```
 
-Check logs:
+Stop the stack:
 
 ```bash
-docker compose logs -f app
+make down
 ```
 
 Health check:
@@ -49,35 +49,40 @@ Health check:
 curl http://localhost:8844/health
 ```
 
-Stop services:
-
-```bash
-docker compose down
-```
-
-## Run With Docker (Development Mode)
-
-Run app in reload mode inside Docker:
-
-```bash
-RUN_MODE=dev docker compose up -d --build
-```
-
 Notes:
 
-- `RUN_MODE=dev` enables `uvicorn --reload` in `start.sh`.
+- `make dev` starts Docker without forcing a rebuild.
+- `make dev-build` rebuilds the images first.
+- `RUN_MODE=dev` still enables `uvicorn --reload` in `start.sh`.
 - `RUN_MODE=prod` runs a single `uvicorn` process without reload.
 
 ## Run Locally (Without Docker App Container)
 
-Use Docker only for databases, and run FastAPI from your local venv:
+Use this command to start Postgres and Redis, set up the local venv, install dependencies, and run the app:
 
 ```bash
-docker compose up -d postgres redis
-python3 -m venv .venv
-.venv/bin/pip install -e .
-RUN_MODE=dev sh ./start.sh
+make local
 ```
+
+## Model Change Workflow
+
+When you change a SQLAlchemy model:
+
+1. Update the model file in `app/domain/<feature>/model.py`
+2. Create a migration:
+
+```bash
+make revision MSG='describe change'
+```
+
+3. Review the generated file in `alembic/versions/`
+4. Apply it to the database:
+
+```bash
+make migrate
+```
+
+If you only change the model and skip the migration step, the database will not change.
 
 ## User Integration Tests
 
@@ -106,4 +111,13 @@ docker compose --profile test up -d postgres-test
 - `HOST`: bind host (default `0.0.0.0`)
 - `PORT`: bind port (default `8844`)
 - `LOG_LEVEL`: app log level (default `info`)
-- `RUN_MIGRATIONS`: set to `1` to run Alembic on startup
+
+## Make Commands
+
+- `make dev`: start Docker and tail app logs
+- `make dev-build`: rebuild containers, start Docker, and tail app logs
+- `make down`: stop and remove the stack
+- `make migrate`: start Docker if needed and apply migrations
+- `make revision MSG='...'`: generate a new Alembic migration
+- `make current`: show the current Alembic revision
+- `make history`: show the Alembic revision history
