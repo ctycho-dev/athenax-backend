@@ -42,9 +42,6 @@ class UserService:
         return user
 
     async def delete_by_id(self, db: AsyncSession, current_user: UserOutSchema, user_id: int) -> None:
-        if current_user.id != user_id:
-            raise HTTPException(status_code=403, detail='Can only delete your own account.')
-
         await self.repo.delete_by_id(db, user_id)
 
     async def get_by_email(self, db: AsyncSession, email: str) -> UserCredsSchema | None:
