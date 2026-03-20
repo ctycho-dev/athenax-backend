@@ -10,7 +10,6 @@ class UserBaseSchema(CamelModel):
     email: EmailStr
     role: UserRole = UserRole.USER
     external_id: str | None = None
-    university_id: int | None = None
     lab_id: int | None = None
     bio: str | None = None
     organization: str | None = None

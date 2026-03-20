@@ -66,7 +66,6 @@ class UserService:
             password_hash=hash_password(user.password),
             role=user.role,
             external_id=user.external_id,
-            university_id=user.university_id,
             lab_id=user.lab_id,
             bio=user.bio,
             organization=user.organization,

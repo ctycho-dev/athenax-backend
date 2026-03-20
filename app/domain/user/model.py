@@ -21,9 +21,6 @@ class User(Base, TimestampMixin):
         SQLEnum(UserRole, name="user_role"), default=UserRole.USER, nullable=False
     )
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    university_id: Mapped[int | None] = mapped_column(
-        ForeignKey("universities.id"), nullable=True
-    )
     lab_id: Mapped[int | None] = mapped_column(
         ForeignKey("labs.id"), nullable=True
     )
