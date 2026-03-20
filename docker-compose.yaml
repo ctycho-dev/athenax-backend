@@ -33,6 +33,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fastapi-app
+    volumes:
+      - .:/app
     env_file:
       - .env
     environment:

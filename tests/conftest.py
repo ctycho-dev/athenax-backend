@@ -1,4 +1,5 @@
 from datetime import datetime
+import pytest
 import pytest_asyncio
 from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
@@ -38,7 +39,7 @@ async def test_engine():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest.fixture(scope="session")
 def session_factory(test_engine):
     """Create session factory once per session."""
     return async_sessionmaker(
