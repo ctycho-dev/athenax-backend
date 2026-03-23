@@ -31,18 +31,20 @@ class UserService:
     
     async def get_all(self, db: AsyncSession) -> list[UserOutSchema]:
         users = await self.repo.get_all(db)
-        return users
+        return [UserOutSchema.model_validate(user) for user in users]
 
     async def get_by_id(self, db: AsyncSession, user_id: int) -> UserOutSchema:
         user = await self.repo.get_by_id(db, user_id)
-        return self._require_user(user)
+        return self._require_user(UserOutSchema.model_validate(user))
 
     async def delete_by_id(self, db: AsyncSession, current_user: UserOutSchema, user_id: int) -> None:
         await self.repo.delete_by_id(db, user_id)
 
     async def get_by_email(self, db: AsyncSession, email: str) -> UserCredsSchema | None:
         user = await self.repo.get_by_email(db, email)
-        return user
+        if not user:
+            return None
+        return UserCredsSchema.model_validate(user)
 
     async def create_user(self, db: AsyncSession, user: UserSignupSchema) -> UserOutSchema:
         existing_user = await self.repo.get_by_email(db, user.email)
@@ -66,7 +68,7 @@ class UserService:
             organization=user.organization,
         )
         new_user = await self.repo.create(db, data)
-        return new_user
+        return UserOutSchema.model_validate(new_user)
 
     async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> MessageSchema:
         """
@@ -119,22 +121,20 @@ class UserService:
                 message="If an account with that email exists, a verification email has been sent."
             )
 
-        full_user = await self.repo.get_by_id(db, user.id)
-        full_user = self._require_user(full_user)
-        if full_user.verified:
+        if user.verified:
             return MessageSchema(message="Email is already verified.")
 
-        token = await self._issue_verification_token(db, full_user.id)
+        token = await self._issue_verification_token(db, user.id)
         try:
             await self.email_service.send_verification_email(
-                full_user.email,
-                full_user.name,
+                user.email,
+                user.name,
                 token,
             )
         except EmailDeliveryError:
             logger.warning(
                 "verification_email_resend_failed",
-                extra={"email": full_user.email, "user_id": full_user.id},
+                extra={"email": user.email, "user_id": user.id},
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -149,19 +149,17 @@ class UserService:
                 message="If an account with that email exists, a password reset email has been sent."
             )
 
-        full_user = await self.repo.get_by_id(db, user.id)
-        full_user = self._require_user(full_user)
-        token = await self._issue_reset_token(db, full_user.id)
+        token = await self._issue_reset_token(db, user.id)
         try:
             await self.email_service.send_password_reset_email(
-                full_user.email,
-                full_user.name,
+                user.email,
+                user.name,
                 token,
             )
         except EmailDeliveryError:
             logger.warning(
                 "password_reset_email_delivery_failed",
-                extra={"email": full_user.email, "user_id": full_user.id},
+                extra={"email": user.email, "user_id": user.id},
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -208,7 +206,7 @@ class UserService:
                 detail="Invalid credentials",
             )
 
-        return user
+        return UserCredsSchema.model_validate(user)
 
     async def _issue_verification_token(self, db: AsyncSession, user_id: int) -> str:
         token = generate_email_token()
