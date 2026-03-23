@@ -89,7 +89,7 @@ async def signup(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return await user_service.signup_user(db, data)
+    return MessageSchema(message=await user_service.signup_user(db, data))
 
 
 @router.post('/verify', response_model=UserOutSchema)
@@ -109,7 +109,7 @@ async def verify_email(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return await user_service.verify_email(db, payload.token)
+    return MessageSchema(message=await user_service.verify_email(db, payload.token))
 
 
 @router.get("/verify-email", response_model=MessageSchema)
@@ -120,7 +120,7 @@ async def verify_email_link(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return await user_service.verify_email(db, token)
+    return MessageSchema(message=await user_service.verify_email(db, token))
 
 
 @router.post("/verify-email/resend", response_model=MessageSchema)
@@ -131,7 +131,7 @@ async def resend_verification_email(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return await user_service.resend_verification_email(db, payload.email)
+    return MessageSchema(message=await user_service.resend_verification_email(db, payload.email))
 
 
 @router.post('/login', response_model=Token)
@@ -174,7 +174,7 @@ async def forgot_password(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return await user_service.request_password_reset(db, payload.email)
+    return MessageSchema(message=await user_service.request_password_reset(db, payload.email))
 
 
 @router.post("/reset-password", response_model=MessageSchema)
@@ -185,7 +185,7 @@ async def reset_password(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return await user_service.reset_password(db, payload.token, payload.password)
+    return MessageSchema(message=await user_service.reset_password(db, payload.token, payload.password))
 
 
 @router.post("/logout")

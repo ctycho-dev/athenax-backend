@@ -7,7 +7,6 @@ from app.domain.user.schema import (
     UserCreateDBSchema,
     UserOutSchema,
     UserCredsSchema,
-    MessageSchema,
 )
 from app.core.logger import get_logger
 from app.infrastructure.email.service import EmailService, EmailDeliveryError
@@ -70,7 +69,7 @@ class UserService:
         new_user = await self.repo.create(db, data)
         return UserOutSchema.model_validate(new_user)
 
-    async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> MessageSchema:
+    async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> str:
         """
         Public signup path.
 
@@ -90,15 +89,13 @@ class UserService:
                 "verification_email_delivery_failed",
                 extra={"email": new_user.email, "user_id": new_user.id},
             )
-            return MessageSchema(
-                message=(
-                    "Signup successful, but we could not send the verification email right now. "
-                    "Please try the resend verification endpoint later."
-                )
+            return (
+                "Signup successful, but we could not send the verification email right now. "
+                "Please try the resend verification endpoint later."
             )
-        return MessageSchema(message="Signup successful. Please verify your email.")
+        return "Signup successful. Please verify your email."
 
-    async def verify_email(self, db: AsyncSession, token: str) -> MessageSchema:
+    async def verify_email(self, db: AsyncSession, token: str) -> str:
         user = await self.repo.get_by_verification_hash(db, hash_token(token))
         if not user:
             raise HTTPException(
@@ -112,17 +109,15 @@ class UserService:
             verified_user.id,
             {"verified": True, "verification_hash": None},
         )
-        return MessageSchema(message="Email verified successfully.")
+        return "Email verified successfully."
 
-    async def resend_verification_email(self, db: AsyncSession, email: str) -> MessageSchema:
+    async def resend_verification_email(self, db: AsyncSession, email: str) -> str:
         user = await self.repo.get_by_email(db, email)
         if not user:
-            return MessageSchema(
-                message="If an account with that email exists, a verification email has been sent."
-            )
+            return "If an account with that email exists, a verification email has been sent."
 
         if user.verified:
-            return MessageSchema(message="Email is already verified.")
+            return "Email is already verified."
 
         token = await self._issue_verification_token(db, user.id)
         try:
@@ -140,14 +135,12 @@ class UserService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Could not send verification email right now. Please try again later.",
             )
-        return MessageSchema(message="Verification email has been sent.")
+        return "Verification email has been sent."
 
-    async def request_password_reset(self, db: AsyncSession, email: str) -> MessageSchema:
+    async def request_password_reset(self, db: AsyncSession, email: str) -> str:
         user = await self.repo.get_by_email(db, email)
         if not user:
-            return MessageSchema(
-                message="If an account with that email exists, a password reset email has been sent."
-            )
+            return "If an account with that email exists, a password reset email has been sent."
 
         token = await self._issue_reset_token(db, user.id)
         try:
@@ -165,9 +158,9 @@ class UserService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Could not send password reset email right now. Please try again later.",
             )
-        return MessageSchema(message="Password reset email has been sent.")
+        return "Password reset email has been sent."
 
-    async def reset_password(self, db: AsyncSession, token: str, password: str) -> MessageSchema:
+    async def reset_password(self, db: AsyncSession, token: str, password: str) -> str:
         user = await self.repo.get_by_reset_hash(db, hash_token(token))
         if not user:
             raise HTTPException(
@@ -184,7 +177,7 @@ class UserService:
                 "reset_hash": None,
             },
         )
-        return MessageSchema(message="Password reset successfully.")
+        return "Password reset successfully."
 
     async def ensure_login_allowed(self, db: AsyncSession, email: str, password: str) -> UserCredsSchema:
         user = await self.repo.get_by_email(db, email)
