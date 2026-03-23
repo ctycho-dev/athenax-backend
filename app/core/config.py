@@ -1,11 +1,5 @@
-import os
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def get_env_file():
-    mode = os.getenv("MODE") or os.getenv("mode") or os.getenv("RUN_MODE") or "prod"
-    return ".env.dev" if mode in ["dev", "test"] else ".env"
 
 
 class ApiV1Prefix(BaseModel):
@@ -24,7 +18,7 @@ class ApiPrefix(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=['.env', get_env_file()],
+        env_file=['.env'],
         env_file_encoding='utf-8',
         extra="allow",
         case_sensitive=False,
@@ -72,4 +66,4 @@ class Settings(BaseSettings):
         return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue] - values come from .env
