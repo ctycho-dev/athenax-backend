@@ -72,6 +72,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: fastapi-redis
+    ports:
+      - "6379:6379"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command:

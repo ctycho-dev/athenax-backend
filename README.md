@@ -28,13 +28,13 @@ cp .env.example .env
 Start the app and follow logs:
 
 ```bash
-make dev
+make start
 ```
 
 Build, start, and follow logs:
 
 ```bash
-make dev-build
+make start-build
 ```
 
 Stop the stack:
@@ -61,7 +61,7 @@ Notes:
 Use this command to start Postgres and Redis, set up the local venv, install dependencies, and run the app:
 
 ```bash
-make local
+make dev
 ```
 
 ## Model Change Workflow
@@ -82,20 +82,16 @@ make revision MSG='describe change'
 make migrate
 ```
 
+`make migrate` starts only the database services and runs Alembic in a one-off container.
+
 If you only change the model and skip the migration step, the database will not change.
 
 ## User Integration Tests
 
-Start test database:
+Run the full test suite:
 
 ```bash
-docker compose --profile test up -d postgres-test
-```
-
-Run tests:
-
-```bash
-.venv/bin/pytest tests/integration/test_user_api.py -v
+make test
 ```
 
 If you previously used a different `postgres-test` config, reset its volume once:
@@ -114,10 +110,12 @@ docker compose --profile test up -d postgres-test
 
 ## Make Commands
 
-- `make dev`: start Docker and tail app logs
-- `make dev-build`: rebuild containers, start Docker, and tail app logs
+- `make start`: start Docker and tail app logs
+- `make start-build`: rebuild containers, start Docker, and tail app logs
+- `make dev`: start Postgres and Redis, set up local venv, install dependencies, and run the app
 - `make down`: stop and remove the stack
-- `make migrate`: start Docker if needed and apply migrations
+- `make test`: start the test database and run the test suite
+- `make migrate`: start the database services if needed and apply migrations in a one-off container
 - `make revision MSG='...'`: generate a new Alembic migration
 - `make current`: show the current Alembic revision
 - `make history`: show the Alembic revision history

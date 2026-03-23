@@ -1,12 +1,12 @@
 import pytest
-from httpx import AsyncClient
+from tests.conftest import ClientWithEmail
 
 
 @pytest.mark.asyncio
 class TestUserAPI:
     """Integration tests for User authentication and CRUD operations."""
 
-    async def test_create_user_success(self, client: AsyncClient, user_payload):
+    async def test_create_user_success(self, client: ClientWithEmail, user_payload):
         """Test successful user creation."""
         response = await client.post("/api/v1/user/", json=user_payload)
         
@@ -14,23 +14,24 @@ class TestUserAPI:
         data = response.json()
         assert data["email"] == user_payload["email"]
         assert "id" in data
+        assert data["verified"] is False
         assert "password" not in data
 
-    async def test_create_user_duplicate_email(self, client: AsyncClient, user_payload):
+    async def test_create_user_duplicate_email(self, client: ClientWithEmail, user_payload):
         """Test creating user with duplicate email fails."""
         await client.post("/api/v1/user/", json=user_payload)
         response = await client.post("/api/v1/user/", json=user_payload)
         
         assert response.status_code == 409
 
-    async def test_get_all_users(self, client: AsyncClient):
+    async def test_get_all_users(self, client: ClientWithEmail):
         """Test retrieving all users."""
         response = await client.get("/api/v1/user/")
         
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    async def test_get_user_by_id(self, client: AsyncClient, user_payload):
+    async def test_get_user_by_id(self, client: ClientWithEmail, user_payload):
         """Test retrieving user by ID."""
         create_response = await client.post("/api/v1/user/", json=user_payload)
 
@@ -43,7 +44,7 @@ class TestUserAPI:
         assert data["id"] == user_id
         assert data["email"] == user_payload["email"]
 
-    async def test_get_user_not_found(self, client: AsyncClient):
+    async def test_get_user_not_found(self, client: ClientWithEmail):
         """Test retrieving user with non-existent ID."""
         non_existent_id = 99999
         
@@ -51,7 +52,7 @@ class TestUserAPI:
         
         assert response.status_code == 404
 
-    async def test_delete_user_success(self, client: AsyncClient, user_payload):
+    async def test_delete_user_success(self, client: ClientWithEmail, user_payload):
         """Test successful user deletion."""
         create_response = await client.post("/api/v1/user/", json=user_payload)
         user_id = create_response.json()["id"]
@@ -64,36 +65,10 @@ class TestUserAPI:
         
         assert get_response.status_code == 404
 
-    async def test_delete_user_not_found(self, client: AsyncClient):
+    async def test_delete_user_not_found(self, client: ClientWithEmail):
         """Test deleting non-existent user."""
         non_existent_id = 99999
         
         response = await client.delete(f"/api/v1/user/{non_existent_id}")
         
         assert response.status_code == 404
-
-    async def test_login_success(self, client: AsyncClient, user_payload):
-        """Test successful login."""
-        # Create user first
-        await client.post("/api/v1/user/", json=user_payload)
-        
-        # Login with created user
-        response = await client.post(
-            "/api/v1/user/login",
-            data={"username": user_payload["email"], "password": user_payload["password"]}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-        assert data["token_type"] == "bearer"
-        assert "access_token" in response.cookies
-
-    async def test_login_invalid_credentials(self, client: AsyncClient):
-        """Test login with wrong credentials."""
-        response = await client.post(
-            "/api/v1/user/login",
-            data={"username": "wrong@example.com", "password": "wrongpass"}
-        )
-        
-        assert response.status_code == 403

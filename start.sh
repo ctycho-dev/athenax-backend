@@ -10,7 +10,9 @@ PORT="${PORT:-8844}"
 RUN_MODE="${RUN_MODE:-prod}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 
-if [ -x ".venv/bin/python" ]; then
+if [ -x ".venv/bin/python3.13" ]; then
+	PYTHON_BIN=".venv/bin/python3.13"
+elif [ -x ".venv/bin/python" ]; then
 	PYTHON_BIN=".venv/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
 	PYTHON_BIN="$(command -v python3)"

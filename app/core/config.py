@@ -4,10 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def get_env_file():
-    mode = os.getenv('mode', 'prod')
-    return '../.env.dev' if mode in ['dev', 'test'] else '.env'
-    # return '../.env.dev' if mode in ['dev', 'test'] else '../.env'
-    # return f'../.env.{mode}' if mode in ['dev', 'test'] else '.env'
+    mode = os.getenv("MODE") or os.getenv("mode") or os.getenv("RUN_MODE") or "prod"
+    return ".env.dev" if mode in ["dev", "test"] else ".env"
 
 
 class ApiV1Prefix(BaseModel):
@@ -52,6 +50,20 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    # SMTP
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASS: str
+    SMTP_FROM: str
+    SMTP_FROM_NAME: str = "AthenaX"
+    SMTP_STARTTLS: bool = True
+    SMTP_USE_SSL: bool = False
+    SMTP_TIMEOUT: float = 10.0
+
+    EMAIL_VERIFY_URL: str | None = None
+    PASSWORD_RESET_URL: str | None = None
 
     @property
     def SYNC_DATABASE_URL(self) -> str:
