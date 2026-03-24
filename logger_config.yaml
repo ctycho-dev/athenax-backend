@@ -1,0 +1,42 @@
+version: 1
+disable_existing_loggers: False
+
+filters:
+  request_id_filter:
+    (): app.middleware.logging.RequestIDFilter
+
+formatters:
+  json:
+    (): pythonjsonlogger.jsonlogger.JsonFormatter
+    format: >-
+      %(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s %(user_email)s
+      %(module)s %(funcName)s %(lineno)d
+    datefmt: '%Y-%m-%dT%H:%M:%S%z'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: json
+    stream: ext://sys.stdout
+    filters: [request_id_filter]
+
+loggers:
+  # uvicorn:
+  #   level: INFO
+  #   handlers: [console]
+  #   propagate: False
+
+  # uvicorn.access:
+  #   level: INFO
+  #   handlers: [console]
+  #   propagate: False
+
+  app:
+    level: INFO
+    handlers: [console]
+    propagate: False
+
+root:
+  level: INFO
+  handlers: [console]

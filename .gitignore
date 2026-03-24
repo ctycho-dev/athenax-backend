@@ -1,0 +1,73 @@
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.Python
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment Files
+.env
+.env.dev
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+volumes/
+postgres_data/
+
+# Logs
+*.log
+logout.log
+logs/
+*.log.*
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Docker
+docker-compose.override.yml
+
+# Scripts Output
+scripts/s3/
+scripts/xlsx_manual/
+scripts/prod_files.json
+scripts/*.json
+debug_*
+
+# Temporary Files
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# Migration Data
+migration_data/
+
+# Alembic
+alembic/versions/*.pyc
