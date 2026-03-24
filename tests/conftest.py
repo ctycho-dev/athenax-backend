@@ -1,4 +1,5 @@
 from datetime import datetime
+import pytest
 import pytest_asyncio
 from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
@@ -38,7 +39,7 @@ async def test_engine():
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest.fixture(scope="session")
 def session_factory(test_engine):
     """Create session factory once per session."""
     return async_sessionmaker(
@@ -53,11 +54,11 @@ async def client(session_factory) -> AsyncGenerator[AsyncClient, None]:
     """Create test client. Each API call gets its own session."""
     mock_user = UserOutSchema(
         id=1,
-        name="Test Admin",
+        name="Test User",
         email="test@example.com",
-        role=UserRole.ADMIN,
-        is_active=True,
-        created_at=datetime.now()
+        role=UserRole.USER,
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
     
     async def override_get_db():

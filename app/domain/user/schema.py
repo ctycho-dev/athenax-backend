@@ -5,33 +5,38 @@ from app.enums.enums import UserRole
 from app.common.schema import CamelModel
 
 
-class UserCreateSchema(CamelModel):
-    """
-    Schema for creating a new user.
-    """
-    name: str | None = None
+class UserBaseSchema(CamelModel):
+    name: str
     email: EmailStr
-    password: str
     role: UserRole = UserRole.USER
+    external_id: str | None = None
+    lab_id: int | None = None
+    bio: str | None = None
+    organization: str | None = None
+
+
+class UserSignupSchema(UserBaseSchema):
+    """Public schema for signup and user creation requests."""
+    password: str
+
+
+class UserCreateDBSchema(UserBaseSchema):
+    """Internal schema used to persist users."""
+    password_hash: str
 
 
 class UserCredsSchema(CamelModel):
 
     id: int
     email: EmailStr | str
-    password: str
+    password_hash: str
 
 
-class UserOutSchema(CamelModel):
-    """
-    Full user output schema.
-    """
+class UserOutSchema(UserBaseSchema):
+    """Full user output schema."""
     id: int
-    name: str | None
-    email: EmailStr | str
-    role: UserRole
-    is_active: bool
     created_at: datetime
+    updated_at: datetime
 
     @staticmethod
     def _iso(dt: datetime) -> str:

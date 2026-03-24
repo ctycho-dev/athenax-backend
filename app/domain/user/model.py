@@ -1,6 +1,5 @@
-from sqlalchemy import String, Boolean, Integer, Enum as SQLEnum
+from sqlalchemy import String, Integer, Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
-from typing import Optional
 from app.database.connection import Base
 from app.common.audit_mixin import TimestampMixin
 from app.enums.enums import UserRole
@@ -13,12 +12,17 @@ class User(Base, TimestampMixin):
         Integer, primary_key=True, autoincrement=True
     )
 
-    name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(
-        String, unique=True, index=True, nullable=False
+        String(150), unique=True, index=True, nullable=False
     )
-    password: Mapped[str] = mapped_column(String, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        SQLEnum(UserRole), default=UserRole.USER, nullable=False
+        SQLEnum(UserRole, name="user_role"), default=UserRole.USER, nullable=False
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lab_id: Mapped[int | None] = mapped_column(
+        ForeignKey("labs.id"), nullable=True
+    )
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    organization: Mapped[str | None] = mapped_column(String(150), nullable=True)
