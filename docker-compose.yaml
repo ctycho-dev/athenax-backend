@@ -33,6 +33,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fastapi-app
+    restart: unless-stopped
     volumes:
       - .:/app
     env_file:
@@ -59,6 +60,7 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: fastapi-postgres
+    restart: unless-stopped
     ports:
       - "5432:5432"
     volumes:
@@ -72,6 +74,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: fastapi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command:
@@ -85,6 +90,7 @@ services:
   postgres-test:
     image: postgres:17-alpine
     container_name: fastapi-postgres-test
+    restart: unless-stopped
     profiles: ["test"]
     ports:
       - "5433:5432"
