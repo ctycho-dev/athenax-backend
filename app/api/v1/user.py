@@ -30,6 +30,17 @@ logger = get_logger(__name__)
 router = APIRouter(prefix=settings.api.v1.user, tags=["User"])
 
 
+def _set_access_token_cookie(response: Response, access_token: str) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        path="/"
+    )
+
+
 @router.get("/", response_model=list[UserOutSchema])
 @limiter.limit("100/minute")
 async def get_users(
@@ -40,32 +51,6 @@ async def get_users(
 ):
     users = await user_service.get_all(db)
     return users
-
-
-@router.get("/{user_id}")
-@limiter.limit("60/minute")
-async def get_user(
-    request: Request,
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: UserOutSchema = Depends(get_current_user),
-    user_service: UserService = Depends(get_user_service)
-):
-    user = await user_service.get_by_id(db, user_id)
-    return user
-
-
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-@limiter.limit("5/minute")
-async def delete_user(
-    request: Request,
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
-    user_service: UserService = Depends(get_user_service)
-):
-    await user_service.delete_by_id(db, current_user, user_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=UserOutSchema)
@@ -101,26 +86,48 @@ async def verify(
     return user
 
 
-@router.post("/verify-email", response_model=MessageSchema)
-@limiter.limit("10/minute")
-async def verify_email(
-    request: Request,
-    payload: EmailTokenSchema,
-    db: AsyncSession = Depends(get_db),
-    user_service: UserService = Depends(get_user_service),
-):
-    return MessageSchema(message=await user_service.verify_email(db, payload.token))
-
-
 @router.get("/verify-email", response_model=MessageSchema)
 @limiter.limit("10/minute")
 async def verify_email_link(
     request: Request,
+    response: Response,
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    return MessageSchema(message=await user_service.verify_email(db, token))
+    logger.info(
+        "verify_email_link_request",
+        extra={
+            "method": request.method,
+            "path": str(request.url.path),
+            "query_has_token": bool(token),
+            "token_len": len(token),
+            "token_prefix": token[:8],
+            "origin": request.headers.get("origin"),
+            "referer": request.headers.get("referer"),
+            "cookie_names": list(request.cookies.keys()),
+        },
+    )
+    verified_user = await user_service.verify_email(db, token)
+    access_token = oauth2.create_access_token(data={"user_id": str(verified_user.id)})
+    _set_access_token_cookie(response, access_token)
+    return MessageSchema(message="Email verified successfully.")
+
+
+
+@router.post("/verify-email", response_model=MessageSchema)
+@limiter.limit("10/minute")
+async def verify_email(
+    request: Request,
+    response: Response,
+    payload: EmailTokenSchema,
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    verified_user = await user_service.verify_email(db, payload.token)
+    access_token = oauth2.create_access_token(data={"user_id": str(verified_user.id)})
+    _set_access_token_cookie(response, access_token)
+    return MessageSchema(message="Email verified successfully.")
 
 
 @router.post("/verify-email/resend", response_model=MessageSchema)
@@ -132,6 +139,32 @@ async def resend_verification_email(
     user_service: UserService = Depends(get_user_service),
 ):
     return MessageSchema(message=await user_service.resend_verification_email(db, payload.email))
+
+
+@router.get("/{user_id}")
+@limiter.limit("60/minute")
+async def get_user(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: UserOutSchema = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    user = await user_service.get_by_id(db, user_id)
+    return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+async def delete_user(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    await user_service.delete_by_id(db, current_user, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post('/login', response_model=Token)
@@ -151,14 +184,7 @@ async def login(
 
     access_token = oauth2.create_access_token(data={"user_id": str(user.id)})
 
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        path="/"
-    )
+    _set_access_token_cookie(response, access_token)
 
     return {
         "access_token": access_token,

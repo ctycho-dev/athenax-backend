@@ -1,4 +1,7 @@
 import pytest
+from sqlalchemy import select
+from app.domain.user.model import User
+from app.enums.enums import UserRole
 from tests.conftest import ClientWithEmail
 
 
@@ -14,6 +17,25 @@ class TestOnboardingAPI:
         assert len(client.fake_email_service.sent_emails) == 1
         assert client.fake_email_service.sent_emails[0]["type"] == "verification"
         assert client.fake_email_service.sent_emails[0]["email"] == user_payload["email"]
+
+    async def test_signup_persists_requested_role(
+        self,
+        client: ClientWithEmail,
+        user_payload,
+        db_session,
+    ):
+        user_payload = {**user_payload, "role": "builder"}
+
+        response = await client.post("/api/v1/user/signup", json=user_payload)
+
+        assert response.status_code == 201
+
+        result = await db_session.execute(
+            select(User).where(User.email == user_payload["email"])
+        )
+        user = result.scalar_one()
+
+        assert user.role == UserRole.BUILDER
 
     async def test_signup_succeeds_when_verification_email_fails(
         self,
@@ -31,17 +53,18 @@ class TestOnboardingAPI:
         )
         assert len(client.fake_email_service.sent_emails) == 0
 
-    async def test_verify_email_allows_login(self, client: ClientWithEmail, user_payload):
+    async def test_verify_email_sets_cookie_and_allows_login(self, client: ClientWithEmail, user_payload):
         await client.post("/api/v1/user/signup", json=user_payload)
         verification_email = client.fake_email_service.sent_emails[-1]
 
-        verify_response = await client.post(
+        verify_response = await client.get(
             "/api/v1/user/verify-email",
-            json={"token": verification_email["token"]},
+            params={"token": verification_email["token"]},
         )
 
         assert verify_response.status_code == 200
         assert verify_response.json()["message"] == "Email verified successfully."
+        assert "access_token" in verify_response.cookies
 
         response = await client.post(
             "/api/v1/user/login",
