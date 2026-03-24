@@ -16,7 +16,6 @@ from app.utils.oauth2 import (
     generate_email_token,
     hash_token,
 )
-from app.enums.enums import UserRole
 
 
 logger = get_logger(__name__)
@@ -34,7 +33,7 @@ class UserService:
 
     async def get_by_id(self, db: AsyncSession, user_id: int) -> UserOutSchema:
         user = await self.repo.get_by_id(db, user_id)
-        return self._require_user(UserOutSchema.model_validate(user))
+        return self._require_user(UserOutSchema.model_validate(user) if user else None)
 
     async def delete_by_id(self, db: AsyncSession, current_user: UserOutSchema, user_id: int) -> None:
         await self.repo.delete_by_id(db, user_id)
@@ -72,11 +71,8 @@ class UserService:
     async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> str:
         """
         Public signup path.
-
-        Force the default user role so the client cannot self-assign elevated roles.
         """
-        signup_data = user.model_copy(update={"role": UserRole.USER})
-        new_user = await self.create_user(db, signup_data)
+        new_user = await self.create_user(db, user)
         token = await self._issue_verification_token(db, new_user.id)
         try:
             await self.email_service.send_verification_email(
@@ -95,7 +91,7 @@ class UserService:
             )
         return "Signup successful. Please verify your email."
 
-    async def verify_email(self, db: AsyncSession, token: str) -> str:
+    async def verify_email(self, db: AsyncSession, token: str) -> UserOutSchema:
         user = await self.repo.get_by_verification_hash(db, hash_token(token))
         if not user:
             raise HTTPException(
@@ -104,12 +100,12 @@ class UserService:
             )
         verified_user = self._require_user(user)
 
-        await self.repo.update(
+        updated_user = await self.repo.update(
             db,
             verified_user.id,
             {"verified": True, "verification_hash": None},
         )
-        return "Email verified successfully."
+        return self._require_user(updated_user)
 
     async def resend_verification_email(self, db: AsyncSession, email: str) -> str:
         user = await self.repo.get_by_email(db, email)
