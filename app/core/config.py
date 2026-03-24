@@ -1,13 +1,5 @@
-import os
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def get_env_file():
-    mode = os.getenv('mode', 'prod')
-    return '../.env.dev' if mode in ['dev', 'test'] else '.env'
-    # return '../.env.dev' if mode in ['dev', 'test'] else '../.env'
-    # return f'../.env.{mode}' if mode in ['dev', 'test'] else '.env'
 
 
 class ApiV1Prefix(BaseModel):
@@ -26,7 +18,7 @@ class ApiPrefix(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=['.env', get_env_file()],
+        env_file=['.env'],
         env_file_encoding='utf-8',
         extra="allow",
         case_sensitive=False,
@@ -53,6 +45,20 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
+    # SMTP
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASS: str
+    SMTP_FROM: str
+    SMTP_FROM_NAME: str = "AthenaX"
+    SMTP_STARTTLS: bool = True
+    SMTP_USE_SSL: bool = False
+    SMTP_TIMEOUT: float = 10.0
+
+    EMAIL_VERIFY_URL: str | None = None
+    PASSWORD_RESET_URL: str | None = None
+
     @property
     def SYNC_DATABASE_URL(self) -> str:
         """Convert async URL to sync URL for Alembic"""
@@ -60,4 +66,4 @@ class Settings(BaseSettings):
         return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue] - values come from .env

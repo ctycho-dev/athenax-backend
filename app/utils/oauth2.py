@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta
+import hashlib
+import secrets
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError, JWTError as JoseJWTError
 from app.domain.user.schema import TokenData
 from app.core.config import settings
 from argon2 import PasswordHasher, exceptions as argon_exceptions
@@ -38,14 +41,22 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 
+def generate_email_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def decode_access_token(token: str):
     """Decode a JWT token."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.ExpiredSignatureError as exc:
+    except ExpiredSignatureError as exc:
         raise ValueError("Token has expired") from exc
-    except jwt.InvalidTokenError as exc:
+    except JoseJWTError as exc:
         raise ValueError("Invalid token") from exc
 
 
@@ -53,9 +64,9 @@ def verify_access_token(token: str, credentials_exception):
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get('user_id')
+        user_id = payload.get("user_id")
 
-        if user_id is None:
+        if not isinstance(user_id, str):
             raise credentials_exception
 
         token_data = TokenData(id=user_id)

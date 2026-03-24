@@ -1,10 +1,10 @@
 from fastapi import (
     APIRouter,
-    HTTPException,
     Depends,
     status,
     Response,
-    Request
+    Request,
+    Query,
 )
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,11 @@ from app.middleware.rate_limiter import limiter
 from app.domain.user.schema import (
     UserSignupSchema,
     UserOutSchema,
-    Token
+    Token,
+    MessageSchema,
+    EmailTokenSchema,
+    EmailRequestSchema,
+    PasswordResetSchema,
 )
 from app.api.dependencies import get_user_service, get_current_user, get_db
 from app.domain.user.service import UserService
@@ -77,41 +81,57 @@ async def create_user(
     return new_user
 
 
-@router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=Token)
+@router.post("/signup", status_code=status.HTTP_201_CREATED, response_model=MessageSchema)
 @limiter.limit("5/minute")
 async def signup(
     request: Request,
-    response: Response,
     data: UserSignupSchema,
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service),
 ):
-    user = await user_service.signup_user(db, data)
-
-    access_token = oauth2.create_access_token(data={"user_id": str(user.id)})
-
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        path="/"
-    )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    return MessageSchema(message=await user_service.signup_user(db, data))
 
 
-@router.post('/verify')
+@router.post('/verify', response_model=UserOutSchema)
 @limiter.limit("60/minute")
 async def verify(
     request: Request,
     user: UserOutSchema = Depends(get_current_user)
 ):
     return user
+
+
+@router.post("/verify-email", response_model=MessageSchema)
+@limiter.limit("10/minute")
+async def verify_email(
+    request: Request,
+    payload: EmailTokenSchema,
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    return MessageSchema(message=await user_service.verify_email(db, payload.token))
+
+
+@router.get("/verify-email", response_model=MessageSchema)
+@limiter.limit("10/minute")
+async def verify_email_link(
+    request: Request,
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    return MessageSchema(message=await user_service.verify_email(db, token))
+
+
+@router.post("/verify-email/resend", response_model=MessageSchema)
+@limiter.limit("5/minute")
+async def resend_verification_email(
+    request: Request,
+    payload: EmailRequestSchema,
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    return MessageSchema(message=await user_service.resend_verification_email(db, payload.email))
 
 
 @router.post('/login', response_model=Token)
@@ -123,12 +143,11 @@ async def login(
     db: AsyncSession = Depends(get_db),
     user_service: UserService = Depends(get_user_service)
 ):
-    user = await user_service.get_by_email(db, user_credentials.username)
-    if not user or not oauth2.verify_password(user_credentials.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid credentials",
-        )
+    user = await user_service.ensure_login_allowed(
+        db,
+        user_credentials.username,
+        user_credentials.password,
+    )
 
     access_token = oauth2.create_access_token(data={"user_id": str(user.id)})
 
@@ -145,6 +164,28 @@ async def login(
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@router.post("/forgot-password", response_model=MessageSchema)
+@limiter.limit("5/minute")
+async def forgot_password(
+    request: Request,
+    payload: EmailRequestSchema,
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    return MessageSchema(message=await user_service.request_password_reset(db, payload.email))
+
+
+@router.post("/reset-password", response_model=MessageSchema)
+@limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    payload: PasswordResetSchema,
+    db: AsyncSession = Depends(get_db),
+    user_service: UserService = Depends(get_user_service),
+):
+    return MessageSchema(message=await user_service.reset_password(db, payload.token, payload.password))
 
 
 @router.post("/logout")
