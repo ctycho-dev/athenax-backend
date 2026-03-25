@@ -154,3 +154,30 @@ class TestAdminRBACAPI:
 
         assert university_response.status_code == 201
         assert response.status_code == 201
+
+    async def test_lab_create_returns_not_found_when_university_missing(
+        self,
+        client: ClientWithEmail,
+    ):
+        original_override = app.dependency_overrides[get_current_user]
+
+        async def override_admin_user():
+            return build_mock_user(UserRole.ADMIN)
+
+        app.dependency_overrides[get_current_user] = override_admin_user
+        try:
+            response = await client.post(
+                "/api/v1/lab",
+                json={
+                    "universityId": 999999,
+                    "name": "Orphan Lab",
+                    "focus": "ML",
+                    "description": "Should fail cleanly",
+                    "active": True,
+                },
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original_override
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "University with ID 999999 not found"
