@@ -1,0 +1,31 @@
+from datetime import datetime
+
+from pydantic import Field
+
+from app.common.schema import CamelModel
+
+
+class LabBaseSchema(CamelModel):
+    university_id: int
+    name: str = Field(max_length=150)
+    focus: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    active: bool = True
+
+
+class LabCreateSchema(LabBaseSchema):
+    pass
+
+
+class LabUpdateSchema(CamelModel):
+    university_id: int | None = None
+    name: str | None = Field(default=None, max_length=150)
+    focus: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    active: bool | None = None
+
+
+class LabOutSchema(LabBaseSchema):
+    id: int
+    created_at: datetime
+    updated_at: datetime

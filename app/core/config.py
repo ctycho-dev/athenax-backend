@@ -6,6 +6,7 @@ class ApiV1Prefix(BaseModel):
     prefix: str = "/api/v1"
     user: str = "/user"
     university: str = "/university"
+    lab: str = "/lab"
     report: str = "/report"
 
 

@@ -4,6 +4,8 @@ from app.domain.user.service import UserService
 from app.infrastructure.email.service import EmailService
 from app.domain.university.repository import UniversityRepository
 from app.domain.university.service import UniversityService
+from app.domain.lab.repository import LabRepository
+from app.domain.lab.service import LabService
 
 
 # -------------------------
@@ -21,6 +23,10 @@ def get_university_repo() -> UniversityRepository:
     return UniversityRepository()
 
 
+def get_lab_repo() -> LabRepository:
+    return LabRepository()
+
+
 # -------------------------
 # Services
 # -------------------------
@@ -35,3 +41,9 @@ def get_university_service(
     repo: UniversityRepository = Depends(get_university_repo),
 ) -> UniversityService:
     return UniversityService(repo=repo)
+
+
+def get_lab_service(
+    repo: LabRepository = Depends(get_lab_repo),
+) -> LabService:
+    return LabService(repo=repo)
