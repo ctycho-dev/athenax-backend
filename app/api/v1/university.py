@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, get_db, get_university_service
+from app.api.dependencies import (
+    get_db,
+    get_university_service,
+    require_admin_user,
+)
 from app.core.config import settings
 from app.domain.university.schema import (
     UniversityCreateSchema,
@@ -22,7 +26,7 @@ async def create_university(
     request: Request,
     payload: UniversityCreateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: UniversityService = Depends(get_university_service),
 ):
     return await service.create(db, payload, current_user=current_user)
@@ -35,7 +39,6 @@ async def list_universities(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    _current_user: UserOutSchema = Depends(get_current_user),
     service: UniversityService = Depends(get_university_service),
 ):
     return await service.list(db, limit=limit, offset=offset)
@@ -47,7 +50,6 @@ async def get_university(
     request: Request,
     university_id: int,
     db: AsyncSession = Depends(get_db),
-    _current_user: UserOutSchema = Depends(get_current_user),
     service: UniversityService = Depends(get_university_service),
 ):
     return await service.get_by_id(db, university_id=university_id)
@@ -60,7 +62,7 @@ async def update_university(
     university_id: int,
     payload: UniversityUpdateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: UniversityService = Depends(get_university_service),
 ):
     return await service.update(
@@ -77,7 +79,7 @@ async def delete_university(
     request: Request,
     university_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: UniversityService = Depends(get_university_service),
 ):
     await service.delete_by_id(db, university_id=university_id, current_user=current_user)

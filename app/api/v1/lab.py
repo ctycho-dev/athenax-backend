@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, get_db, get_lab_service
+from app.api.dependencies import (
+    get_db,
+    get_lab_service,
+    require_admin_user,
+)
 from app.core.config import settings
 from app.domain.lab.schema import LabCreateSchema, LabOutSchema, LabUpdateSchema
 from app.domain.lab.service import LabService
@@ -18,7 +22,7 @@ async def create_lab(
     request: Request,
     payload: LabCreateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: LabService = Depends(get_lab_service),
 ):
     return await service.create(db, payload, current_user=current_user)
@@ -31,7 +35,6 @@ async def list_labs(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    _current_user: UserOutSchema = Depends(get_current_user),
     service: LabService = Depends(get_lab_service),
 ):
     return await service.list(db, limit=limit, offset=offset)
@@ -43,7 +46,6 @@ async def get_lab(
     request: Request,
     lab_id: int,
     db: AsyncSession = Depends(get_db),
-    _current_user: UserOutSchema = Depends(get_current_user),
     service: LabService = Depends(get_lab_service),
 ):
     return await service.get_by_id(db, lab_id=lab_id)
@@ -56,7 +58,7 @@ async def update_lab(
     lab_id: int,
     payload: LabUpdateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: LabService = Depends(get_lab_service),
 ):
     return await service.update(
@@ -73,7 +75,7 @@ async def delete_lab(
     request: Request,
     lab_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(get_current_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: LabService = Depends(get_lab_service),
 ):
     await service.delete_by_id(db, lab_id=lab_id, current_user=current_user)
