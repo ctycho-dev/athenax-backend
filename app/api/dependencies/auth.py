@@ -39,8 +39,6 @@ async def get_current_user(
 
         # Fetch the user from the repository
         user = await user_repo.get_by_id(db, int(user_id))
-        if user is None:
-            raise credentials_exception
 
         request.state.user = user.id
         set_user_email(user.email, request)

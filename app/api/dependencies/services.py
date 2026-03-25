@@ -45,5 +45,6 @@ def get_university_service(
 
 def get_lab_service(
     repo: LabRepository = Depends(get_lab_repo),
+    university_repo: UniversityRepository = Depends(get_university_repo),
 ) -> LabService:
-    return LabService(repo=repo)
+    return LabService(repo=repo, university_repo=university_repo)

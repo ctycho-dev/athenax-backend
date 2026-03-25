@@ -28,12 +28,10 @@ class UserService:
         self.email_service = email_service
     
     async def get_all(self, db: AsyncSession) -> list[UserOutSchema]:
-        users = await self.repo.get_all(db)
-        return [UserOutSchema.model_validate(user) for user in users]
+        return await self.repo.get_all(db)
 
     async def get_by_id(self, db: AsyncSession, user_id: int) -> UserOutSchema:
-        user = await self.repo.get_by_id(db, user_id)
-        return self._require_user(UserOutSchema.model_validate(user) if user else None)
+        return await self.repo.get_by_id(db, user_id)
 
     async def delete_by_id(self, db: AsyncSession, current_user: UserOutSchema, user_id: int) -> None:
         await self.repo.delete_by_id(db, user_id)
@@ -65,8 +63,7 @@ class UserService:
             bio=user.bio,
             organization=user.organization,
         )
-        new_user = await self.repo.create(db, data)
-        return UserOutSchema.model_validate(new_user)
+        return await self.repo.create(db, data)
 
     async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> str:
         """

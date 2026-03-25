@@ -1,5 +1,3 @@
-from typing import cast
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.lab.repository import LabRepository
@@ -10,8 +8,9 @@ from app.exceptions.exceptions import NotFoundError
 
 
 class LabService:
-    def __init__(self, repo: LabRepository):
+    def __init__(self, repo: LabRepository, university_repo: UniversityRepository):
         self.repo = repo
+        self.university_repo = university_repo
 
     async def create(
         self,
@@ -32,12 +31,10 @@ class LabService:
         limit: int = 50,
         offset: int = 0,
     ) -> list[LabOutSchema]:
-        labs = await self.repo.list_all(db, limit=limit, offset=offset)
-        return [LabOutSchema.model_validate(lab) for lab in labs]
+        return await self.repo.get_all(db, limit=limit, offset=offset)
 
     async def get_by_id(self, db: AsyncSession, lab_id: int) -> LabOutSchema:
-        lab = await self.repo.get_by_id(db, lab_id)
-        return cast(LabOutSchema, lab)
+        return await self.repo.get_by_id(db, lab_id)
 
     async def update(
         self,
@@ -65,7 +62,7 @@ class LabService:
 
     async def _ensure_university_exists(self, db: AsyncSession, university_id: int) -> None:
         try:
-            await UniversityRepository().get_by_id(db, university_id)
+            await self.university_repo.get_by_id(db, university_id)
         except NotFoundError as exc:
             raise NotFoundError(
                 f"University with ID {university_id} not found"

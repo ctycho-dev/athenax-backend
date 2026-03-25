@@ -22,17 +22,6 @@ class UserRepository(BaseRepository[User, UserOutSchema, UserCreateDBSchema]):
 
     # ---------- Custom queries ---------- #
 
-    async def get_by_id(
-        self,
-        db: AsyncSession,
-        _id: int,
-    ) -> User | None:
-        try:
-            result = await db.execute(select(User).where(User.id == _id))
-            return result.scalar_one_or_none()
-        except Exception as e:  # pragma: no cover
-            raise DatabaseError(f"Failed to retrieve user with ID {_id}: {e}") from e
-
     async def get_by_email(
         self,
         db: AsyncSession,

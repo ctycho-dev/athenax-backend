@@ -1,11 +1,9 @@
 # app/common/base_repository.py
-from typing import Type, TypeVar, Generic, Optional, Dict, Any, Union
+from typing import Type, TypeVar, Generic, Optional, Dict, Any, Union, cast
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_
-from sqlalchemy import update as sqlalchemy_update, delete as sqlalchemy_delete
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import and_, asc
 from datetime import datetime, timezone
 from app.exceptions.exceptions import NotFoundError, DatabaseError
 
@@ -26,9 +24,10 @@ class BaseRepository(Generic[T, S, C]):
         self.default_schema = default_schema
         self.create_schema = create_schema
 
-    async def get_by_id(self, db: AsyncSession, _id: int) -> Optional[S]:
+    async def get_by_id(self, db: AsyncSession, _id: int) -> S:
         try:
-            result = await db.execute(select(self.model).where(self.model.id == _id))
+            model_cls = cast(Any, self.model)
+            result = await db.execute(select(self.model).where(model_cls.id == _id))
             instance = result.scalar_one_or_none()
             if not instance:
                 raise NotFoundError(f"Entity with ID {_id} not found")
@@ -38,14 +37,26 @@ class BaseRepository(Generic[T, S, C]):
         except Exception as e:
             raise DatabaseError(f"Failed to retrieve entity: {str(e)}") from e
 
-    async def get_all(self, db: AsyncSession, schema: Optional[Type[S]] = None) -> list[S]:
+    async def get_all(
+        self,
+        db: AsyncSession,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        schema: Optional[Type[S]] = None,
+    ) -> list[S]:
+        """Retrieve entities with optional pagination. If limit is None, returns all entities."""
         try:
-            result = await db.execute(select(self.model))
+            model_cls = cast(Any, self.model)
+            query = select(self.model).order_by(asc(model_cls.id))
+            if limit is not None:
+                query = query.limit(limit).offset(offset)
+            
+            result = await db.execute(query)
             instances = result.scalars().all()
             schema_cls = schema or self.default_schema
             return [schema_cls.model_validate(instance) for instance in instances]
         except Exception as e:
-            raise DatabaseError(f"Failed to retrieve all entities: {str(e)}") from e
+            raise DatabaseError(f"Failed to retrieve entities: {str(e)}") from e
 
     async def create(
         self,
@@ -60,7 +71,8 @@ class BaseRepository(Generic[T, S, C]):
             else:
                 data = entity
 
-            db_obj = self.model(**data)
+            model_cls = cast(Any, self.model)
+            db_obj = model_cls(**data)
             # Set audit fields if they exist
             now = datetime.now(timezone.utc)
             if hasattr(db_obj, 'created_at'):
@@ -91,12 +103,13 @@ class BaseRepository(Generic[T, S, C]):
         current_user_id: int | None = None,
     ) -> S:
         try:
+            model_cls = cast(Any, self.model)
             # if hasattr(self.model, 'deleted_at'):
             #     query = select(self.model).where(
             #         and_(self.model.id == _id, self.model.deleted_at.is_(None))
             #     )
             # else:
-            query = select(self.model).where(self.model.id == _id)
+            query = select(self.model).where(model_cls.id == _id)
                 
             result = await db.execute(query)
             instance = result.scalar_one_or_none()
@@ -138,20 +151,23 @@ class BaseRepository(Generic[T, S, C]):
     ) -> None:
         """Soft delete an entity by setting deleted_at and deleted_by."""
         try:
+            model_cls = cast(Any, self.model)
             result = await db.execute(
                 select(self.model).where(
-                    and_(self.model.id == _id, self.model.deleted_at.is_(None))
+                    and_(model_cls.id == _id, model_cls.deleted_at.is_(None))
                 )
             )
             instance = result.scalar_one_or_none()
             if not instance:
                 raise NotFoundError(f"Entity with ID {_id} not found")
 
+            instance_obj = cast(Any, instance)
+
             # Set soft delete fields
-            if hasattr(instance, "deleted_at"):
-                instance.deleted_at = datetime.now(timezone.utc)
-            if current_user_id and hasattr(instance, "deleted_by"):
-                instance.deleted_by = current_user_id
+            if hasattr(instance_obj, "deleted_at"):
+                instance_obj.deleted_at = datetime.now(timezone.utc)
+            if current_user_id and hasattr(instance_obj, "deleted_by"):
+                instance_obj.deleted_by = current_user_id
 
             await db.commit()
         except NotFoundError:
@@ -163,7 +179,8 @@ class BaseRepository(Generic[T, S, C]):
     async def delete_by_id(self, db: AsyncSession, _id: int) -> None:
         """Hard delete an entity (permanently removes from database)."""
         try:
-            result = await db.execute(select(self.model).where(self.model.id == _id))
+            model_cls = cast(Any, self.model)
+            result = await db.execute(select(self.model).where(model_cls.id == _id))
             instance = result.scalar_one_or_none()
             if not instance:
                 raise NotFoundError(f"Entity with ID {_id} not found")

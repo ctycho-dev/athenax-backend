@@ -1,5 +1,3 @@
-from typing import cast
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.university.repository import UniversityRepository
@@ -33,12 +31,10 @@ class UniversityService:
         limit: int = 50,
         offset: int = 0,
     ) -> list[UniversityOutSchema]:
-        universities = await self.repo.list_all(db, limit=limit, offset=offset)
-        return [UniversityOutSchema.model_validate(university) for university in universities]
+        return await self.repo.get_all(db, limit=limit, offset=offset)
 
     async def get_by_id(self, db: AsyncSession, university_id: int) -> UniversityOutSchema:
-        university = await self.repo.get_by_id(db, university_id)
-        return cast(UniversityOutSchema, university)
+        return await self.repo.get_by_id(db, university_id)
 
     async def update(
         self,
