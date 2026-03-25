@@ -80,12 +80,13 @@ curl -X POST "${API_URL}/api/v1/user/login" \
 
 ## University CRUD flow
 
-Universities are managed through authenticated API calls.
+Universities expose public read endpoints and admin-only write endpoints.
 
 1. The frontend sends `POST /api/v1/university`
 2. The backend creates the university record
 3. The frontend can list, read, update, and delete universities with the matching `/api/v1/university` routes
-4. All university CRUD endpoints require a valid authenticated user
+4. `GET /api/v1/university` and `GET /api/v1/university/{university_id}` are public
+5. `POST`, `PATCH`, and `DELETE` require an authenticated user with the `admin` role
 
 ### University create request example
 
@@ -94,8 +95,8 @@ curl -X POST "${API_URL}/api/v1/university" \
   -H "Content-Type: application/json" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{
-    "name": "University of Colombo",
-    "country": "LKA",
+    "name": "University of California",
+    "country": "USA",
     "focus": "Research"
   }'
 ```
@@ -104,14 +105,14 @@ curl -X POST "${API_URL}/api/v1/university" \
 
 ```bash
 curl -X GET "${API_URL}/api/v1/university?limit=50&offset=0" \
-  -H "Cookie: access_token=${ACCESS_TOKEN}"
+  -H "Accept: application/json"
 ```
 
 ### University get request example
 
 ```bash
 curl -X GET "${API_URL}/api/v1/university/1" \
-  -H "Cookie: access_token=${ACCESS_TOKEN}"
+  -H "Accept: application/json"
 ```
 
 ### University update request example
@@ -134,12 +135,13 @@ curl -X DELETE "${API_URL}/api/v1/university/1" \
 
 ## Lab CRUD flow
 
-Labs are also managed through authenticated API calls.
+Labs expose public read endpoints and admin-only write endpoints.
 
 1. The frontend sends `POST /api/v1/lab`
 2. The backend creates the lab record linked to a university
 3. The frontend can list, read, update, and delete labs with the matching `/api/v1/lab` routes
-4. All lab CRUD endpoints require a valid authenticated user
+4. `GET /api/v1/lab` and `GET /api/v1/lab/{lab_id}` are public
+5. `POST`, `PATCH`, and `DELETE` require an authenticated user with the `admin` role
 
 ### Lab create request example
 
@@ -148,7 +150,7 @@ curl -X POST "${API_URL}/api/v1/lab" \
   -H "Content-Type: application/json" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{
-    "university_id": 1,
+    "universityId": 1,
     "name": "AI Research Lab",
     "focus": "Machine Learning",
     "description": "Computer vision and applied ML projects",
@@ -160,14 +162,14 @@ curl -X POST "${API_URL}/api/v1/lab" \
 
 ```bash
 curl -X GET "${API_URL}/api/v1/lab?limit=50&offset=0" \
-  -H "Cookie: access_token=${ACCESS_TOKEN}"
+  -H "Accept: application/json"
 ```
 
 ### Lab get request example
 
 ```bash
 curl -X GET "${API_URL}/api/v1/lab/1" \
-  -H "Cookie: access_token=${ACCESS_TOKEN}"
+  -H "Accept: application/json"
 ```
 
 ### Lab update request example

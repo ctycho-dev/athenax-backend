@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.execute("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'admin';")
+    op.execute("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'ADMIN';")
 
 
 def downgrade() -> None:
