@@ -10,6 +10,7 @@ class AppMode(str, Enum):
 
 class UserRole(str, Enum):
     """User role and permissions in the system."""
+    ADMIN = "admin"
     USER = "user"
     RESEARCHER = "researcher"
     SPONSOR = "sponsor"

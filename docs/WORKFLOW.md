@@ -77,3 +77,114 @@ curl -X POST "${API_URL}/api/v1/user/login" \
   "token_type": "bearer"
 }
 ```
+
+## University CRUD flow
+
+Universities are managed through authenticated API calls.
+
+1. The frontend sends `POST /api/v1/university`
+2. The backend creates the university record
+3. The frontend can list, read, update, and delete universities with the matching `/api/v1/university` routes
+4. All university CRUD endpoints require a valid authenticated user
+
+### University create request example
+
+```bash
+curl -X POST "${API_URL}/api/v1/university" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "name": "University of Colombo",
+    "country": "LKA",
+    "focus": "Research"
+  }'
+```
+
+### University list request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/university?limit=50&offset=0" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### University get request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/university/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### University update request example
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/university/1" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "focus": "Applied Research"
+  }'
+```
+
+### University delete request example
+
+```bash
+curl -X DELETE "${API_URL}/api/v1/university/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+## Lab CRUD flow
+
+Labs are also managed through authenticated API calls.
+
+1. The frontend sends `POST /api/v1/lab`
+2. The backend creates the lab record linked to a university
+3. The frontend can list, read, update, and delete labs with the matching `/api/v1/lab` routes
+4. All lab CRUD endpoints require a valid authenticated user
+
+### Lab create request example
+
+```bash
+curl -X POST "${API_URL}/api/v1/lab" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "university_id": 1,
+    "name": "AI Research Lab",
+    "focus": "Machine Learning",
+    "description": "Computer vision and applied ML projects",
+    "active": true
+  }'
+```
+
+### Lab list request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/lab?limit=50&offset=0" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### Lab get request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/lab/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### Lab update request example
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/lab/1" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "active": false,
+    "description": "Paused until the next intake"
+  }'
+```
+
+### Lab delete request example
+
+```bash
+curl -X DELETE "${API_URL}/api/v1/lab/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
