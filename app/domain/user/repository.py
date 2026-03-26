@@ -9,7 +9,7 @@ from app.domain.user.schema import UserCreateDBSchema, UserOutSchema
 from app.exceptions.exceptions import DatabaseError
 
 
-class UserRepository(BaseRepository[User, UserOutSchema, UserCreateDBSchema]):
+class UserRepository(BaseRepository[User]):
     """
     PostgreSQL repository for User using SQLAlchemy (async).
 
@@ -18,7 +18,7 @@ class UserRepository(BaseRepository[User, UserOutSchema, UserCreateDBSchema]):
     """
 
     def __init__(self) -> None:
-        super().__init__(User, UserOutSchema, UserCreateDBSchema)
+        super().__init__(User)
 
     # ---------- Custom queries ---------- #
 

@@ -10,15 +10,14 @@ from app.domain.lab.schema import LabCreateSchema, LabOutSchema
 from app.exceptions.exceptions import DatabaseError, NotFoundError
 
 
-class LabRepository(BaseRepository[Lab, LabOutSchema, LabCreateSchema]):
+class LabRepository(BaseRepository[Lab]):
     def __init__(self) -> None:
-        super().__init__(Lab, LabOutSchema, LabCreateSchema)
+        super().__init__(Lab)
 
-    async def create(
+    async def create_lab(
         self,
         db: AsyncSession,
         entity: dict | LabCreateSchema,
-        schema=None,
         current_user_id: int | None = None,
     ) -> LabOutSchema:
         try:
@@ -53,12 +52,11 @@ class LabRepository(BaseRepository[Lab, LabOutSchema, LabCreateSchema]):
             await db.rollback()
             raise DatabaseError(f"Failed to create entity: {str(e)}") from e
 
-    async def update(
+    async def update_lab(
         self,
         db: AsyncSession,
         _id: int,
         update_data: dict | BaseModel,
-        schema=None,
         current_user_id: int | None = None,
     ) -> LabOutSchema:
         try:

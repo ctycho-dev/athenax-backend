@@ -1,194 +1,150 @@
-# app/common/base_repository.py
-from typing import Type, TypeVar, Generic, Optional, Dict, Any, Union, cast
+from typing import Type, TypeVar, Generic, Optional, Any, Union, runtime_checkable, Protocol
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_, asc
-from datetime import datetime, timezone
+from sqlalchemy import and_
 from app.exceptions.exceptions import NotFoundError, DatabaseError
 
+@runtime_checkable
+class AudiProtocol(Protocol):
+    id: Any
+    created_by_id: Optional[int]
+    updated_by_id: Optional[int]
+    deleted_at: Any
 
-T = TypeVar("T")  # SQLAlchemy model
-S = TypeVar("S", bound=BaseModel)  # Output schema
-C = TypeVar("C", bound=BaseModel)  # Create schema
+T = TypeVar("T", bound=AudiProtocol)
 
 
-class BaseRepository(Generic[T, S, C]):
-    def __init__(
-        self,
-        model: Type[T],
-        default_schema: Type[S],
-        create_schema: Type[C],
-    ):
+class BaseRepository(Generic[T]):
+    def __init__(self, model: Type[T]):
         self.model = model
-        self.default_schema = default_schema
-        self.create_schema = create_schema
 
-    async def get_by_id(self, db: AsyncSession, _id: int) -> S:
+    async def get_by_id(self, session: AsyncSession, _id: int) -> T:
         try:
-            model_cls = cast(Any, self.model)
-            result = await db.execute(select(self.model).where(model_cls.id == _id))
+            result = await session.execute(select(self.model).where(self.model.id == _id))
             instance = result.scalar_one_or_none()
             if not instance:
-                raise NotFoundError(f"Entity with ID {_id} not found")
-            return self.default_schema.model_validate(instance)
+                raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
+            return instance
         except NotFoundError:
             raise
         except Exception as e:
-            raise DatabaseError(f"Failed to retrieve entity: {str(e)}") from e
+            raise DatabaseError(f"Failed to retrieve {self.model.__name__}: {e}") from e
 
     async def get_all(
         self,
-        db: AsyncSession,
-        limit: Optional[int] = None,
+        session: AsyncSession,
+        limit: int = 100,
         offset: int = 0,
-        schema: Optional[Type[S]] = None,
-    ) -> list[S]:
-        """Retrieve entities with optional pagination. If limit is None, returns all entities."""
+    ) -> list[T]:
         try:
-            model_cls = cast(Any, self.model)
-            query = select(self.model).order_by(asc(model_cls.id))
-            if limit is not None:
-                query = query.limit(limit).offset(offset)
-            
-            result = await db.execute(query)
-            instances = result.scalars().all()
-            schema_cls = schema or self.default_schema
-            return [schema_cls.model_validate(instance) for instance in instances]
+            result = await session.execute(select(self.model).limit(limit).offset(offset))
+            return list(result.scalars().all())
         except Exception as e:
-            raise DatabaseError(f"Failed to retrieve entities: {str(e)}") from e
+            raise DatabaseError(f"Failed to retrieve {self.model.__name__} list: {e}") from e
 
     async def create(
         self,
-        db: AsyncSession,
-        entity: Union[Dict[str, Any], C],
-        schema: Optional[Type[S]] = None,
+        session: AsyncSession,
+        data: Union[dict[str, Any], BaseModel],
         current_user_id: int | None = None,
-    ) -> S:
+    ) -> T:
         try:
-            if isinstance(entity, BaseModel):
-                data = entity.model_dump()
-            else:
-                data = entity
-
-            model_cls = cast(Any, self.model)
-            db_obj = model_cls(**data)
-            # Set audit fields if they exist
-            now = datetime.now(timezone.utc)
-            if hasattr(db_obj, 'created_at'):
-                db_obj.created_at = now
-            if hasattr(db_obj, 'updated_at'):
-                db_obj.updated_at = now
-            if current_user_id and hasattr(db_obj, 'created_by'):
-                db_obj.created_by = current_user_id
-            if current_user_id and hasattr(db_obj, 'updated_by'):
-                db_obj.updated_by = current_user_id
-
-            db.add(db_obj)
-            await db.commit()
-            await db.refresh(db_obj)
-
-            schema_cls = schema or self.default_schema
-            return schema_cls.model_validate(db_obj)
+            payload = data.model_dump() if isinstance(data, BaseModel) else data
+            instance = self.model(**payload)
+            if current_user_id and hasattr(instance, "created_by_id"):
+                instance.created_by_id = current_user_id
+            if current_user_id and hasattr(instance, "updated_by_id"):
+                instance.updated_by_id = current_user_id
+            session.add(instance)
+            await session.flush()
+            await session.refresh(instance)
+            return instance
         except Exception as e:
-            await db.rollback()
-            raise DatabaseError(f"Failed to create entity: {str(e)}") from e
+            raise DatabaseError(f"Failed to create {self.model.__name__}: {e}") from e
 
     async def update(
         self,
-        db: AsyncSession,
+        session: AsyncSession,
         _id: int,
-        update_data: Union[Dict[str, Any], BaseModel],
-        schema: Optional[Type[S]] = None,
+        data: Union[dict[str, Any], BaseModel],
         current_user_id: int | None = None,
-    ) -> S:
+    ) -> T:
         try:
-            model_cls = cast(Any, self.model)
-            # if hasattr(self.model, 'deleted_at'):
-            #     query = select(self.model).where(
-            #         and_(self.model.id == _id, self.model.deleted_at.is_(None))
-            #     )
-            # else:
-            query = select(self.model).where(model_cls.id == _id)
-                
-            result = await db.execute(query)
+            result = await session.execute(select(self.model).where(self.model.id == _id))
             instance = result.scalar_one_or_none()
             if not instance:
-                raise NotFoundError(f"Entity with ID {_id} not found")
+                raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
 
-            if isinstance(update_data, BaseModel):
-                update_data = update_data.model_dump(exclude_unset=True)
+            payload = data.model_dump(exclude_unset=True) if isinstance(data, BaseModel) else data
 
-            # Protected fields that should never be updated
-            protected_fields = {"id", "created_at", "created_by"}
-            # protected_fields = {"id", "created_at", "created_by", "deleted_at", "deleted_by"}
-            
-            # Update only allowed fields
-            for key, value in update_data.items():
+            protected_fields = {"id", "created_at", "created_by_id"}
+            for key, value in payload.items():
                 if key not in protected_fields:
                     setattr(instance, key, value)
 
-            # Always update audit fields if they exist
-            if current_user_id and hasattr(instance, "updated_by"):
-                setattr(instance, "updated_by", current_user_id)
+            if current_user_id and hasattr(instance, "updated_by_id"):
+                instance.updated_by_id = current_user_id
 
-            await db.commit()
-            await db.refresh(instance)
-
-            schema_cls = schema or self.default_schema
-            return schema_cls.model_validate(instance)
+            await session.flush()
+            await session.refresh(instance)
+            return instance
         except NotFoundError:
             raise
         except Exception as e:
-            await db.rollback()
-            raise DatabaseError(f"Failed to update entity: {str(e)}") from e
-
-    async def soft_delete(
+            raise DatabaseError(f"Failed to update {self.model.__name__}: {e}") from e
+    
+    async def update_instance(
         self,
-        db: AsyncSession,
-        _id: int,
-        current_user_id: Optional[str] = None,
-    ) -> None:
-        """Soft delete an entity by setting deleted_at and deleted_by."""
+        session: AsyncSession,
+        instance: T,
+        data: Union[dict[str, Any], BaseModel],
+        current_user_id: int | None = None,
+    ) -> T:
         try:
-            model_cls = cast(Any, self.model)
-            result = await db.execute(
+            payload = data.model_dump(exclude_unset=True) if isinstance(data, BaseModel) else data
+
+            protected_fields = {"id", "created_at", "created_by_id"}
+            for key, value in payload.items():
+                if key not in protected_fields:
+                    setattr(instance, key, value)
+
+            if current_user_id and hasattr(instance, "updated_by_id"):
+                instance.updated_by_id = current_user_id
+
+            await session.flush()
+            return instance
+        except Exception as e:
+            raise DatabaseError(f"Failed to update {self.model.__name__}: {e}") from e
+
+    async def delete_by_id(self, session: AsyncSession, _id: int) -> None:
+        try:
+            result = await session.execute(select(self.model).where(self.model.id == _id))
+            instance = result.scalar_one_or_none()
+            if not instance:
+                raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
+            await session.delete(instance)
+            await session.flush()
+        except NotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Failed to delete {self.model.__name__}: {e}") from e
+
+    async def soft_delete(self, session: AsyncSession, _id: int) -> None:
+        from datetime import datetime, timezone
+        try:
+            result = await session.execute(
                 select(self.model).where(
-                    and_(model_cls.id == _id, model_cls.deleted_at.is_(None))
+                    and_(self.model.id == _id, self.model.deleted_at.is_(None))
                 )
             )
             instance = result.scalar_one_or_none()
             if not instance:
-                raise NotFoundError(f"Entity with ID {_id} not found")
-
-            instance_obj = cast(Any, instance)
-
-            # Set soft delete fields
-            if hasattr(instance_obj, "deleted_at"):
-                instance_obj.deleted_at = datetime.now(timezone.utc)
-            if current_user_id and hasattr(instance_obj, "deleted_by"):
-                instance_obj.deleted_by = current_user_id
-
-            await db.commit()
+                raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
+            if hasattr(instance, "deleted_at"):
+                instance.deleted_at = datetime.now(timezone.utc)
+            await session.flush()
         except NotFoundError:
             raise
         except Exception as e:
-            await db.rollback()
-            raise DatabaseError(f"Failed to soft delete entity: {str(e)}") from e
-
-    async def delete_by_id(self, db: AsyncSession, _id: int) -> None:
-        """Hard delete an entity (permanently removes from database)."""
-        try:
-            model_cls = cast(Any, self.model)
-            result = await db.execute(select(self.model).where(model_cls.id == _id))
-            instance = result.scalar_one_or_none()
-            if not instance:
-                raise NotFoundError(f"Entity with ID {_id} not found")
-
-            await db.delete(instance)
-            await db.commit()
-        except NotFoundError:
-            raise
-        except Exception as e:
-            await db.rollback()
-            raise DatabaseError(f"Failed to delete entity: {str(e)}") from e
+            raise DatabaseError(f"Failed to soft delete {self.model.__name__}: {e}") from e

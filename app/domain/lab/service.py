@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.lab.model import Lab
 from app.domain.lab.repository import LabRepository
 from app.domain.lab.schema import LabCreateSchema, LabOutSchema, LabUpdateSchema
 from app.domain.university.repository import UniversityRepository
@@ -19,7 +20,7 @@ class LabService:
         current_user: UserOutSchema | None = None,
     ) -> LabOutSchema:
         await self._ensure_university_exists(db, data.university_id)
-        return await self.repo.create(
+        return await self.repo.create_lab(
             db,
             data,
             current_user_id=current_user.id if current_user else None,
@@ -30,10 +31,10 @@ class LabService:
         db: AsyncSession,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[LabOutSchema]:
+    ) -> list[Lab]:
         return await self.repo.get_all(db, limit=limit, offset=offset)
 
-    async def get_by_id(self, db: AsyncSession, lab_id: int) -> LabOutSchema:
+    async def get_by_id(self, db: AsyncSession, lab_id: int) -> Lab:
         return await self.repo.get_by_id(db, lab_id)
 
     async def update(
@@ -45,7 +46,7 @@ class LabService:
     ) -> LabOutSchema:
         if data.university_id is not None:
             await self._ensure_university_exists(db, data.university_id)
-        return await self.repo.update(
+        return await self.repo.update_lab(
             db,
             lab_id,
             data,

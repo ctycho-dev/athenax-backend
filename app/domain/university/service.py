@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.university.model import University
 from app.domain.university.repository import UniversityRepository
 from app.domain.university.schema import (
     UniversityCreateSchema,
-    UniversityOutSchema,
     UniversityUpdateSchema,
 )
 from app.domain.user.schema import UserOutSchema
@@ -18,7 +18,7 @@ class UniversityService:
         db: AsyncSession,
         data: UniversityCreateSchema,
         current_user: UserOutSchema | None = None,
-    ) -> UniversityOutSchema:
+    ) -> University:
         return await self.repo.create(
             db,
             data,
@@ -30,10 +30,10 @@ class UniversityService:
         db: AsyncSession,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[UniversityOutSchema]:
+    ) -> list[University]:
         return await self.repo.get_all(db, limit=limit, offset=offset)
 
-    async def get_by_id(self, db: AsyncSession, university_id: int) -> UniversityOutSchema:
+    async def get_by_id(self, db: AsyncSession, university_id: int) -> University:
         return await self.repo.get_by_id(db, university_id)
 
     async def update(
@@ -42,7 +42,7 @@ class UniversityService:
         university_id: int,
         data: UniversityUpdateSchema,
         current_user: UserOutSchema | None = None,
-    ) -> UniversityOutSchema:
+    ) -> University:
         return await self.repo.update(
             db,
             university_id,

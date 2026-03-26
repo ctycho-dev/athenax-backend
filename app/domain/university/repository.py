@@ -3,6 +3,6 @@ from app.domain.university.model import University
 from app.domain.university.schema import UniversityCreateSchema, UniversityOutSchema
 
 
-class UniversityRepository(BaseRepository[University, UniversityOutSchema, UniversityCreateSchema]):
+class UniversityRepository(BaseRepository[University]):
     def __init__(self) -> None:
-        super().__init__(University, UniversityOutSchema, UniversityCreateSchema)
+        super().__init__(University)
