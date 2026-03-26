@@ -2,8 +2,10 @@ from datetime import datetime
 
 import pytest
 from fastapi import HTTPException, status
+from sqlalchemy import insert
 
 from app.api.dependencies import get_current_user
+from app.domain.lab.model import Category
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
 from app.main import app
@@ -181,3 +183,75 @@ class TestAdminRBACAPI:
 
         assert response.status_code == 404
         assert response.json()["detail"] == "University with ID 999999 not found"
+
+    async def test_lab_create_with_category_ids(self, client: ClientWithEmail, db_session):
+        original_override = app.dependency_overrides[get_current_user]
+
+        async def override_admin_user():
+            return build_mock_user(UserRole.ADMIN)
+
+        category_result = await db_session.execute(
+            insert(Category)
+            .values(name="AI")
+            .returning(Category.id)
+        )
+        category_id = category_result.scalar_one()
+        await db_session.commit()
+
+        app.dependency_overrides[get_current_user] = override_admin_user
+        try:
+            university_response = await client.post(
+                "/api/v1/university",
+                json={"name": "Category Uni", "country": "LKA", "focus": "Science"},
+            )
+            university_id = university_response.json()["id"]
+
+            response = await client.post(
+                "/api/v1/lab",
+                json={
+                    "universityId": university_id,
+                    "name": "Category Lab",
+                    "focus": "AI",
+                    "description": "Lab with categories",
+                    "categoryIds": [category_id],
+                    "active": True,
+                },
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original_override
+
+        assert university_response.status_code == 201
+        assert response.status_code == 201
+        assert response.json()["categoryIds"] == [category_id]
+
+    async def test_lab_create_returns_not_found_when_category_missing(self, client: ClientWithEmail):
+        original_override = app.dependency_overrides[get_current_user]
+
+        async def override_admin_user():
+            return build_mock_user(UserRole.ADMIN)
+
+        app.dependency_overrides[get_current_user] = override_admin_user
+        try:
+            university_response = await client.post(
+                "/api/v1/university",
+                json={"name": "Missing Category Uni", "country": "LKA", "focus": "Science"},
+            )
+            university_id = university_response.json()["id"]
+
+            response = await client.post(
+                "/api/v1/lab",
+                json={
+                    "universityId": university_id,
+                    "name": "Invalid Category Lab",
+                    "focus": "AI",
+                    "description": "Invalid category assignment",
+                    "categoryIds": [999999],
+                    "active": True,
+                },
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original_override
+
+        assert university_response.status_code == 201
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Category IDs not found: [999999]"

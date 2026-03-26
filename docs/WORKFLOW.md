@@ -135,15 +135,37 @@ curl -X DELETE "${API_URL}/api/v1/university/1" \
 
 ## Lab CRUD flow
 
-Labs expose public read endpoints and admin-only write endpoints.
+Labs expose public read endpoints and admin-only write endpoints. Labs support many-to-many categories.
 
 1. The frontend sends `POST /api/v1/lab`
 2. The backend creates the lab record linked to a university
-3. The frontend can list, read, update, and delete labs with the matching `/api/v1/lab` routes
-4. `GET /api/v1/lab` and `GET /api/v1/lab/{lab_id}` are public
-5. `POST`, `PATCH`, and `DELETE` require an authenticated user with the `admin` role
+3. Categories can be linked by existing ID (`categoryIds`) or created inline by name (`newCategories`)
+4. The frontend can list, read, update, and delete labs with the matching `/api/v1/lab` routes
+5. `GET /api/v1/lab` and `GET /api/v1/lab/{lab_id}` are public
+6. `POST`, `PATCH`, and `DELETE` require an authenticated user with the `admin` role
+
+### Lab response shape
+
+```json
+{
+  "id": 1,
+  "universityId": 1,
+  "name": "AI Research Lab",
+  "focus": "Machine Learning",
+  "description": "Computer vision and applied ML projects",
+  "categories": [
+    { "id": 1, "name": "Robotics" },
+    { "id": 2, "name": "Computer Vision" }
+  ],
+  "active": true,
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T00:00:00Z"
+}
+```
 
 ### Lab create request example
+
+`categoryIds` links existing categories by ID. `newCategories` creates new categories by name (optional, both default to empty).
 
 ```bash
 curl -X POST "${API_URL}/api/v1/lab" \
@@ -154,6 +176,8 @@ curl -X POST "${API_URL}/api/v1/lab" \
     "name": "AI Research Lab",
     "focus": "Machine Learning",
     "description": "Computer vision and applied ML projects",
+    "categoryIds": [1, 2],
+    "newCategories": ["Robotics", "Computer Vision"],
     "active": true
   }'
 ```

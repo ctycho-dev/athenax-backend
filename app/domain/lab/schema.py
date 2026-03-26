@@ -5,6 +5,11 @@ from pydantic import Field
 from app.common.schema import CamelModel
 
 
+class CategoryOutSchema(CamelModel):
+    id: int
+    name: str
+
+
 class LabBaseSchema(CamelModel):
     university_id: int
     name: str = Field(max_length=150)
@@ -14,7 +19,8 @@ class LabBaseSchema(CamelModel):
 
 
 class LabCreateSchema(LabBaseSchema):
-    pass
+    category_ids: list[int] = Field(default_factory=list)
+    new_categories: list[str] = Field(default_factory=list)
 
 
 class LabUpdateSchema(CamelModel):
@@ -22,10 +28,12 @@ class LabUpdateSchema(CamelModel):
     name: str | None = Field(default=None, max_length=150)
     focus: str | None = Field(default=None, max_length=255)
     description: str | None = None
+    category_ids: list[int] | None = None
     active: bool | None = None
 
 
 class LabOutSchema(LabBaseSchema):
     id: int
+    categories: list[CategoryOutSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
