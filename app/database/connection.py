@@ -73,6 +73,7 @@ class DatabaseManager:
         session = self.async_session()
         try:
             yield session
+            await session.commit()
         except Exception:
             await session.rollback()
             raise

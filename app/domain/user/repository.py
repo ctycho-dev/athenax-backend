@@ -9,7 +9,7 @@ from app.domain.user.schema import UserCreateDBSchema, UserOutSchema
 from app.exceptions.exceptions import DatabaseError
 
 
-class UserRepository(BaseRepository[User, UserOutSchema, UserCreateDBSchema]):
+class UserRepository(BaseRepository[User]):
     """
     PostgreSQL repository for User using SQLAlchemy (async).
 
@@ -18,20 +18,9 @@ class UserRepository(BaseRepository[User, UserOutSchema, UserCreateDBSchema]):
     """
 
     def __init__(self) -> None:
-        super().__init__(User, UserOutSchema, UserCreateDBSchema)
+        super().__init__(User)
 
     # ---------- Custom queries ---------- #
-
-    async def get_by_id(
-        self,
-        db: AsyncSession,
-        _id: int,
-    ) -> User | None:
-        try:
-            result = await db.execute(select(User).where(User.id == _id))
-            return result.scalar_one_or_none()
-        except Exception as e:  # pragma: no cover
-            raise DatabaseError(f"Failed to retrieve user with ID {_id}: {e}") from e
 
     async def get_by_email(
         self,

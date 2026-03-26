@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
 from app.domain.user.schema import UserOutSchema
 from app.domain.user.repository import UserRepository
+from app.enums.enums import UserRole
 from app.exceptions.exceptions import NotFoundError
 from app.api.dependencies.db import get_db
 from app.middleware.logging import set_user_email
@@ -38,8 +39,6 @@ async def get_current_user(
 
         # Fetch the user from the repository
         user = await user_repo.get_by_id(db, int(user_id))
-        if user is None:
-            raise credentials_exception
 
         request.state.user = user.id
         set_user_email(user.email, request)
@@ -47,3 +46,15 @@ async def get_current_user(
         return user
     except (JWTError, NotFoundError, ValueError) as exc:
         raise credentials_exception from exc
+
+
+async def require_admin_user(
+    current_user: UserOutSchema = Depends(get_current_user),
+) -> UserOutSchema:
+    """Require an authenticated admin user."""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return current_user

@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ApiV1Prefix(BaseModel):
     prefix: str = "/api/v1"
     user: str = "/user"
+    university: str = "/university"
+    lab: str = "/lab"
 
 
 class ApiV2Prefix(BaseModel):

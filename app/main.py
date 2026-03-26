@@ -9,7 +9,6 @@ from app.api.v1 import router as api_router
 from app.domain.product.model import Product  # noqa: F401
 from app.domain.university.model import University  # noqa: F401
 from app.domain.lab.model import Lab  # noqa: F401
-from app.domain.tag.model import Tag  # noqa: F401
 from app.exceptions.exceptions import add_exception_handlers
 from app.core.logger import (
     get_logger,
