@@ -1,7 +1,7 @@
 # app/common/audit_mixin.py
-from sqlalchemy import DateTime, Integer, ForeignKey
+from sqlalchemy import DateTime, Integer, ForeignKey, func
 from sqlalchemy.orm import declarative_mixin, declared_attr, Mapped, mapped_column
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 
@@ -13,7 +13,7 @@ class TimestampMixin:
     def created_at(cls) -> Mapped[datetime]:
         return mapped_column(
             DateTime(timezone=True),
-            default=lambda: datetime.now(timezone.utc),
+            server_default=func.now(),
             nullable=False
         )
 
@@ -21,8 +21,8 @@ class TimestampMixin:
     def updated_at(cls) -> Mapped[datetime]:
         return mapped_column(
             DateTime(timezone=True),
-            default=lambda: datetime.now(timezone.utc),
-            onupdate=lambda: datetime.now(timezone.utc),
+            server_default=func.now(),
+            onupdate=func.now(),
             nullable=False
         )
 

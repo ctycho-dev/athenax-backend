@@ -8,6 +8,7 @@ def add_cors_middleware(app: FastAPI):
 
     if settings.MODE == "dev":
         origins.append("http://localhost:5173")
+        origins.append("http://localhost:3543")
 
     app.add_middleware(
         CORSMiddleware,
