@@ -80,28 +80,16 @@ class UserService:
     async def create_user(
         self, db: AsyncSession, user: UserSignupSchema
     ) -> UserOutSchema:
-        existing_user = await self.repo.get_by_email(db, user.email)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User already exists",
-            )
-        data = UserCreateDBSchema(
-            name=user.name,
-            email=user.email,
-            password_hash=hash_password(user.password),
-            verified=False,
-            role=user.role,
-            external_id=user.external_id,
-        )
-        return await self.repo.create(db, data)
+        user_out = await self._create_user_record(db, user)
+        await db.commit()
+        return user_out
 
     async def signup_user(self, db: AsyncSession, user: UserSignupSchema) -> str:
         """
         Public signup. Creates user and optional role-specific profile
         in a single transaction.
         """
-        new_user = await self.create_user(db, user)
+        new_user = await self._create_user_record(db, user)
 
         if user.investor_profile is not None:
             await self._upsert_profile(db, self.investor_profile_repo, new_user.id, user.investor_profile, InvestorProfileOutSchema)
@@ -342,6 +330,23 @@ class UserService:
         token = generate_email_token()
         await self.repo.update(db, user_id, {"token_hash": hash_token(token), "token_type": token_type})
         return token
+
+    async def _create_user_record(self, db: AsyncSession, user: UserSignupSchema) -> UserOutSchema:
+        existing_user = await self.repo.get_by_email(db, user.email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already exists",
+            )
+        data = UserCreateDBSchema(
+            name=user.name,
+            email=user.email,
+            password_hash=hash_password(user.password),
+            verified=False,
+            role=user.role,
+            external_id=user.external_id,
+        )
+        return await self.repo.create(db, data)
 
     async def _upsert_profile(
         self,
