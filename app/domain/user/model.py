@@ -1,8 +1,5 @@
-from datetime import datetime
-
 from sqlalchemy import (
     Boolean,
-    DateTime,
     Enum as SQLEnum,
     Float,
     ForeignKey,
@@ -10,7 +7,6 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     String,
     Text,
-    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,7 +71,7 @@ class SponsorProfile(Base, TimestampMixin):
     amount: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
-class UserCategory(Base):
+class UserCategory(Base, TimestampMixin):
     __tablename__ = "user_category"
     __table_args__ = (PrimaryKeyConstraint("user_id", "category_id"),)
 
@@ -84,7 +80,4 @@ class UserCategory(Base):
     )
     category_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
