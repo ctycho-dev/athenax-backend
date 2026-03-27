@@ -35,5 +35,6 @@ class LabUpdateSchema(CamelModel):
 class LabOutSchema(LabBaseSchema):
     id: int
     categories: list[CategoryOutSchema] = Field(default_factory=list)
+    category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

@@ -1,5 +1,11 @@
 from fastapi import Depends
-from app.domain.user.repository import UserRepository
+from app.domain.user.repository import (
+    UserRepository,
+    InvestorProfileRepository,
+    ResearcherProfileRepository,
+    SponsorProfileRepository,
+    UserCategoryRepository,
+)
 from app.domain.user.service import UserService
 from app.infrastructure.email.service import EmailService
 from app.domain.university.repository import UniversityRepository
@@ -27,14 +33,41 @@ def get_lab_repo() -> LabRepository:
     return LabRepository()
 
 
+def get_investor_profile_repo() -> InvestorProfileRepository:
+    return InvestorProfileRepository()
+
+
+def get_researcher_profile_repo() -> ResearcherProfileRepository:
+    return ResearcherProfileRepository()
+
+
+def get_sponsor_profile_repo() -> SponsorProfileRepository:
+    return SponsorProfileRepository()
+
+
+def get_user_category_repo() -> UserCategoryRepository:
+    return UserCategoryRepository()
+
+
 # -------------------------
 # Services
 # -------------------------
 def get_user_service(
     repo: UserRepository = Depends(get_user_repo),
     email_service: EmailService = Depends(get_email_service),
+    investor_profile_repo: InvestorProfileRepository = Depends(get_investor_profile_repo),
+    researcher_profile_repo: ResearcherProfileRepository = Depends(get_researcher_profile_repo),
+    sponsor_profile_repo: SponsorProfileRepository = Depends(get_sponsor_profile_repo),
+    user_category_repo: UserCategoryRepository = Depends(get_user_category_repo),
 ) -> UserService:
-    return UserService(repo=repo, email_service=email_service)
+    return UserService(
+        repo=repo,
+        email_service=email_service,
+        investor_profile_repo=investor_profile_repo,
+        researcher_profile_repo=researcher_profile_repo,
+        sponsor_profile_repo=sponsor_profile_repo,
+        user_category_repo=user_category_repo,
+    )
 
 
 def get_university_service(

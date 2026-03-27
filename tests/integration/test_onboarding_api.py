@@ -24,7 +24,7 @@ class TestOnboardingAPI:
         user_payload,
         db_session,
     ):
-        user_payload = {**user_payload, "role": "builder"}
+        user_payload = {**user_payload, "role": "researcher"}
 
         response = await client.post("/api/v1/user/signup", json=user_payload)
 
@@ -35,7 +35,7 @@ class TestOnboardingAPI:
         )
         user = result.scalar_one()
 
-        assert user.role == UserRole.BUILDER
+        assert user.role == UserRole.RESEARCHER
 
     async def test_signup_succeeds_when_verification_email_fails(
         self,
