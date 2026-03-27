@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import insert
 
 from app.api.dependencies import get_current_user
-from app.domain.lab.model import Category
+from app.domain.category.model import Category
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
 from app.main import app

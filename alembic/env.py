@@ -11,6 +11,7 @@ from app.domain.user.model import User
 from app.domain.product.model import Product
 from app.domain.university.model import University
 from app.domain.lab.model import Lab
+from app.domain.category.model import Category
 # from app.domain.camera.model import Camera
 # from app.domain.company.model import Company
 # from app.domain.notification.model import Notification
