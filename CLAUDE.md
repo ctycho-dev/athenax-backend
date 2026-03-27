@@ -65,6 +65,22 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 2. `SlowAPIMiddleware` — Per-endpoint rate limiting via slowapi.
 3. CORS middleware — Configurable origins from settings.
 
+### Transaction Management
+
+- `session_scope` rolls back on error but never commits — services own `commit()`.
+- Repositories only `flush()` + `refresh()`, never `commit()`.
+- Multi-step atomic ops (e.g. `signup_user`) must call internal helpers (e.g. `_upsert_profile`) directly, not the public service methods which each commit independently.
+
+### Domain / Model Rules
+
+- `Category` lives in `category/model.py`; `lab_category` association table stays in `lab/model.py`.
+- Every model must be explicitly imported in `alembic/env.py` for autogenerate to detect it.
+- Profile/extension tables belong in their parent domain (e.g. `user/model.py`), not a new folder.
+
+### Pagination
+
+- Wire `limit`/`offset` all the way: `Query` param → service arg → `repo.get_all()`.
+
 ### Testing Patterns
 
 Tests are async integration tests in `tests/integration/`. The `conftest.py` provides:

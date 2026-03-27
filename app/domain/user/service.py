@@ -57,8 +57,8 @@ class UserService:
         self.sponsor_profile_repo = sponsor_profile_repo
         self.user_category_repo = user_category_repo
 
-    async def get_all(self, db: AsyncSession) -> list[User]:
-        return await self.repo.get_all(db)
+    async def get_all(self, db: AsyncSession, limit: int = 50, offset: int = 0) -> list[User]:
+        return await self.repo.get_all(db, limit=limit, offset=offset)
 
     async def get_by_id(self, db: AsyncSession, user_id: int) -> User:
         return await self.repo.get_by_id(db, user_id)

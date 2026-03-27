@@ -62,8 +62,10 @@ async def get_users(
     db: AsyncSession = Depends(get_db),
     _: UserOutSchema = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
-    return await user_service.get_all(db)
+    return await user_service.get_all(db, limit=limit, offset=offset)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=UserOutSchema)
