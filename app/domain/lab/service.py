@@ -20,11 +20,13 @@ class LabService:
         current_user: UserOutSchema | None = None,
     ) -> LabOutSchema:
         await self._ensure_university_exists(db, data.university_id)
-        return await self.repo.create_lab(
+        result = await self.repo.create_lab(
             db,
             data,
             current_user_id=current_user.id if current_user else None,
         )
+        await db.commit()
+        return result
 
     async def list(
         self,
@@ -46,12 +48,14 @@ class LabService:
     ) -> LabOutSchema:
         if data.university_id is not None:
             await self._ensure_university_exists(db, data.university_id)
-        return await self.repo.update_lab(
+        result = await self.repo.update_lab(
             db,
             lab_id,
             data,
             current_user_id=current_user.id if current_user else None,
         )
+        await db.commit()
+        return result
 
     async def delete_by_id(
         self,
@@ -60,6 +64,7 @@ class LabService:
         current_user: UserOutSchema | None = None,
     ) -> None:
         await self.repo.delete_by_id(db, lab_id)
+        await db.commit()
 
     async def _ensure_university_exists(self, db: AsyncSession, university_id: int) -> None:
         try:

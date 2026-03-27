@@ -19,11 +19,13 @@ class UniversityService:
         data: UniversityCreateSchema,
         current_user: UserOutSchema | None = None,
     ) -> University:
-        return await self.repo.create(
+        result = await self.repo.create(
             db,
             data,
             current_user_id=current_user.id if current_user else None,
         )
+        await db.commit()
+        return result
 
     async def list(
         self,
@@ -43,12 +45,14 @@ class UniversityService:
         data: UniversityUpdateSchema,
         current_user: UserOutSchema | None = None,
     ) -> University:
-        return await self.repo.update(
+        result = await self.repo.update(
             db,
             university_id,
             data,
             current_user_id=current_user.id if current_user else None,
         )
+        await db.commit()
+        return result
 
     async def delete_by_id(
         self,
@@ -57,3 +61,4 @@ class UniversityService:
         current_user: UserOutSchema | None = None,
     ) -> None:
         await self.repo.delete_by_id(db, university_id)
+        await db.commit()

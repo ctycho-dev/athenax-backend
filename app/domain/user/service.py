@@ -67,6 +67,7 @@ class UserService:
         self, db: AsyncSession, current_user: UserOutSchema, user_id: int
     ) -> None:
         await self.repo.delete_by_id(db, user_id)
+        await db.commit()
 
     async def get_by_email(
         self, db: AsyncSession, email: str
@@ -103,13 +104,14 @@ class UserService:
         new_user = await self.create_user(db, user)
 
         if user.investor_profile is not None:
-            await self.upsert_investor_profile(db, new_user.id, user.investor_profile)
+            await self._upsert_profile(db, self.investor_profile_repo, new_user.id, user.investor_profile, InvestorProfileOutSchema)
         if user.researcher_profile is not None:
-            await self.upsert_researcher_profile(db, new_user.id, user.researcher_profile)
+            await self._upsert_profile(db, self.researcher_profile_repo, new_user.id, user.researcher_profile, ResearcherProfileOutSchema)
         if user.sponsor_profile is not None:
-            await self.upsert_sponsor_profile(db, new_user.id, user.sponsor_profile)
+            await self._upsert_profile(db, self.sponsor_profile_repo, new_user.id, user.sponsor_profile, SponsorProfileOutSchema)
 
         token = await self._issue_verification_token(db, new_user.id)
+        await db.commit()
         try:
             await self.email_service.send_verification_email(
                 new_user.email,
@@ -140,6 +142,7 @@ class UserService:
             verified_user.id,
             {"verified": True, "token_hash": None, "token_type": None},
         )
+        await db.commit()
         return self._require_user(updated_user)
 
     async def resend_verification_email(
@@ -151,6 +154,7 @@ class UserService:
         if user.verified:
             return "Email is already verified."
         token = await self._issue_verification_token(db, user.id)
+        await db.commit()
         try:
             await self.email_service.send_verification_email(
                 user.email,
@@ -173,6 +177,7 @@ class UserService:
         if not user:
             return "If an account with that email exists, a password reset email has been sent."
         token = await self._issue_reset_token(db, user.id)
+        await db.commit()
         try:
             await self.email_service.send_password_reset_email(
                 user.email,
@@ -205,6 +210,7 @@ class UserService:
             reset_user.id,
             {"password_hash": hash_password(password), "token_hash": None, "token_type": None},
         )
+        await db.commit()
         return "Password reset successfully."
 
     async def ensure_login_allowed(
@@ -235,9 +241,11 @@ class UserService:
     async def upsert_investor_profile(
         self, db: AsyncSession, user_id: int, data: InvestorProfileSchema
     ) -> InvestorProfileOutSchema:
-        return await self._upsert_profile(
+        result = await self._upsert_profile(
             db, self.investor_profile_repo, user_id, data, InvestorProfileOutSchema
         )
+        await db.commit()
+        return result
 
     async def get_investor_profile(
         self, db: AsyncSession, user_id: int
@@ -249,9 +257,11 @@ class UserService:
     async def upsert_researcher_profile(
         self, db: AsyncSession, user_id: int, data: ResearcherProfileSchema
     ) -> ResearcherProfileOutSchema:
-        return await self._upsert_profile(
+        result = await self._upsert_profile(
             db, self.researcher_profile_repo, user_id, data, ResearcherProfileOutSchema
         )
+        await db.commit()
+        return result
 
     async def get_researcher_profile(
         self, db: AsyncSession, user_id: int
@@ -263,9 +273,11 @@ class UserService:
     async def upsert_sponsor_profile(
         self, db: AsyncSession, user_id: int, data: SponsorProfileSchema
     ) -> SponsorProfileOutSchema:
-        return await self._upsert_profile(
+        result = await self._upsert_profile(
             db, self.sponsor_profile_repo, user_id, data, SponsorProfileOutSchema
         )
+        await db.commit()
+        return result
 
     async def get_sponsor_profile(
         self, db: AsyncSession, user_id: int
@@ -278,6 +290,7 @@ class UserService:
         self, db: AsyncSession, user_id: int, category_ids: list[int]
     ) -> list[CategoryRefSchema]:
         entries = await self.user_category_repo.set_categories(db, user_id, category_ids)
+        await db.commit()
         return [CategoryRefSchema(category_id=e.category_id) for e in entries]
 
     async def get_user_categories(
@@ -290,6 +303,7 @@ class UserService:
         self, db: AsyncSession, user_id: int, category_id: int
     ) -> None:
         await self.user_category_repo.remove_category(db, user_id, category_id)
+        await db.commit()
 
     async def get_user_with_profile(
         self, db: AsyncSession, user_id: int
