@@ -33,10 +33,10 @@ class User(Base, TimestampMixin):
     verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_type: Mapped[TokenType | None] = mapped_column(
-        SQLEnum(TokenType, name="token_type"), nullable=True
+        SQLEnum(TokenType, name="token_type", values_callable=lambda x: [e.value for e in x]), nullable=True
     )
     role: Mapped[UserRole] = mapped_column(
-        SQLEnum(UserRole, name="user_role"), default=UserRole.USER, nullable=False
+        SQLEnum(UserRole, name="user_role", values_callable=lambda x: [e.value for e in x]), default=UserRole.USER, nullable=False
     )
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -48,7 +48,7 @@ class InvestorProfile(Base, TimestampMixin):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     investor_type: Mapped[InvestorType] = mapped_column(
-        SQLEnum(InvestorType, name="investor_type"), nullable=False
+        SQLEnum(InvestorType, name="investor_type", values_callable=lambda x: [e.value for e in x]), nullable=False
     )
     balance: Mapped[float | None] = mapped_column(Float, nullable=True)
 

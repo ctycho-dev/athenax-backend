@@ -15,12 +15,12 @@ class Product(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str | None] = mapped_column("desc", Text, nullable=True)
     sector: Mapped[ProductSector] = mapped_column(
-        SQLEnum(ProductSector, name="product_sector"),
+        SQLEnum(ProductSector, name="product_sector", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stage: Mapped[ProductStage | None] = mapped_column(
-        SQLEnum(ProductStage, name="product_stage"),
+        SQLEnum(ProductStage, name="product_stage", values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
     funding: Mapped[float | None] = mapped_column(Float, nullable=True)
