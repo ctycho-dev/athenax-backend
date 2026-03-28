@@ -6,8 +6,8 @@ from app.common.base_repository import BaseRepository
 from app.common.db_utils import sync_association
 from app.domain.category.model import Category
 from app.domain.lab.model import Lab, LabCategory
-from app.domain.lab.schema import LabCreateSchema
-from app.exceptions.exceptions import DatabaseError, NotFoundError
+from app.domain.lab.schema import LabCreateSchema, LabUpdateSchema
+from app.exceptions.exceptions import NotFoundError
 
 
 class LabRepository(BaseRepository[Lab]):
@@ -17,77 +17,42 @@ class LabRepository(BaseRepository[Lab]):
     async def create_lab(
         self,
         db: AsyncSession,
-        entity: dict | LabCreateSchema,
+        data: LabCreateSchema,
         current_user_id: int | None = None,
     ) -> Lab:
-        try:
-            data = entity.model_dump() if isinstance(entity, BaseModel) else dict(entity)
-            category_ids = data.pop("category_ids", [])
-            new_category_names = data.pop("new_categories", [])
+        payload = data.model_dump()
+        category_ids = payload.pop("category_ids", [])
+        new_category_names = payload.pop("new_categories", [])
 
-            resolved_ids = list(category_ids)
-            if category_ids:
-                await self._assert_categories_exist(db, category_ids)
-            if new_category_names:
-                new_ids = await self._get_or_create_categories_by_name(db, new_category_names)
-                resolved_ids += new_ids
+        resolved_ids = list(category_ids)
+        if category_ids:
+            await self._assert_categories_exist(db, category_ids)
+        if new_category_names:
+            resolved_ids += await self._get_or_create_categories_by_name(db, new_category_names)
 
-            db_obj = Lab(**data)
-            if current_user_id and hasattr(db_obj, "created_by_id"):
-                db_obj.created_by_id = current_user_id
-            if current_user_id and hasattr(db_obj, "updated_by_id"):
-                db_obj.updated_by_id = current_user_id
-
-            db.add(db_obj)
-            await db.flush()
-            await db.refresh(db_obj)
-
-            await sync_association(db, LabCategory.__table__, "lab_id", db_obj.id, "category_id", set(resolved_ids))
-            await db.flush()
-            return db_obj
-        except NotFoundError:
-            await db.rollback()
-            raise
-        except Exception as e:
-            await db.rollback()
-            raise DatabaseError(f"Failed to create entity: {str(e)}") from e
+        lab = await super().create(db, payload, current_user_id=current_user_id)
+        await sync_association(db, LabCategory.__table__, "lab_id", lab.id, "category_id", set(resolved_ids))
+        await db.flush()
+        return lab
 
     async def update_lab(
         self,
         db: AsyncSession,
         _id: int,
-        update_data: dict | BaseModel,
+        data: LabUpdateSchema,
         current_user_id: int | None = None,
     ) -> Lab:
-        try:
-            result = await db.execute(select(Lab).where(Lab.id == _id))
-            instance = result.scalar_one_or_none()
-            if not instance:
-                raise NotFoundError(f"Entity with ID {_id} not found")
+        payload = data.model_dump(exclude_unset=True)
+        category_ids = payload.pop("category_ids", None)
 
-            payload = update_data.model_dump(exclude_unset=True) if isinstance(update_data, BaseModel) else dict(update_data)
-            category_ids = payload.pop("category_ids", None)
+        lab = await super().update(db, _id, payload, current_user_id=current_user_id)
 
-            protected_fields = {"id", "created_at", "created_by"}
-            for key, value in payload.items():
-                if key not in protected_fields:
-                    setattr(instance, key, value)
-
-            if current_user_id and hasattr(instance, "updated_by_id"):
-                instance.updated_by_id = current_user_id
-
-            if category_ids is not None:
-                await self._assert_categories_exist(db, category_ids)
-                await sync_association(db, LabCategory.__table__, "lab_id", _id, "category_id", set(category_ids))
-
+        if category_ids is not None:
+            await self._assert_categories_exist(db, category_ids)
+            await sync_association(db, LabCategory.__table__, "lab_id", _id, "category_id", set(category_ids))
             await db.flush()
-            return instance
-        except NotFoundError:
-            await db.rollback()
-            raise
-        except Exception as e:
-            await db.rollback()
-            raise DatabaseError(f"Failed to update entity: {str(e)}") from e
+
+        return lab
 
     async def get_categories_for_lab(self, db: AsyncSession, lab_id: int) -> list[Category]:
         result = await db.execute(
@@ -107,11 +72,7 @@ class LabRepository(BaseRepository[Lab]):
         if missing:
             raise NotFoundError(f"Category IDs not found: {missing}")
 
-    async def _get_or_create_categories_by_name(
-        self,
-        db: AsyncSession,
-        names: list[str],
-    ) -> list[int]:
+    async def _get_or_create_categories_by_name(self, db: AsyncSession, names: list[str]) -> list[int]:
         unique_names = list(dict.fromkeys(names))
         result = await db.execute(select(Category).where(Category.name.in_(unique_names)))
         existing = {c.name: c for c in result.scalars().all()}
