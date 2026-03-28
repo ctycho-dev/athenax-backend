@@ -3,11 +3,7 @@ from datetime import datetime
 from pydantic import Field
 
 from app.common.schema import CamelModel
-
-
-class CategoryOutSchema(CamelModel):
-    id: int
-    name: str
+from app.domain.category.schema import CategoryOutSchema
 
 
 class LabBaseSchema(CamelModel):

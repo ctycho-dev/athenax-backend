@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.lab.repository import LabRepository
-from app.domain.lab.schema import CategoryOutSchema, LabCreateSchema, LabOutSchema, LabUpdateSchema
+from app.domain.category.schema import CategoryOutSchema
+from app.domain.lab.schema import LabCreateSchema, LabOutSchema, LabUpdateSchema
 from app.domain.university.repository import UniversityRepository
 from app.domain.user.schema import UserOutSchema
 from app.exceptions.exceptions import NotFoundError
