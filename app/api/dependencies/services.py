@@ -10,6 +10,7 @@ from app.domain.user.service import UserService
 from app.infrastructure.email.service import EmailService
 from app.domain.university.repository import UniversityRepository
 from app.domain.university.service import UniversityService
+from app.domain.category.repository import CategoryRepository
 from app.domain.lab.repository import LabRepository
 from app.domain.lab.service import LabService
 
@@ -29,8 +30,14 @@ def get_university_repo() -> UniversityRepository:
     return UniversityRepository()
 
 
-def get_lab_repo() -> LabRepository:
-    return LabRepository()
+def get_category_repo() -> CategoryRepository:
+    return CategoryRepository()
+
+
+def get_lab_repo(
+    category_repo: CategoryRepository = Depends(get_category_repo),
+) -> LabRepository:
+    return LabRepository(category_repo=category_repo)
 
 
 def get_investor_profile_repo() -> InvestorProfileRepository:

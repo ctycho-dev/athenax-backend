@@ -44,7 +44,7 @@ FastAPI + async SQLAlchemy 2.0 backend using Domain-Driven Design with a strict 
 
 ### Key Shared Infrastructure
 
-- **`app/common/base_repository.py`** — Generic `BaseRepository[T, S, C]` providing `get_by_id`, `get_all`, `create`, `update`, `delete_by_id`, `soft_delete` with pagination. All repositories extend this.
+- **`app/common/base_repository.py`** — Generic `BaseRepository[T, S, C]` providing `get_by_id`, `get_all`, `create`, `update`, `delete_by_id`, `soft_delete` with pagination. All repositories extend this unless the model has a composite PK (e.g. association tables), in which case a plain class is used.
 - **`app/exceptions/exceptions.py`** — Custom exceptions (`NotFoundError`, `ValidationError`, `DatabaseError`, `RepositoryError`, `ExternalServiceError`) with centralized FastAPI handlers that log request ID + user email.
 - **`app/api/dependencies/`** — Factory functions for dependency injection: `services.py` composes repositories into services; `auth.py` provides `get_current_user()` and `require_admin_user()` dependencies.
 - **`app/core/config.py`** — Pydantic Settings loaded from `.env` (database URL, Redis, JWT secret, SMTP).

@@ -1,18 +1,19 @@
-from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
 from app.common.db_utils import sync_association
 from app.domain.category.model import Category
+from app.domain.category.repository import CategoryRepository
 from app.domain.lab.model import Lab, LabCategory
 from app.domain.lab.schema import LabCreateSchema, LabUpdateSchema
 from app.exceptions.exceptions import NotFoundError
 
 
 class LabRepository(BaseRepository[Lab]):
-    def __init__(self) -> None:
+    def __init__(self, category_repo: CategoryRepository) -> None:
         super().__init__(Lab)
+        self.category_repo = category_repo
 
     async def create_lab(
         self,
@@ -28,7 +29,8 @@ class LabRepository(BaseRepository[Lab]):
         if category_ids:
             await self._assert_categories_exist(db, category_ids)
         if new_category_names:
-            resolved_ids += await self._get_or_create_categories_by_name(db, new_category_names)
+            new_cats = await self.category_repo.get_or_create_by_names(db, new_category_names)
+            resolved_ids += [c.id for c in new_cats]
 
         lab = await super().create(db, payload, current_user_id=current_user_id)
         await sync_association(db, LabCategory.__table__, "lab_id", lab.id, "category_id", set(resolved_ids))
@@ -71,17 +73,3 @@ class LabRepository(BaseRepository[Lab]):
         missing = [cid for cid in unique_ids if cid not in found_ids]
         if missing:
             raise NotFoundError(f"Category IDs not found: {missing}")
-
-    async def _get_or_create_categories_by_name(self, db: AsyncSession, names: list[str]) -> list[int]:
-        unique_names = list(dict.fromkeys(names))
-        result = await db.execute(select(Category).where(Category.name.in_(unique_names)))
-        existing = {c.name: c for c in result.scalars().all()}
-
-        for name in unique_names:
-            if name not in existing:
-                new_cat = Category(name=name)
-                db.add(new_cat)
-                existing[name] = new_cat
-
-        await db.flush()
-        return [existing[name].id for name in unique_names]
