@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from sqlalchemy import String, Integer, Text, Boolean, ForeignKey, Table, Column
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
 from app.common.audit_mixin import TimestampMixin
-from app.domain.category.model import Category
 
 
 lab_category = Table(
@@ -29,14 +28,4 @@ class Lab(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     focus: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    categories: Mapped[list[Category]] = relationship(
-        "Category",
-        secondary=lab_category,
-        back_populates="labs",
-        lazy="selectin",
-    )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    @property
-    def category_ids(self) -> list[int]:
-        return [category.id for category in self.categories]

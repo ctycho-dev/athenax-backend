@@ -222,7 +222,7 @@ class TestAdminRBACAPI:
 
         assert university_response.status_code == 201
         assert response.status_code == 201
-        assert response.json()["categoryIds"] == [category_id]
+        assert any(c["id"] == category_id for c in response.json()["categories"])
 
     async def test_lab_create_returns_not_found_when_category_missing(self, client: ClientWithEmail):
         original_override = app.dependency_overrides[get_current_user]

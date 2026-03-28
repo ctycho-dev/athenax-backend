@@ -302,19 +302,12 @@ class UserService:
         sponsor = await self.sponsor_profile_repo.get_by_user_id(db, user_id)
         categories = await self.user_category_repo.get_by_user_id(db, user_id)
 
-        return UserWithProfileOutSchema(
-            **UserOutSchema.model_validate(user, from_attributes=True).model_dump(),
-            investor_profile=InvestorProfileOutSchema.model_validate(
-                investor, from_attributes=True
-            ) if investor else None,
-            researcher_profile=ResearcherProfileOutSchema.model_validate(
-                researcher, from_attributes=True
-            ) if researcher else None,
-            sponsor_profile=SponsorProfileOutSchema.model_validate(
-                sponsor, from_attributes=True
-            ) if sponsor else None,
-            categories=[CategoryRefSchema(category_id=c.category_id) for c in categories],
-        )
+        result = UserWithProfileOutSchema.model_validate(user, from_attributes=True)
+        result.investor_profile = InvestorProfileOutSchema.model_validate(investor, from_attributes=True) if investor else None
+        result.researcher_profile = ResearcherProfileOutSchema.model_validate(researcher, from_attributes=True) if researcher else None
+        result.sponsor_profile = SponsorProfileOutSchema.model_validate(sponsor, from_attributes=True) if sponsor else None
+        result.categories = [CategoryRefSchema(category_id=c.category_id) for c in categories]
+        return result
 
     # ------------------------------------------------------------------
     # Private helpers

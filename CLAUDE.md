@@ -76,6 +76,10 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 - `Category` lives in `category/model.py`; `lab_category` association table stays in `lab/model.py`.
 - Every model must be explicitly imported in `alembic/env.py` for autogenerate to detect it.
 - Profile/extension tables belong in their parent domain (e.g. `user/model.py`), not a new folder.
+- Never use `relationship()` when a join table exists — query explicitly.
+- Repos return ORM objects only — no schema conversion. Services own `commit()`, `refresh()`, and `model_validate()`.
+- When validating ORM → schema with extra fields: `result = OutSchema.model_validate(obj, from_attributes=True)` then set extra fields. Never `**schema.model_dump()`.
+- Many-to-many updates: use `sync_association()` from `app/common/db_utils.py` — diffs existing vs new, never delete-all-reinsert.
 
 ### Pagination
 
