@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.base_repository import BaseRepository
 from app.common.db_utils import sync_association
 from app.domain.category.model import Category
-from app.domain.lab.model import Lab, lab_category
+from app.domain.lab.model import Lab, LabCategory
 from app.domain.lab.schema import LabCreateSchema
 from app.exceptions.exceptions import DatabaseError, NotFoundError
 
@@ -42,7 +42,7 @@ class LabRepository(BaseRepository[Lab]):
             await db.flush()
             await db.refresh(db_obj)
 
-            await sync_association(db, lab_category, "lab_id", db_obj.id, "category_id", set(resolved_ids))
+            await sync_association(db, LabCategory.__table__, "lab_id", db_obj.id, "category_id", set(resolved_ids))
             await db.flush()
             return db_obj
         except NotFoundError:
@@ -78,7 +78,7 @@ class LabRepository(BaseRepository[Lab]):
 
             if category_ids is not None:
                 await self._assert_categories_exist(db, category_ids)
-                await sync_association(db, lab_category, "lab_id", _id, "category_id", set(category_ids))
+                await sync_association(db, LabCategory.__table__, "lab_id", _id, "category_id", set(category_ids))
 
             await db.flush()
             return instance
@@ -92,8 +92,8 @@ class LabRepository(BaseRepository[Lab]):
     async def get_categories_for_lab(self, db: AsyncSession, lab_id: int) -> list[Category]:
         result = await db.execute(
             select(Category)
-            .join(lab_category, Category.id == lab_category.c.category_id)
-            .where(lab_category.c.lab_id == lab_id)
+            .join(LabCategory.__table__, Category.id == LabCategory.__table__.c.category_id)
+            .where(LabCategory.__table__.c.lab_id == lab_id)
         )
         return list(result.scalars().all())
 

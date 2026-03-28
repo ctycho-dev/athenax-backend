@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from sqlalchemy import String, Integer, Text, Boolean, ForeignKey, Table, Column
+from sqlalchemy import String, Integer, Text, Boolean, ForeignKey, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
 from app.common.audit_mixin import TimestampMixin
 
 
-lab_category = Table(
-    "lab_category",
-    Base.metadata,
-    Column("lab_id", ForeignKey("labs.id", ondelete="CASCADE"), primary_key=True),
-    Column("category_id", ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True),
-)
+class LabCategory(Base, TimestampMixin):
+    __tablename__ = "lab_category"
+    __table_args__ = (PrimaryKeyConstraint("lab_id", "category_id"),)
+
+    lab_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("labs.id", ondelete="CASCADE"), nullable=False
+    )
+    category_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
+    )
 
 
 class Lab(Base, TimestampMixin):

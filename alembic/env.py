@@ -7,10 +7,10 @@ from alembic import context
 
 from app.core.config import settings  # Import your settings
 
-from app.domain.user.model import User
+from app.domain.user.model import User, InvestorProfile, ResearcherProfile, SponsorProfile, UserCategory
 from app.domain.product.model import Product
 from app.domain.university.model import University
-from app.domain.lab.model import Lab
+from app.domain.lab.model import Lab, LabCategory
 from app.domain.category.model import Category
 # from app.domain.camera.model import Camera
 # from app.domain.company.model import Company
