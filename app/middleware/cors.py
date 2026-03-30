@@ -4,11 +4,15 @@ from app.core.config import settings
 
 
 def add_cors_middleware(app: FastAPI):
-    origins = []
+    origins = [
+        "https://athenax-research.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3543",
+    ]
 
-    if settings.MODE == "dev":
-        origins.append("http://localhost:5173")
-        origins.append("http://localhost:3543")
+    # if settings.MODE == "dev":
+    #     origins.append("http://localhost:5173")
+    #     origins.append("http://localhost:3543")
 
     app.add_middleware(
         CORSMiddleware,
