@@ -123,7 +123,11 @@ async def client(session_factory) -> AsyncGenerator[ClientWithEmail, None]:
     
     async def override_get_db():
         async with session_factory() as session:
-            yield session
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
     
     async def override_get_current_user():
         return mock_user

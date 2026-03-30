@@ -14,7 +14,22 @@ class UserRole(str, Enum):
     USER = "user"
     RESEARCHER = "researcher"
     SPONSOR = "sponsor"
-    BUILDER = "builder"
+    FOUNDER = "founder"
+    INVESTOR = "investor"
+
+
+class TokenType(str, Enum):
+    """Purpose of a one-time token stored on a user."""
+    VERIFICATION = "verification"
+    RESET = "reset"
+
+
+class InvestorType(str, Enum):
+    """Type of investor."""
+    VC = "VC"
+    ANGEL = "Angel"
+    CORPORATE = "Corporate"
+    FAMILY_OFFICE = "Family Office"
 
 
 class ProductSector(str, Enum):

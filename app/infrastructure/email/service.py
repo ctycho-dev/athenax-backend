@@ -22,14 +22,34 @@ class EmailService:
             token,
         )
         subject = "Verify your AthenaX account"
-        body = (
+        plain = (
             f"Hi {name},\n\n"
             "Welcome to AthenaX. Please verify your email address to activate your account.\n\n"
-            f"Verification link: {verification_url}\n"
-            f"Verification token: {token}\n\n"
+            f"Verification link: {verification_url}\n\n"
             "If you did not create this account, you can ignore this email."
         )
-        await self.send_email(email, subject, body)
+        html = f"""<!DOCTYPE html>
+<html>
+  <body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:40px 0;">
+        <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;padding:40px;">
+          <tr><td>
+            <h2 style="margin:0 0 16px;color:#111111;">Verify your email</h2>
+            <p style="color:#444444;line-height:1.6;">Hi {name},</p>
+            <p style="color:#444444;line-height:1.6;">Welcome to AthenaX. Click the button below to verify your email address and activate your account.</p>
+            <p style="text-align:center;margin:32px 0;">
+              <a href="{verification_url}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:16px;font-weight:600;display:inline-block;">Verify Email</a>
+            </p>
+            <p style="color:#888888;font-size:11px;">Token: <code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-family:monospace;">{token}</code></p>
+            <p style="color:#888888;font-size:13px;">If you did not create this account, you can ignore this email.</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+        await self.send_email(email, subject, plain, html)
 
     async def send_password_reset_email(self, email: str, name: str, token: str) -> None:
         reset_url = self._build_url(
@@ -47,12 +67,14 @@ class EmailService:
         )
         await self.send_email(email, subject, body)
 
-    async def send_email(self, email: str, subject: str, body: str) -> None:
+    async def send_email(self, email: str, subject: str, body: str, html: str | None = None) -> None:
         message = EmailMessage()
         message["Subject"] = subject
         message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM}>"
         message["To"] = email
         message.set_content(body)
+        if html:
+            message.add_alternative(html, subtype="html")
 
         await to_thread.run_sync(self._send_message, message)
 

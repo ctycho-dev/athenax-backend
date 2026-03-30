@@ -44,7 +44,7 @@ FastAPI + async SQLAlchemy 2.0 backend using Domain-Driven Design with a strict 
 
 ### Key Shared Infrastructure
 
-- **`app/common/base_repository.py`** — Generic `BaseRepository[T, S, C]` providing `get_by_id`, `get_all`, `create`, `update`, `delete_by_id`, `soft_delete` with pagination. All repositories extend this.
+- **`app/common/base_repository.py`** — Generic `BaseRepository[T, S, C]` providing `get_by_id`, `get_all`, `create`, `update`, `delete_by_id`, `soft_delete` with pagination. All repositories extend this unless the model has a composite PK (e.g. association tables), in which case a plain class is used.
 - **`app/exceptions/exceptions.py`** — Custom exceptions (`NotFoundError`, `ValidationError`, `DatabaseError`, `RepositoryError`, `ExternalServiceError`) with centralized FastAPI handlers that log request ID + user email.
 - **`app/api/dependencies/`** — Factory functions for dependency injection: `services.py` composes repositories into services; `auth.py` provides `get_current_user()` and `require_admin_user()` dependencies.
 - **`app/core/config.py`** — Pydantic Settings loaded from `.env` (database URL, Redis, JWT secret, SMTP).
@@ -64,6 +64,33 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 1. `AccessLogMiddleware` — Injects `X-Request-ID` header, logs request/response with structured fields.
 2. `SlowAPIMiddleware` — Per-endpoint rate limiting via slowapi.
 3. CORS middleware — Configurable origins from settings.
+
+### Transaction Management
+
+- `session_scope` rolls back on error but never commits — services own `commit()`.
+- Repositories only `flush()` + `refresh()`, never `commit()`.
+- Multi-step atomic ops (e.g. `signup_user`) must call internal helpers (e.g. `_upsert_profile`) directly, not the public service methods which each commit independently.
+
+### Domain / Model Rules
+
+- `Category` lives in `category/model.py`; `lab_category` association table stays in `lab/model.py`.
+- Every model must be explicitly imported in `alembic/env.py` for autogenerate to detect it. (All models in a domain file, not just the primary one).
+- Profile/extension tables belong in their parent domain (e.g. `user/model.py`), not a new folder.
+- Never use `relationship()` when a join table exists — query explicitly.
+- Repos return ORM objects only — no schema conversion. Services own `commit()`, `refresh()`, and `model_validate()`.
+- When validating ORM → schema with extra fields: `result = OutSchema.model_validate(obj, from_attributes=True)` then set extra fields. Never `**schema.model_dump()`.
+- Many-to-many updates: use `sync_association()` from `app/common/db_utils.py` — diffs existing vs new, never delete-all-reinsert.
+- Association tables must be ORM classes extending `Base, TimestampMixin` with `PrimaryKeyConstraint`, not bare `Table(...)` constructs.
+- Out schemas belong to their own domain, not the domain that uses them.
+- Custom repo methods must delegate to `super().create()`/`super().update()` — never duplicate base logic. Handle associations after the base call, within the same transaction.
+- Repos are pure data access — no orchestration, no calling other repos, no mixed read/write methods (no `get_or_create`). Service owns all coordination.
+- `sync_association()` is called from the service, not the repo.
+- Categories are a managed resource (admin CRUD API). Clients pass `category_ids` only — never create categories as a side effect of another domain's create/update.
+
+### Pagination
+
+- Wire `limit`/`offset` all the way: `Query` param → service arg → `repo.get_all()`.
+- Defaults (`limit=50`, `offset=0`) belong only in the endpoint — service and repo take plain `int`.
 
 ### Testing Patterns
 
