@@ -83,10 +83,14 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 - Association tables must be ORM classes extending `Base, TimestampMixin` with `PrimaryKeyConstraint`, not bare `Table(...)` constructs.
 - Out schemas belong to their own domain, not the domain that uses them.
 - Custom repo methods must delegate to `super().create()`/`super().update()` — never duplicate base logic. Handle associations after the base call, within the same transaction.
+- Repos are pure data access — no orchestration, no calling other repos, no mixed read/write methods (no `get_or_create`). Service owns all coordination.
+- `sync_association()` is called from the service, not the repo.
+- Categories are a managed resource (admin CRUD API). Clients pass `category_ids` only — never create categories as a side effect of another domain's create/update.
 
 ### Pagination
 
 - Wire `limit`/`offset` all the way: `Query` param → service arg → `repo.get_all()`.
+- Defaults (`limit=50`, `offset=0`) belong only in the endpoint — service and repo take plain `int`.
 
 ### Testing Patterns
 

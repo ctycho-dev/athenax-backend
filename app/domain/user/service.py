@@ -1,8 +1,10 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.common.db_utils import sync_association
 from typing import Any, Type, TypeVar
 
-from app.domain.user.model import User
+from app.domain.user.model import User, UserCategory
 from app.domain.user.repository import ProfileRepository
 from app.domain.user.repository import (
     UserRepository,
@@ -57,7 +59,7 @@ class UserService:
         self.sponsor_profile_repo = sponsor_profile_repo
         self.user_category_repo = user_category_repo
 
-    async def get_all(self, db: AsyncSession, limit: int = 50, offset: int = 0) -> list[User]:
+    async def get_all(self, db: AsyncSession, limit: int, offset: int) -> list[User]:
         return await self.repo.get_all(db, limit=limit, offset=offset)
 
     async def get_by_id(self, db: AsyncSession, user_id: int) -> User:
@@ -277,8 +279,9 @@ class UserService:
     async def set_user_categories(
         self, db: AsyncSession, user_id: int, category_ids: list[int]
     ) -> list[CategoryRefSchema]:
-        entries = await self.user_category_repo.set_categories(db, user_id, category_ids)
+        await sync_association(db, UserCategory.__table__, "user_id", user_id, "category_id", set(category_ids))
         await db.commit()
+        entries = await self.user_category_repo.get_by_user_id(db, user_id)
         return [CategoryRefSchema(category_id=e.category_id) for e in entries]
 
     async def get_user_categories(

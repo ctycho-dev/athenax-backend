@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy import exists, delete
 
 from app.common.base_repository import BaseRepository
-from app.common.db_utils import sync_association
+
 from app.domain.user.model import (
     User,
     InvestorProfile,
@@ -137,13 +137,3 @@ class UserCategoryRepository:
         except Exception as e:
             raise DatabaseError(f"Failed to remove user category: {e}") from e
 
-    async def set_categories(
-        self, db: AsyncSession, user_id: int, category_ids: list[int]
-    ) -> list[UserCategory]:
-        try:
-            await sync_association(db, UserCategory.__table__, "user_id", user_id, "category_id", set(category_ids))
-            await db.flush()
-            result = await db.execute(select(UserCategory).where(UserCategory.user_id == user_id))
-            return list(result.scalars().all())
-        except Exception as e:
-            raise DatabaseError(f"Failed to set user categories: {e}") from e

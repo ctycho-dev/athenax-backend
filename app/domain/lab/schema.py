@@ -16,7 +16,6 @@ class LabBaseSchema(CamelModel):
 
 class LabCreateSchema(LabBaseSchema):
     category_ids: list[int] = Field(default_factory=list)
-    new_categories: list[str] = Field(default_factory=list)
 
 
 class LabUpdateSchema(CamelModel):

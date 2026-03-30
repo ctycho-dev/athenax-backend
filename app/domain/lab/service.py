@@ -1,7 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.lab.repository import LabRepository
+from app.common.db_utils import sync_association
+from app.domain.category.repository import CategoryRepository
 from app.domain.category.schema import CategoryOutSchema
+from app.domain.lab.model import LabCategory
+from app.domain.lab.repository import LabRepository
 from app.domain.lab.schema import LabCreateSchema, LabOutSchema, LabUpdateSchema
 from app.domain.university.repository import UniversityRepository
 from app.domain.user.schema import UserOutSchema
@@ -9,9 +12,10 @@ from app.exceptions.exceptions import NotFoundError
 
 
 class LabService:
-    def __init__(self, repo: LabRepository, university_repo: UniversityRepository):
+    def __init__(self, repo: LabRepository, university_repo: UniversityRepository, category_repo: CategoryRepository):
         self.repo = repo
         self.university_repo = university_repo
+        self.category_repo = category_repo
 
     async def create(
         self,
@@ -20,17 +24,21 @@ class LabService:
         current_user: UserOutSchema | None = None,
     ) -> LabOutSchema:
         await self._ensure_university_exists(db, data.university_id)
-        lab = await self.repo.create_lab(db, data, current_user_id=current_user.id if current_user else None)
+
+        payload = data.model_dump()
+        category_ids = payload.pop("category_ids", [])
+
+        if category_ids:
+            await self.category_repo.assert_exist(db, category_ids)
+
+        lab = await self.repo.create(db, payload, current_user_id=current_user.id if current_user else None)
+        await sync_association(db, LabCategory.__table__, "lab_id", lab.id, "category_id", set(category_ids))
+
         await db.commit()
         await db.refresh(lab)
         return await self._to_schema(db, lab)
 
-    async def list(
-        self,
-        db: AsyncSession,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[LabOutSchema]:
+    async def list(self, db: AsyncSession, limit: int, offset: int) -> list[LabOutSchema]:
         labs = await self.repo.get_all(db, limit=limit, offset=offset)
         return [await self._to_schema(db, lab) for lab in labs]
 
@@ -47,7 +55,16 @@ class LabService:
     ) -> LabOutSchema:
         if data.university_id is not None:
             await self._ensure_university_exists(db, data.university_id)
-        lab = await self.repo.update_lab(db, lab_id, data, current_user_id=current_user.id if current_user else None)
+
+        payload = data.model_dump(exclude_unset=True)
+        category_ids = payload.pop("category_ids", None)
+
+        lab = await self.repo.update(db, lab_id, payload, current_user_id=current_user.id if current_user else None)
+
+        if category_ids is not None:
+            await self.category_repo.assert_exist(db, category_ids)
+            await sync_association(db, LabCategory.__table__, "lab_id", lab_id, "category_id", set(category_ids))
+
         await db.commit()
         await db.refresh(lab)
         return await self._to_schema(db, lab)

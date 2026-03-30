@@ -30,8 +30,8 @@ class UniversityService:
     async def list(
         self,
         db: AsyncSession,
-        limit: int = 50,
-        offset: int = 0,
+        limit: int,
+        offset: int,
     ) -> list[University]:
         return await self.repo.get_all(db, limit=limit, offset=offset)
 

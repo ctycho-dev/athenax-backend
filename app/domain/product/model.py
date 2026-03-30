@@ -1,9 +1,21 @@
-from sqlalchemy import String, Integer, Float, Text, Enum as SQLEnum
+from sqlalchemy import String, Integer, Float, Text, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
 from app.common.audit_mixin import TimestampMixin
 from app.enums.enums import ProductSector, ProductStage
+
+
+class ProductCategory(Base, TimestampMixin):
+    __tablename__ = "product_category"
+    __table_args__ = (PrimaryKeyConstraint("product_id", "category_id"),)
+
+    product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    category_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
+    )
 
 
 class Product(Base, TimestampMixin):
@@ -18,7 +30,6 @@ class Product(Base, TimestampMixin):
         SQLEnum(ProductSector, name="product_sector", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stage: Mapped[ProductStage | None] = mapped_column(
         SQLEnum(ProductStage, name="product_stage", values_callable=lambda x: [e.value for e in x]),
         nullable=True,
