@@ -1,15 +1,40 @@
 from datetime import datetime
 
 import pytest
+import pytest_asyncio
 from fastapi import HTTPException, status
 from sqlalchemy import insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
 from app.domain.category.model import Category
+from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
 from app.main import app
-from tests.conftest import ClientWithEmail
+from tests.conftest import TEST_DATABASE_URL, ClientWithEmail
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def seed_users():
+    """Insert users with id=1 and id=2 needed by paper FK constraints."""
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        await session.execute(
+            pg_insert(User)
+            .values(
+                [
+                    {"id": 1, "name": "Researcher", "email": "researcher@test.com", "password_hash": "x", "role": UserRole.RESEARCHER, "verified": True},
+                    {"id": 2, "name": "Other", "email": "other@test.com", "password_hash": "x", "role": UserRole.RESEARCHER, "verified": True},
+                ]
+            )
+            .on_conflict_do_nothing()
+        )
+        await session.commit()
+    await engine.dispose()
 
 
 def build_mock_user(role: UserRole, user_id: int = 1) -> UserOutSchema:
@@ -27,7 +52,7 @@ def build_mock_user(role: UserRole, user_id: int = 1) -> UserOutSchema:
 PAPER_PAYLOAD = {
     "title": "My Research Paper",
     "abstract": "A study on AI.",
-    "status": "Draft",
+    "status": "draft",
     "sourceType": "editor",
     "content": "Full paper content here.",
     "categoryIds": [],
@@ -110,7 +135,7 @@ class TestPaperAPI:
 
         app.dependency_overrides[get_current_user] = override_researcher
         try:
-            payload = {**PAPER_PAYLOAD, "status": "Published"}
+            payload = {**PAPER_PAYLOAD, "status": "published"}
             response = await client.post("/api/v1/paper", json=payload)
         finally:
             app.dependency_overrides[get_current_user] = original
@@ -283,7 +308,7 @@ class TestPaperAPI:
         app.dependency_overrides[get_current_user] = override_owner
         try:
             response = await client.patch(
-                f"/api/v1/paper/{paper_id}", json={"status": "Published"}
+                f"/api/v1/paper/{paper_id}", json={"status": "published"}
             )
         finally:
             app.dependency_overrides[get_current_user] = original
