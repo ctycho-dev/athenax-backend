@@ -14,6 +14,8 @@ from app.domain.category.repository import CategoryRepository
 from app.domain.category.service import CategoryService
 from app.domain.lab.repository import LabRepository
 from app.domain.lab.service import LabService
+from app.domain.paper.repository import PaperRepository
+from app.domain.paper.service import PaperService
 
 
 # -------------------------
@@ -55,6 +57,10 @@ def get_user_category_repo() -> UserCategoryRepository:
     return UserCategoryRepository()
 
 
+def get_paper_repo() -> PaperRepository:
+    return PaperRepository()
+
+
 # -------------------------
 # Services
 # -------------------------
@@ -94,3 +100,10 @@ def get_lab_service(
     category_repo: CategoryRepository = Depends(get_category_repo),
 ) -> LabService:
     return LabService(repo=repo, university_repo=university_repo, category_repo=category_repo)
+
+
+def get_paper_service(
+    repo: PaperRepository = Depends(get_paper_repo),
+    category_repo: CategoryRepository = Depends(get_category_repo),
+) -> PaperService:
+    return PaperService(repo=repo, category_repo=category_repo)

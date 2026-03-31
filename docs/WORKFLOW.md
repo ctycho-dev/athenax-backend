@@ -397,3 +397,108 @@ curl -X PATCH "${API_URL}/api/v1/lab/1" \
 curl -X DELETE "${API_URL}/api/v1/lab/1" \
   -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
+
+---
+
+## Paper CRUD + voting flow
+
+Papers are researcher-created resources with many-to-many categories and a vote count. `POST` requires the `researcher` role. `PATCH` and `DELETE` require ownership or `admin`. Read endpoints are public.
+
+### Paper response shape
+
+```json
+{
+  "id": 1,
+  "userId": 1,
+  "productId": null,
+  "title": "Attention Is All You Need",
+  "slug": "attention-is-all-you-need",
+  "abstract": "We propose a new network architecture...",
+  "status": "published",
+  "publishedAt": "2026-01-01T00:00:00Z",
+  "sourceType": "external",
+  "externalUrl": "https://arxiv.org/abs/1706.03762",
+  "content": null,
+  "voteCount": 42,
+  "categories": [
+    { "id": 1, "name": "Machine Learning" }
+  ],
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T00:00:00Z"
+}
+```
+
+### Paper create request example — external source
+
+```bash
+curl -X POST "${API_URL}/api/v1/paper" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "title": "Attention Is All You Need",
+    "sourceType": "link",
+    "externalUrl": "https://arxiv.org/abs/1706.03762",
+    "status": "draft",
+    "categoryIds": [1, 2]
+  }'
+```
+
+### Paper create request example — hosted content
+
+```bash
+curl -X POST "${API_URL}/api/v1/paper" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "title": "My Research Paper",
+    "sourceType": "editor",
+    "abstract": "This paper explores...",
+    "content": "Full paper body goes here...",
+    "status": "draft",
+    "categoryIds": [1, 2]
+  }'
+```
+
+### Paper list request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/paper?limit=50&offset=0" \
+  -H "Accept: application/json"
+```
+
+### Paper get request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/paper/1" \
+  -H "Accept: application/json"
+```
+
+### Paper update request example
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/paper/1" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "status": "published",
+    "categoryIds": [1, 3]
+  }'
+```
+
+### Paper delete request example
+
+```bash
+curl -X DELETE "${API_URL}/api/v1/paper/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### Paper vote request example
+
+`voted: true` adds a vote, `voted: false` removes it. Duplicate votes are silently ignored.
+
+```bash
+curl -X PUT "${API_URL}/api/v1/paper/1/vote" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"voted": true}'
+```

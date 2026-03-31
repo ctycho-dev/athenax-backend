@@ -48,13 +48,19 @@ async def get_current_user(
         raise credentials_exception from exc
 
 
-async def require_admin_user(
-    current_user: UserOutSchema = Depends(get_current_user),
-) -> UserOutSchema:
-    """Require an authenticated admin user."""
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required",
-        )
-    return current_user
+def require_roles(*roles: UserRole, detail: str = "Not enough permissions"):
+    allowed_roles = set(roles)
+    async def dependency(
+        current_user: UserOutSchema = Depends(get_current_user),
+    ) -> UserOutSchema:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=detail,
+            )
+        return current_user
+    return dependency
+
+
+require_admin_user = require_roles(UserRole.ADMIN, detail="Admin role required")
+require_researcher_user = require_roles(UserRole.RESEARCHER, UserRole.ADMIN, detail="Researcher role required")
