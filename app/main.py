@@ -44,18 +44,16 @@ async def lifespan(_: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
-app.add_exception_handler(
-    RateLimitExceeded,
-    rate_limit_exceeded_handler
-)
 
-
+# CORS last = outermost layer
 add_cors_middleware(app)
 
-add_exception_handlers(app)
-
-app.add_middleware(SlowAPIMiddleware)
+# Then everything else
 app.add_middleware(AccessLogMiddleware)
+app.add_middleware(SlowAPIMiddleware)
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+add_exception_handlers(app)
 
 app.include_router(api_router)
 
