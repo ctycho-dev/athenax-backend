@@ -53,9 +53,9 @@ class ProductStage(str, Enum):
 
 class PaperStatus(str, Enum):
     """Publication status of a research paper."""
-    DRAFT = "Draft"
-    PUBLISHED = "Published"
-    ARCHIVED = "Archived"
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
 
 
 class PaperSourceType(str, Enum):

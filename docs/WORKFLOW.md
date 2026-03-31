@@ -436,7 +436,7 @@ curl -X POST "${API_URL}/api/v1/paper" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{
     "title": "Attention Is All You Need",
-    "sourceType": "external",
+    "sourceType": "link",
     "externalUrl": "https://arxiv.org/abs/1706.03762",
     "status": "draft",
     "categoryIds": [1, 2]
@@ -451,7 +451,7 @@ curl -X POST "${API_URL}/api/v1/paper" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{
     "title": "My Research Paper",
-    "sourceType": "internal",
+    "sourceType": "editor",
     "abstract": "This paper explores...",
     "content": "Full paper body goes here...",
     "status": "draft",
