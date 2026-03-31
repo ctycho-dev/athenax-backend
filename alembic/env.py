@@ -12,6 +12,7 @@ from app.domain.product.model import Product, ProductCategory
 from app.domain.university.model import University
 from app.domain.lab.model import Lab, LabCategory
 from app.domain.category.model import Category
+from app.domain.paper.model import Paper, PaperCategory, PaperVote
 # from app.domain.camera.model import Camera
 # from app.domain.company.model import Company
 # from app.domain.notification.model import Notification

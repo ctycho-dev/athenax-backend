@@ -6,9 +6,10 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.database.connection import db_manager
 from app.api.v1 import router as api_router
 # Import models so SQLAlchemy metadata knows about every table before create_all().
-from app.domain.product.model import Product  # noqa: F401
+from app.domain.product.model import Product, ProductCategory  # noqa: F401
 from app.domain.university.model import University  # noqa: F401
-from app.domain.lab.model import Lab  # noqa: F401
+from app.domain.lab.model import Lab, LabCategory  # noqa: F401
+from app.domain.paper.model import Paper, PaperCategory, PaperVote  # noqa: F401
 from app.exceptions.exceptions import add_exception_handlers
 from app.core.logger import (
     get_logger,

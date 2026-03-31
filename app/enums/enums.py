@@ -49,3 +49,16 @@ class ProductStage(str, Enum):
     SEED = "Seed"
     SERIES_A = "Series A"
     SERIES_B = "Series B"
+
+
+class PaperStatus(str, Enum):
+    """Publication status of a research paper."""
+    DRAFT = "Draft"
+    PUBLISHED = "Published"
+    ARCHIVED = "Archived"
+
+
+class PaperSourceType(str, Enum):
+    """How the paper content is provided."""
+    LINK = "link"
+    EDITOR = "editor"

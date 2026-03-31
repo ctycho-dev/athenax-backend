@@ -8,6 +8,7 @@ class ApiV1Prefix(BaseModel):
     university: str = "/university"
     lab: str = "/lab"
     category: str = "/category"
+    paper: str = "/paper"
 
 
 class ApiV2Prefix(BaseModel):

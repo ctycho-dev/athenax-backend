@@ -87,6 +87,12 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 - `sync_association()` is called from the service, not the repo.
 - Categories are a managed resource (admin CRUD API). Clients pass `category_ids` only — never create categories as a side effect of another domain's create/update.
 
+### Avoiding N+1 Queries
+
+- Never call per-row queries inside a loop. Use batch repo methods for list paths.
+- Write plural batch methods (`get_x(ids) -> dict[int, ...]`) that hold the SQL. Singular methods (`get_x(id)`) delegate to the plural with a single-element list — no duplicated SQL.
+- In service `list()`: fetch IDs, call batch methods once each, assemble schemas in a loop with no DB calls inside.
+
 ### Pagination
 
 - Wire `limit`/`offset` all the way: `Query` param → service arg → `repo.get_all()`.
