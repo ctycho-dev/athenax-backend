@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -12,12 +12,14 @@ help:
 	@echo "  make dev-build              Build Docker images, start containers, and follow app logs"
 	@echo "  make local                  Start postgres/redis, set up .venv, install deps, and run the app locally"
 	@echo "  make test                   Start the test database and run the test suite"
+	@echo "  make recreate               Force-recreate the app container"
+	@echo "  make logs                   Tail app container logs"
 	@echo "  make down                   Stop and remove the Docker containers"
-	@echo "  make migrate                 Apply all migrations to the latest revision"
-	@echo "  make revision MSG='...'      Create a new autogenerate migration"
+	@echo "  make migrate                Apply all migrations to the latest revision"
+	@echo "  make revision MSG='...'     Create a new autogenerate migration"
 	@echo "  make downgrade              Roll back the last migration"
-	@echo "  make current                 Show current migration version"
-	@echo "  make history                 Show migration history"
+	@echo "  make current                Show current migration version"
+	@echo "  make history                Show migration history"
 
 start:
 	$(COMPOSE) up -d
@@ -39,6 +41,12 @@ dev:
 		exit 1; \
 	fi
 	MODE=dev RUN_MODE=dev REDIS_HOST=localhost sh ./start.sh
+
+recreate:
+	$(COMPOSE) up -d --force-recreate $(APP_SERVICE)
+
+logs:
+	$(COMPOSE) logs -f $(APP_SERVICE)
 
 down:
 	$(COMPOSE) down
