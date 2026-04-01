@@ -9,6 +9,7 @@ class ApiV1Prefix(BaseModel):
     lab: str = "/lab"
     category: str = "/category"
     paper: str = "/paper"
+    product: str = "/product"
 
 
 class ApiV2Prefix(BaseModel):

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.db_utils import sync_association
+from app.common.db_utils import sync_categories
 from app.domain.category.repository import CategoryRepository
 from app.domain.category.schema import CategoryOutSchema
 from app.domain.lab.model import LabCategory
@@ -28,11 +28,8 @@ class LabService:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
 
-        if category_ids:
-            await self.category_repo.assert_exist(db, category_ids)
-
         lab = await self.repo.create(db, payload, current_user_id=current_user.id if current_user else None)
-        await sync_association(db, LabCategory.__table__, "lab_id", lab.id, "category_id", set(category_ids))
+        await sync_categories(db, self.category_repo, LabCategory.__table__, "lab_id", lab.id, category_ids)
 
         await db.commit()
         await db.refresh(lab)
@@ -62,8 +59,7 @@ class LabService:
         lab = await self.repo.update(db, lab_id, payload, current_user_id=current_user.id if current_user else None)
 
         if category_ids is not None:
-            await self.category_repo.assert_exist(db, category_ids)
-            await sync_association(db, LabCategory.__table__, "lab_id", lab_id, "category_id", set(category_ids))
+            await sync_categories(db, self.category_repo, LabCategory.__table__, "lab_id", lab_id, category_ids)
 
         await db.commit()
         await db.refresh(lab)
