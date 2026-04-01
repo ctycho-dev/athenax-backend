@@ -20,6 +20,7 @@ COPY scripts ./scripts
 RUN python -m pip install --upgrade pip && pip install -e .
 RUN chmod +x /app/start.sh
 
-EXPOSE 8844
+ARG PORT=8000
+EXPOSE ${PORT}
 
 CMD ["sh", "./start.sh"]

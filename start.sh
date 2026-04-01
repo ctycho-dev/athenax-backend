@@ -6,7 +6,7 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8844}"
+PORT="${PORT:-8000}"
 RUN_MODE="${RUN_MODE:-prod}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 

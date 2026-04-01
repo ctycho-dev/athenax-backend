@@ -48,7 +48,6 @@ app.state.limiter = limiter
 # CORS last = outermost layer
 add_cors_middleware(app)
 
-# Then everything else
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
