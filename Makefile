@@ -32,9 +32,10 @@ dev:
 	"$(PYTHON)" -m venv .venv
 	.venv/bin/python -m pip install --upgrade pip setuptools wheel
 	.venv/bin/pip install -e .
-	@if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:8844 -sTCP:LISTEN >/dev/null 2>&1; then \
-		echo "Port 8844 is already in use. Stop the existing local app before running 'make local'."; \
-		lsof -nP -iTCP:8844 -sTCP:LISTEN; \
+	@_port=$${PORT:-8000}; \
+	if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:$$_port -sTCP:LISTEN >/dev/null 2>&1; then \
+		echo "Port $$_port is already in use. Stop the existing local app before running 'make dev'."; \
+		lsof -nP -iTCP:$$_port -sTCP:LISTEN; \
 		exit 1; \
 	fi
 	MODE=dev RUN_MODE=dev REDIS_HOST=localhost sh ./start.sh

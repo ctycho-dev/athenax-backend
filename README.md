@@ -46,7 +46,7 @@ make down
 Health check:
 
 ```bash
-curl http://localhost:8844/health
+curl http://localhost:8000/health
 ```
 
 Notes:
@@ -105,7 +105,7 @@ docker compose --profile test up -d postgres-test
 
 - `RUN_MODE`: `prod` or `dev`
 - `HOST`: bind host (default `0.0.0.0`)
-- `PORT`: bind port (default `8844`)
+- `PORT`: bind port (default `8000`)
 - `LOG_LEVEL`: app log level (default `info`)
 
 ## Make Commands
