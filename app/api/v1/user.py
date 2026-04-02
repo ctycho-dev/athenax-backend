@@ -46,7 +46,8 @@ def _set_access_token_cookie(response: Response, access_token: str) -> None:
         value=access_token,
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE,
         path="/"
     )
 
@@ -232,7 +233,12 @@ async def reset_password(
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(key="access_token", path="/", samesite="lax")
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE,
+    )
     return {"message": "Logged out successfully"}
 
 

@@ -39,7 +39,6 @@ services:
     env_file:
       - .env
     environment:
-      MODE: ${MODE:-prod}
       RUN_MODE: ${RUN_MODE:-prod}
       HOST: 0.0.0.0
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
