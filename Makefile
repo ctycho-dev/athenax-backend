@@ -40,7 +40,7 @@ dev:
 		lsof -nP -iTCP:$$_port -sTCP:LISTEN; \
 		exit 1; \
 	fi
-	MODE=dev RUN_MODE=dev REDIS_HOST=localhost sh ./start.sh
+	RUN_MODE=dev REDIS_HOST=localhost sh ./start.sh
 
 recreate:
 	$(COMPOSE) up -d --force-recreate $(APP_SERVICE)
