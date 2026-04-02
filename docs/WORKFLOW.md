@@ -502,3 +502,172 @@ curl -X PUT "${API_URL}/api/v1/paper/1/vote" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{"voted": true}'
 ```
+
+---
+
+## Product CRUD + interactions flow
+
+Products are founder-created resources with many-to-many categories, vote counts, bookmark counts, investor interest counts, and comments. `POST`, `PATCH`, and `DELETE` require the `founder` or `admin` role (with ownership enforced on `PATCH`/`DELETE`). Investor interest requires the `investor` role. All read endpoints are public.
+
+### Product response shape
+
+```json
+{
+  "id": 1,
+  "userId": 1,
+  "slug": "axonos",
+  "name": "Axonos",
+  "description": "An AI-powered research assistant.",
+  "sector": "AI & Agents",
+  "stage": "Seed",
+  "funding": 500000.0,
+  "founded": 2024,
+  "github": "https://github.com/org/axonos",
+  "demo": "https://axonos.ai",
+  "qualityBadge": null,
+  "voteCount": 12,
+  "bookmarkCount": 5,
+  "investorInterestCount": 3,
+  "categories": [
+    { "id": 1, "name": "AI & Agents" }
+  ],
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T00:00:00Z"
+}
+```
+
+### Product create request example
+
+```bash
+curl -X POST "${API_URL}/api/v1/product" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "slug": "axonos",
+    "name": "Axonos",
+    "sector": "AI & Agents",
+    "stage": "Seed",
+    "funding": 500000,
+    "founded": 2024,
+    "github": "https://github.com/org/axonos",
+    "demo": "https://axonos.ai",
+    "categoryIds": [1, 2]
+  }'
+```
+
+### Product list request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/product?limit=50&offset=0" \
+  -H "Accept: application/json"
+```
+
+### Product get request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/product/1" \
+  -H "Accept: application/json"
+```
+
+### Product update request example
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/product/1" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{
+    "stage": "Series A",
+    "funding": 2000000
+  }'
+```
+
+### Product delete request example
+
+```bash
+curl -X DELETE "${API_URL}/api/v1/product/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### Product vote request example
+
+`voted: true` adds a vote, `voted: false` removes it. Duplicate votes are silently ignored. Any authenticated user can vote.
+
+```bash
+curl -X PUT "${API_URL}/api/v1/product/1/vote" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"voted": true}'
+```
+
+### Product bookmark request example
+
+`bookmarked: true` adds a bookmark, `bookmarked: false` removes it. Any authenticated user can bookmark.
+
+```bash
+curl -X PUT "${API_URL}/api/v1/product/1/bookmark" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"bookmarked": true}'
+```
+
+### Product investor interest request example
+
+`interested: true` marks interest, `interested: false` removes it. Requires `investor` role.
+
+```bash
+curl -X PUT "${API_URL}/api/v1/product/1/interest" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"interested": true}'
+```
+
+---
+
+## Product comments flow
+
+Comments are scoped to a product. Any authenticated user can create a comment. Only the comment owner or an admin can update or delete a comment. The list endpoint is public.
+
+### Comment response shape
+
+```json
+{
+  "id": 1,
+  "productId": 1,
+  "userId": 1,
+  "text": "This looks promising!",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T00:00:00Z"
+}
+```
+
+### List comments request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/product/1/comments?limit=50&offset=0" \
+  -H "Accept: application/json"
+```
+
+### Create comment request example
+
+```bash
+curl -X POST "${API_URL}/api/v1/product/1/comments" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"text": "This looks promising!"}'
+```
+
+### Update comment request example
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/product/1/comments/1" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"text": "Updated thoughts."}'
+```
+
+### Delete comment request example
+
+```bash
+curl -X DELETE "${API_URL}/api/v1/product/1/comments/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```

@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,6 +10,7 @@ class ApiV1Prefix(BaseModel):
     lab: str = "/lab"
     category: str = "/category"
     paper: str = "/paper"
+    product: str = "/product"
 
 
 class ApiV2Prefix(BaseModel):
@@ -30,7 +32,9 @@ class Settings(BaseSettings):
 
     BASE_URL: str
     api: ApiPrefix = ApiPrefix()
-    MODE: str = 'prod'
+    RUN_MODE: str = 'prod'
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: Literal['lax', 'strict', 'none'] = 'none'
     PROXY_URL: str | None = None
 
     ADMIN_LOGIN: str
@@ -60,8 +64,15 @@ class Settings(BaseSettings):
     SMTP_USE_SSL: bool = False
     SMTP_TIMEOUT: float = 10.0
 
-    EMAIL_VERIFY_URL: str | None = None
-    PASSWORD_RESET_URL: str | None = None
+    FRONTEND_URL: str = 'http://localhost:3000'
+
+    @property
+    def EMAIL_VERIFY_URL(self) -> str:
+        return f"{self.FRONTEND_URL.rstrip('/')}/verify-email"
+
+    @property
+    def PASSWORD_RESET_URL(self) -> str:
+        return f"{self.FRONTEND_URL.rstrip('/')}/reset-password"
 
     @property
     def SYNC_DATABASE_URL(self) -> str:

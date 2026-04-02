@@ -64,3 +64,5 @@ def require_roles(*roles: UserRole, detail: str = "Not enough permissions"):
 
 require_admin_user = require_roles(UserRole.ADMIN, detail="Admin role required")
 require_researcher_user = require_roles(UserRole.RESEARCHER, UserRole.ADMIN, detail="Researcher role required")
+require_founder_or_admin = require_roles(UserRole.FOUNDER, UserRole.ADMIN, detail="Founder or admin role required")
+require_investor_user = require_roles(UserRole.INVESTOR, detail="Investor role required")

@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.db_utils import sync_association
+from app.common.db_utils import sync_categories
+from app.common.permissions import assert_can_modify
 from app.domain.category.repository import CategoryRepository
 from app.domain.category.schema import CategoryOutSchema
 from app.domain.paper.model import PaperCategory
@@ -14,8 +15,7 @@ from app.domain.paper.schema import (
     VoteOutSchema,
 )
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import PaperStatus, UserRole
-from app.exceptions.exceptions import ValidationError
+from app.enums.enums import PaperStatus
 from app.utils.slug import generate_slug
 
 
@@ -33,9 +33,6 @@ class PaperService:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
 
-        if category_ids:
-            await self.category_repo.assert_exist(db, category_ids)
-
         payload["user_id"] = current_user.id
         payload["slug"] = generate_slug(data.title)
 
@@ -44,14 +41,7 @@ class PaperService:
 
         paper = await self.repo.create(db, payload, current_user_id=current_user.id)
 
-        await sync_association(
-            db,
-            PaperCategory.__table__,
-            "paper_id",
-            paper.id,
-            "category_id",
-            set(category_ids),
-        )
+        await sync_categories(db, self.category_repo, PaperCategory.__table__, "paper_id", paper.id, category_ids)
 
         await db.commit()
         await db.refresh(paper)
@@ -87,7 +77,7 @@ class PaperService:
         current_user: UserOutSchema,
     ) -> PaperOutSchema:
         paper = await self.repo.get_by_id(db, paper_id)
-        self._assert_can_modify(paper, current_user)
+        assert_can_modify(paper, current_user)
 
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
@@ -105,15 +95,7 @@ class PaperService:
         paper = await self.repo.update(db, paper_id, payload, current_user_id=current_user.id)
 
         if category_ids is not None:
-            await self.category_repo.assert_exist(db, category_ids)
-            await sync_association(
-                db,
-                PaperCategory.__table__,
-                "paper_id",
-                paper_id,
-                "category_id",
-                set(category_ids),
-            )
+            await sync_categories(db, self.category_repo, PaperCategory.__table__, "paper_id", paper_id, category_ids)
 
         await db.commit()
         await db.refresh(paper)
@@ -126,7 +108,7 @@ class PaperService:
         current_user: UserOutSchema,
     ) -> None:
         paper = await self.repo.get_by_id(db, paper_id)
-        self._assert_can_modify(paper, current_user)
+        assert_can_modify(paper, current_user)
         await self.repo.delete_by_id(db, paper_id)
         await db.commit()
 
@@ -158,8 +140,3 @@ class PaperService:
         result.vote_count = vote_count
         return result
 
-    def _assert_can_modify(self, paper, current_user: UserOutSchema) -> None:
-        if current_user.role == UserRole.ADMIN:
-            return
-        if paper.user_id != current_user.id:
-            raise ValidationError("You do not have permission to modify this paper")
