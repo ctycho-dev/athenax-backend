@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
+from app.api.dependencies.auth import get_optional_user
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import UserRole
+from app.enums.enums import ProductStatus, UserRole
 from app.main import app
 from tests.conftest import TEST_DATABASE_URL, ClientWithEmail
 
@@ -28,6 +29,7 @@ async def seed_users():
                     {"id": 1, "name": "Founder", "email": "founder@test.com", "password_hash": "x", "role": UserRole.FOUNDER, "verified": True},
                     {"id": 2, "name": "Other", "email": "other@test.com", "password_hash": "x", "role": UserRole.FOUNDER, "verified": True},
                     {"id": 3, "name": "Investor", "email": "investor@test.com", "password_hash": "x", "role": UserRole.INVESTOR, "verified": True},
+                    {"id": 99, "name": "Admin", "email": "admin@test.com", "password_hash": "x", "role": UserRole.ADMIN, "verified": True},
                 ]
             )
             .on_conflict_do_nothing()
@@ -49,7 +51,6 @@ def build_mock_user(role: UserRole, user_id: int = 1) -> UserOutSchema:
 
 
 PRODUCT_PAYLOAD = {
-    "slug": "my-test-product",
     "name": "My Test Product",
     "sector": "AI & Agents",
     "stage": "Seed",
@@ -116,16 +117,17 @@ class TestProductAPI:
 
         app.dependency_overrides[get_current_user] = override_founder
         try:
-            payload = {**PRODUCT_PAYLOAD, "slug": "founder-product-1"}
+            payload = {**PRODUCT_PAYLOAD, "name": "Founder Product 1"}
             response = await client.post("/api/v1/product", json=payload)
         finally:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 201
         data = response.json()
-        assert data["name"] == PRODUCT_PAYLOAD["name"]
-        assert data["slug"] == "founder-product-1"
+        assert data["name"] == "Founder Product 1"
+        assert data["slug"]
         assert data["userId"] == 1
+        assert data["status"] == "pending"
         assert data["voteCount"] == 0
         assert data["bookmarkCount"] == 0
         assert data["investorInterestCount"] == 0
@@ -138,14 +140,14 @@ class TestProductAPI:
 
         app.dependency_overrides[get_current_user] = override_admin
         try:
-            payload = {**PRODUCT_PAYLOAD, "slug": "admin-product-1"}
+            payload = {**PRODUCT_PAYLOAD, "name": "Admin Product 1"}
             response = await client.post("/api/v1/product", json=payload)
         finally:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 201
 
-    async def test_create_product_duplicate_slug_returns_error(self, client: ClientWithEmail):
+    async def test_create_product_same_name_generates_unique_slugs(self, client: ClientWithEmail):
         original = app.dependency_overrides[get_current_user]
 
         async def override_founder():
@@ -153,13 +155,15 @@ class TestProductAPI:
 
         app.dependency_overrides[get_current_user] = override_founder
         try:
-            payload = {**PRODUCT_PAYLOAD, "slug": "duplicate-slug"}
-            await client.post("/api/v1/product", json=payload)
-            response = await client.post("/api/v1/product", json=payload)
+            payload = {**PRODUCT_PAYLOAD, "name": "Duplicate Name"}
+            response_1 = await client.post("/api/v1/product", json=payload)
+            response_2 = await client.post("/api/v1/product", json=payload)
         finally:
             app.dependency_overrides[get_current_user] = original
 
-        assert response.status_code in (400, 500)
+        assert response_1.status_code == 201
+        assert response_2.status_code == 201
+        assert response_1.json()["slug"] != response_2.json()["slug"]
 
     # ------------------------------------------------------------------
     # CRUD helpers
@@ -168,7 +172,7 @@ class TestProductAPI:
     _slug_counter = 0
 
     async def _create_product_as_founder(
-        self, client: ClientWithEmail, user_id: int = 1
+        self, client: ClientWithEmail, user_id: int = 1, approve: bool = True
     ) -> int:
         TestProductAPI._slug_counter += 1
         original = app.dependency_overrides[get_current_user]
@@ -178,13 +182,28 @@ class TestProductAPI:
 
         app.dependency_overrides[get_current_user] = override
         try:
-            payload = {**PRODUCT_PAYLOAD, "slug": f"product-{TestProductAPI._slug_counter}"}
+            payload = {**PRODUCT_PAYLOAD, "name": f"Product {TestProductAPI._slug_counter}"}
             resp = await client.post("/api/v1/product", json=payload)
         finally:
             app.dependency_overrides[get_current_user] = original
 
         assert resp.status_code == 201
-        return resp.json()["id"]
+        product_id = resp.json()["id"]
+
+        if approve:
+            async def override_admin():
+                return build_mock_user(UserRole.ADMIN, user_id=99)
+
+            app.dependency_overrides[get_current_user] = override_admin
+            try:
+                verify_resp = await client.patch(
+                    f"/api/v1/product/{product_id}/verify", json={"status": "approved"}
+                )
+            finally:
+                app.dependency_overrides[get_current_user] = original
+            assert verify_resp.status_code == 200
+
+        return product_id
 
     # ------------------------------------------------------------------
     # Ownership / RBAC — update
@@ -533,3 +552,144 @@ class TestProductAPI:
             json={"text": "X"},
         )
         assert response.status_code == 404
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
+
+    async def test_newly_created_product_has_pending_status(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_optional_user] = override_admin
+        try:
+            response = await client.get("/api/v1/product?status=pending")
+        finally:
+            del app.dependency_overrides[get_optional_user]
+
+        assert response.status_code == 200
+        matching = [p for p in response.json() if p["id"] == product_id]
+        assert len(matching) == 1
+        assert matching[0]["status"] == "pending"
+
+    async def test_list_defaults_to_approved_only(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        response = await client.get("/api/v1/product")
+        assert response.status_code == 200
+        ids = [p["id"] for p in response.json()]
+        assert product_id not in ids
+
+    async def test_list_with_status_pending_returns_pending(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_optional_user] = override_admin
+        try:
+            response = await client.get("/api/v1/product?status=pending")
+        finally:
+            del app.dependency_overrides[get_optional_user]
+
+        assert response.status_code == 200
+        ids = [p["id"] for p in response.json()]
+        assert product_id in ids
+
+    async def test_get_pending_product_returns_404(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        response = await client.get(f"/api/v1/product/{product_id}")
+        assert response.status_code == 404
+
+    async def test_admin_can_approve_product(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/verify", json={"status": "approved"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "approved"
+
+        # Now visible publicly
+        public_response = await client.get(f"/api/v1/product/{product_id}")
+        assert public_response.status_code == 200
+
+    async def test_admin_can_reject_product(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/verify", json={"status": "rejected"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "rejected"
+
+    async def test_non_admin_cannot_verify(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/verify", json={"status": "approved"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
+
+    async def test_verify_nonexistent_product_returns_404(self, client: ClientWithEmail):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                "/api/v1/product/999999/verify", json={"status": "approved"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 404
+
+    async def test_vote_on_pending_product_returns_404(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        response = await client.put(f"/api/v1/product/{product_id}/vote", json={"voted": True})
+        assert response.status_code == 404
+
+    async def test_comment_on_pending_product_returns_404(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        response = await client.post(
+            f"/api/v1/product/{product_id}/comments", json={"text": "Sneaky comment"}
+        )
+        assert response.status_code == 404
+
+    async def test_approved_product_visible_in_public_list(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=True)
+        response = await client.get("/api/v1/product")
+        assert response.status_code == 200
+        ids = [p["id"] for p in response.json()]
+        assert product_id in ids

@@ -4,11 +4,10 @@ from pydantic import Field
 
 from app.common.schema import CamelModel
 from app.domain.category.schema import CategoryOutSchema
-from app.enums.enums import ProductSector, ProductStage
+from app.enums.enums import ProductSector, ProductStage, ProductStatus
 
 
 class ProductCreateSchema(CamelModel):
-    slug: str = Field(max_length=150)
     name: str = Field(max_length=150)
     description: str | None = None
     sector: ProductSector
@@ -22,7 +21,6 @@ class ProductCreateSchema(CamelModel):
 
 
 class ProductUpdateSchema(CamelModel):
-    slug: str | None = Field(default=None, max_length=150)
     name: str | None = Field(default=None, max_length=150)
     description: str | None = None
     sector: ProductSector | None = None
@@ -48,12 +46,17 @@ class ProductOutSchema(CamelModel):
     github: str | None
     demo: str | None
     quality_badge: str | None
+    status: ProductStatus
     vote_count: int = 0
     bookmark_count: int = 0
     investor_interest_count: int = 0
     categories: list[CategoryOutSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class VerifyProductRequestSchema(CamelModel):
+    status: ProductStatus
 
 
 class VoteSchema(CamelModel):

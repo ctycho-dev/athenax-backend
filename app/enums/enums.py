@@ -51,6 +51,13 @@ class ProductStage(str, Enum):
     SERIES_B = "Series B"
 
 
+class ProductStatus(str, Enum):
+    """Verification/approval status of a product."""
+    PENDING  = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class PaperStatus(str, Enum):
     """Publication status of a research paper."""
     DRAFT = "draft"
