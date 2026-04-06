@@ -52,7 +52,7 @@ class ProductOutSchema(CamelModel):
     updated_at: datetime
 
 
-class VerifyProductRequestSchema(CamelModel):
+class ProductStatusUpdateSchema(CamelModel):
     status: ProductStatus
 
 

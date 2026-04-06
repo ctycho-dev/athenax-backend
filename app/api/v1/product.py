@@ -16,9 +16,9 @@ from app.domain.product.schema import (
     InvestorInterestSchema,
     ProductCreateSchema,
     ProductOutSchema,
+    ProductStatusUpdateSchema,
     ProductUpdateSchema,
     ToggleOutSchema,
-    VerifyProductRequestSchema,
     VoteSchema,
 )
 from app.enums.enums import ProductStage, ProductStatus
@@ -97,17 +97,17 @@ async def delete_product(
     await service.delete_by_id(db, product_id=product_id, current_user=current_user)
 
 
-@router.patch("/{product_id}/verify", response_model=ProductOutSchema)
+@router.patch("/{product_id}/status", response_model=ProductOutSchema)
 @limiter.limit("30/minute")
-async def verify_product(
+async def update_product_status(
     request: Request,
     product_id: int,
-    payload: VerifyProductRequestSchema,
+    payload: ProductStatusUpdateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(require_admin_user),
+    _: UserOutSchema = Depends(require_admin_user),
     service: ProductService = Depends(get_product_service),
 ):
-    return await service.verify(db, product_id=product_id, data=payload, current_user=current_user)
+    return await service.update_status(db, product_id=product_id, data=payload)
 
 
 @router.put("/{product_id}/vote", response_model=ToggleOutSchema)

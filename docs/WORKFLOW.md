@@ -693,12 +693,12 @@ curl -X DELETE "${API_URL}/api/v1/product/1" \
   -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
-### Product verify request example
+### Product status update request example
 
 Admin-only. Sets the product status to `approved` or `rejected`.
 
 ```bash
-curl -X PATCH "${API_URL}/api/v1/product/1/verify" \
+curl -X PATCH "${API_URL}/api/v1/product/1/status" \
   -H "Content-Type: application/json" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{"status": "approved"}'
