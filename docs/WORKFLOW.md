@@ -15,31 +15,6 @@ This document collects the main day-to-day steps for this backend in one place.
 
 ---
 
-## Enum endpoints
-
-Use these endpoints to populate frontend dropdowns and filters with canonical enum values.
-
-### Get product stages
-
-`GET /api/v1/product/stages`
-
-- Public endpoint (no auth required)
-- Rate limited to `60/minute`
-
-### Product stages response shape
-
-```json
-["Pre-Seed", "Seed", "Series A", "Series B"]
-```
-
-### Product stages request example
-
-```bash
-curl -X GET "${API_URL}/api/v1/product/stages" \
-  -H "Accept: application/json"
-```
-
----
 
 ## Public signup flow
 

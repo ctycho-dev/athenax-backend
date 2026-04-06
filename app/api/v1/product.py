@@ -29,12 +29,6 @@ from app.middleware.rate_limiter import limiter
 router = APIRouter(prefix=settings.api.v1.product, tags=["Product"])
 
 
-@router.get("/stages")
-@limiter.limit("60/minute")
-async def get_product_stages(request: Request):
-    return [e.value for e in ProductStage]
-
-
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProductOutSchema)
 @limiter.limit("30/minute")
 async def create_product(
