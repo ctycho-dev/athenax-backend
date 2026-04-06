@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -20,6 +20,7 @@ help:
 	@echo "  make downgrade              Roll back the last migration"
 	@echo "  make current                Show current migration version"
 	@echo "  make history                Show migration history"
+	@echo "  make seed                   Seed the database with initial data"
 
 start:
 	$(COMPOSE) up -d
@@ -99,3 +100,7 @@ current:
 history:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps $(APP_SERVICE) alembic history
+
+seed:
+	$(COMPOSE) up -d postgres redis
+	$(COMPOSE) run --rm --no-deps $(APP_SERVICE) python scripts/seed.py
