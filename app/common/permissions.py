@@ -3,6 +3,11 @@ from app.enums.enums import UserRole
 from app.exceptions.exceptions import ValidationError
 
 
+
+def is_admin(current_user: UserOutSchema) -> bool:
+    return current_user.role == UserRole.ADMIN
+
+
 def assert_can_modify(entity, current_user: UserOutSchema) -> None:
     """Check if the current user is allowed to modify this resource (product, paper, lab, etc).
 
@@ -12,7 +17,7 @@ def assert_can_modify(entity, current_user: UserOutSchema) -> None:
 
     Raises ValidationError if neither — nothing is modified.
     """
-    if current_user.role == UserRole.ADMIN:
+    if is_admin(current_user):
         return
     if entity.user_id is None or entity.user_id != current_user.id:
         raise ValidationError("You do not have permission to modify this resource")

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
 from app.common.audit_mixin import TimestampMixin
-from app.enums.enums import ProductSector, ProductStage
+from app.enums.enums import ProductSector, ProductStage, ProductStatus
 
 
 class ProductCategory(Base, TimestampMixin):
@@ -97,3 +97,8 @@ class Product(Base, TimestampMixin):
     github: Mapped[str | None] = mapped_column(String(200), nullable=True)
     demo: Mapped[str | None] = mapped_column(String(200), nullable=True)
     quality_badge: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[ProductStatus] = mapped_column(
+        SQLEnum(ProductStatus, name="product_status", values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        server_default="pending",
+    )
