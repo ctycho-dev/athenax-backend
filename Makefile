@@ -20,7 +20,7 @@ help:
 	@echo "  make downgrade              Roll back the last migration"
 	@echo "  make current                Show current migration version"
 	@echo "  make history                Show migration history"
-	@echo "  make seed                   Seed categories from fixtures"
+	@echo "  make seed                   Seed the database with initial data"
 
 start:
 	$(COMPOSE) up -d
