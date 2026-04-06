@@ -19,26 +19,23 @@ This document collects the main day-to-day steps for this backend in one place.
 
 Use these endpoints to populate frontend dropdowns and filters with canonical enum values.
 
-### Get product sectors and stages
+### Get product stages
 
-`GET /api/v1/enums/product-meta`
+`GET /api/v1/product/stages`
 
 - Public endpoint (no auth required)
 - Rate limited to `60/minute`
 
-### Product meta response shape
+### Product stages response shape
 
 ```json
-{
-  "productSectors": ["AI & Agents", "Robotics", "Biotech", "..."],
-  "productStages": ["Pre-Seed", "Seed", "Series A", "Series B"]
-}
+["Pre-Seed", "Seed", "Series A", "Series B"]
 ```
 
-### Product meta request example
+### Product stages request example
 
 ```bash
-curl -X GET "${API_URL}/api/v1/enums/product-meta" \
+curl -X GET "${API_URL}/api/v1/product/stages" \
   -H "Accept: application/json"
 ```
 
@@ -613,7 +610,6 @@ Every product starts with `status: "pending"` and must be approved by an admin b
   "slug": "axonos",
   "name": "Axonos",
   "description": "An AI-powered research assistant.",
-  "sector": "AI & Agents",
   "stage": "Seed",
   "funding": 500000.0,
   "founded": 2024,
@@ -641,7 +637,6 @@ curl -X POST "${API_URL}/api/v1/product" \
   -d '{
     "name": "Axonos",
     "description": "An AI-powered research assistant.",
-    "sector": "AI & Agents",
     "stage": "Seed",
     "funding": 500000,
     "founded": 2024,

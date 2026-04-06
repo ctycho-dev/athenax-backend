@@ -21,12 +21,18 @@ from app.domain.product.schema import (
     VerifyProductRequestSchema,
     VoteSchema,
 )
-from app.enums.enums import ProductStatus
+from app.enums.enums import ProductStage, ProductStatus
 from app.domain.product.service import ProductService
 from app.domain.user.schema import UserOutSchema
 from app.middleware.rate_limiter import limiter
 
 router = APIRouter(prefix=settings.api.v1.product, tags=["Product"])
+
+
+@router.get("/stages")
+@limiter.limit("60/minute")
+async def get_product_stages(request: Request):
+    return [e.value for e in ProductStage]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProductOutSchema)
