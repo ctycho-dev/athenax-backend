@@ -16,9 +16,10 @@ from app.domain.product.schema import (
     CommentUpdateSchema,
     ProductCreateSchema,
     ProductOutSchema,
+    ProductStatusUpdateSchema,
     ProductUpdateSchema,
     ToggleOutSchema,
-    VerifyProductRequestSchema,
+
 )
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductStatus
@@ -210,15 +211,14 @@ class ProductService:
         await self.repo.delete_comment(db, comment_id)
         await db.commit()
 
-    async def verify(
+    async def update_status(
         self,
         db: AsyncSession,
         product_id: int,
-        data: VerifyProductRequestSchema,
-        current_user: UserOutSchema,
+        data: ProductStatusUpdateSchema,
     ) -> ProductOutSchema:
         await self.repo.get_by_id(db, product_id)
-        product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
+        product = await self.repo.update(db, product_id, {"status": data.status})
         await db.commit()
         await db.refresh(product)
         return await self._to_schema(db, product)
