@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
 from app.domain.category.model import Category
+from app.enums.enums import ProductStatus
+from app.exceptions.exceptions import NotFoundError
 from app.domain.product.model import (
     Product,
     ProductBookmark,
@@ -17,6 +19,30 @@ from app.domain.product.model import (
 class ProductRepository(BaseRepository[Product]):
     def __init__(self) -> None:
         super().__init__(Product)
+
+    # -------------------------
+    # Status filtering
+    # -------------------------
+    async def get_all_by_status(
+        self, db: AsyncSession, status: ProductStatus | None, limit: int, offset: int
+    ) -> list[Product]:
+        q = select(Product)
+        if status is not None:
+            q = q.where(Product.status == status)
+        q = q.limit(limit).offset(offset)
+        result = await db.execute(q)
+        return list(result.scalars().all())
+
+    async def get_by_id_with_status_check(
+        self, db: AsyncSession, product_id: int, required_status: ProductStatus | None = None
+    ) -> Product:
+        result = await db.execute(select(Product).where(Product.id == product_id))
+        instance = result.scalar_one_or_none()
+        if not instance:
+            raise NotFoundError(f"Product with ID {product_id} not found")
+        if required_status is not None and instance.status != required_status:
+            raise NotFoundError(f"Product with ID {product_id} not found") # Don't reveal existence of product if status doesn't match 
+        return instance
 
     # -------------------------
     # Categories

@@ -6,7 +6,7 @@ from app.api.dependencies import (
     get_db,
     get_product_service,
 )
-from app.api.dependencies.auth import require_founder_or_admin, require_investor_user
+from app.api.dependencies.auth import get_optional_user, require_admin_user, require_founder_or_admin, require_investor_user
 from app.core.config import settings
 from app.domain.product.schema import (
     BookmarkSchema,
@@ -16,10 +16,12 @@ from app.domain.product.schema import (
     InvestorInterestSchema,
     ProductCreateSchema,
     ProductOutSchema,
+    ProductStatusUpdateSchema,
     ProductUpdateSchema,
     ToggleOutSchema,
     VoteSchema,
 )
+from app.enums.enums import ProductStage, ProductStatus
 from app.domain.product.service import ProductService
 from app.domain.user.schema import UserOutSchema
 from app.middleware.rate_limiter import limiter
@@ -45,10 +47,12 @@ async def list_products(
     request: Request,
     limit: int = 50,
     offset: int = 0,
+    status: ProductStatus | None = None,
     db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
 ):
-    return await service.list(db, limit=limit, offset=offset)
+    return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user)
 
 
 @router.get("/{product_id}", response_model=ProductOutSchema)
@@ -85,6 +89,19 @@ async def delete_product(
     service: ProductService = Depends(get_product_service),
 ):
     await service.delete_by_id(db, product_id=product_id, current_user=current_user)
+
+
+@router.patch("/{product_id}/status", response_model=ProductOutSchema)
+@limiter.limit("30/minute")
+async def update_product_status(
+    request: Request,
+    product_id: int,
+    payload: ProductStatusUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    _: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_status(db, product_id=product_id, data=payload)
 
 
 @router.put("/{product_id}/vote", response_model=ToggleOutSchema)

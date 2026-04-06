@@ -62,6 +62,23 @@ def require_roles(*roles: UserRole, detail: str = "Not enough permissions"):
     return dependency
 
 
+async def get_optional_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> UserOutSchema | None:
+    """Soft authentication dependency for public endpoints that behave differently based on who is asking.
+    when no valid session is present — allowing the endpoint to remain publicly accessible.
+
+    Used on the product list endpoint so the service can apply role-based filtering:
+      - None (unauthenticated) or non-admin → approved products only
+      - Admin → can filter by any status or retrieve all products
+    """
+    try:
+        return await get_current_user(request, db)
+    except HTTPException:
+        return None
+
+
 require_admin_user = require_roles(UserRole.ADMIN, detail="Admin role required")
 require_researcher_user = require_roles(UserRole.RESEARCHER, UserRole.ADMIN, detail="Researcher role required")
 require_founder_or_admin = require_roles(UserRole.FOUNDER, UserRole.ADMIN, detail="Founder or admin role required")

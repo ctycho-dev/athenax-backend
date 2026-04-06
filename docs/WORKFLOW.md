@@ -4,16 +4,17 @@ This document collects the main day-to-day steps for this backend in one place.
 
 ## Available roles
 
-| Role | Value | Profile table |
-|------|-------|---------------|
-| Admin | `admin` | — |
-| User | `user` | — |
+| Role       | Value        | Profile table         |
+| ---------- | ------------ | --------------------- |
+| Admin      | `admin`      | —                     |
+| User       | `user`       | —                     |
 | Researcher | `researcher` | `researcher_profiles` |
-| Sponsor | `sponsor` | `sponsor_profiles` |
-| Founder | `founder` | — |
-| Investor | `investor` | `investor_profiles` |
+| Sponsor    | `sponsor`    | `sponsor_profiles`    |
+| Founder    | `founder`    | —                     |
+| Investor   | `investor`   | `investor_profiles`   |
 
 ---
+
 
 ## Public signup flow
 
@@ -172,9 +173,7 @@ curl -X POST "${API_URL}/api/v1/user/login" \
   },
   "researcherProfile": null,
   "sponsorProfile": null,
-  "categories": [
-    { "categoryId": 3 }
-  ]
+  "categories": [{ "categoryId": 3 }]
 }
 ```
 
@@ -251,10 +250,61 @@ curl -X DELETE "${API_URL}/api/v1/user/${USER_ID}/categories/2" \
 ### Categories response shape
 
 ```json
-[
-  { "categoryId": 1 },
-  { "categoryId": 3 }
-]
+[{ "categoryId": 1 }, { "categoryId": 3 }]
+```
+
+---
+
+## Category CRUD flow
+
+Categories are a managed resource. Read endpoints are public. `POST`, `PATCH`, and `DELETE` require the `admin` role.
+
+### Category response shape
+
+```json
+{
+  "id": 1,
+  "name": "Machine Learning"
+}
+```
+
+### Category create request example
+
+```bash
+curl -X POST "${API_URL}/api/v1/category" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"name": "Machine Learning"}'
+```
+
+### Category list request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/category?limit=50&offset=0" \
+  -H "Accept: application/json"
+```
+
+### Category get request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/category/1" \
+  -H "Accept: application/json"
+```
+
+### Category update request example
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/category/1" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"name": "Deep Learning"}'
+```
+
+### Category delete request example
+
+```bash
+curl -X DELETE "${API_URL}/api/v1/category/1" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
 ---
@@ -420,9 +470,7 @@ Papers are researcher-created resources with many-to-many categories and a vote 
   "externalUrl": "https://arxiv.org/abs/1706.03762",
   "content": null,
   "voteCount": 42,
-  "categories": [
-    { "id": 1, "name": "Machine Learning" }
-  ],
+  "categories": [{ "id": 1, "name": "Machine Learning" }],
   "createdAt": "2026-01-01T00:00:00Z",
   "updatedAt": "2026-01-01T00:00:00Z"
 }
@@ -507,7 +555,26 @@ curl -X PUT "${API_URL}/api/v1/paper/1/vote" \
 
 ## Product CRUD + interactions flow
 
-Products are founder-created resources with many-to-many categories, vote counts, bookmark counts, investor interest counts, and comments. `POST`, `PATCH`, and `DELETE` require the `founder` or `admin` role (with ownership enforced on `PATCH`/`DELETE`). Investor interest requires the `investor` role. All read endpoints are public.
+Products are founder-created resources with many-to-many categories, vote counts, bookmark counts, investor interest counts, and comments. `POST`, `PATCH`, and `DELETE` require the `founder` or `admin` role (with ownership enforced on `PATCH`/`DELETE`). Investor interest requires the `investor` role.
+
+### Verification / approval workflow
+
+Every product starts with `status: "pending"` and must be approved by an admin before it appears publicly. The possible statuses are:
+
+| Status     | Meaning                                |
+| ---------- | -------------------------------------- |
+| `pending`  | Newly submitted, awaiting admin review |
+| `approved` | Visible to everyone                    |
+| `rejected` | Not visible publicly                   |
+
+**Visibility rules:**
+
+| Caller                      | What they see                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
+| Unauthenticated / non-admin | Approved products only, regardless of any `?status=` param passed                              |
+| Admin                       | Any status via `?status=pending/approved/rejected`, or all products when `?status=` is omitted |
+
+**All interactions (vote, bookmark, investor interest, and comments) are blocked on non-approved products** — they return 404.
 
 ### Product response shape
 
@@ -518,19 +585,17 @@ Products are founder-created resources with many-to-many categories, vote counts
   "slug": "axonos",
   "name": "Axonos",
   "description": "An AI-powered research assistant.",
-  "sector": "AI & Agents",
   "stage": "Seed",
   "funding": 500000.0,
   "founded": 2024,
   "github": "https://github.com/org/axonos",
   "demo": "https://axonos.ai",
   "qualityBadge": null,
+  "status": "approved",
   "voteCount": 12,
   "bookmarkCount": 5,
   "investorInterestCount": 3,
-  "categories": [
-    { "id": 1, "name": "AI & Agents" }
-  ],
+  "categories": [{ "id": 1, "name": "AI & Agents" }],
   "createdAt": "2026-01-01T00:00:00Z",
   "updatedAt": "2026-01-01T00:00:00Z"
 }
@@ -538,31 +603,46 @@ Products are founder-created resources with many-to-many categories, vote counts
 
 ### Product create request example
 
+Newly created products always start as `pending`. The backend generates `slug` from `name`.
+
 ```bash
 curl -X POST "${API_URL}/api/v1/product" \
   -H "Content-Type: application/json" \
   -H "Cookie: access_token=${ACCESS_TOKEN}" \
   -d '{
-    "slug": "axonos",
     "name": "Axonos",
-    "sector": "AI & Agents",
+    "description": "An AI-powered research assistant.",
     "stage": "Seed",
     "funding": 500000,
     "founded": 2024,
     "github": "https://github.com/org/axonos",
     "demo": "https://axonos.ai",
+    "qualityBadge": "Top Rated",
     "categoryIds": [1, 2]
   }'
 ```
 
 ### Product list request example
 
+Default returns approved products only. Admins can filter by status or omit `status` to get all.
+
 ```bash
+# Public — approved products only
 curl -X GET "${API_URL}/api/v1/product?limit=50&offset=0" \
   -H "Accept: application/json"
+
+# Admin — pending products
+curl -X GET "${API_URL}/api/v1/product?status=pending" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+
+# Admin — all products regardless of status
+curl -X GET "${API_URL}/api/v1/product" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
 ### Product get request example
+
+Returns 404 for non-approved products.
 
 ```bash
 curl -X GET "${API_URL}/api/v1/product/1" \
@@ -588,9 +668,20 @@ curl -X DELETE "${API_URL}/api/v1/product/1" \
   -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
+### Product status update request example
+
+Admin-only. Sets the product status to `approved` or `rejected`.
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/product/1/status" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"status": "approved"}'
+```
+
 ### Product vote request example
 
-`voted: true` adds a vote, `voted: false` removes it. Duplicate votes are silently ignored. Any authenticated user can vote.
+`voted: true` adds a vote, `voted: false` removes it. Duplicate votes are silently ignored. Any authenticated user can vote. Returns 404 on non-approved products.
 
 ```bash
 curl -X PUT "${API_URL}/api/v1/product/1/vote" \
@@ -601,7 +692,7 @@ curl -X PUT "${API_URL}/api/v1/product/1/vote" \
 
 ### Product bookmark request example
 
-`bookmarked: true` adds a bookmark, `bookmarked: false` removes it. Any authenticated user can bookmark.
+`bookmarked: true` adds a bookmark, `bookmarked: false` removes it. Any authenticated user can bookmark. Returns 404 on non-approved products.
 
 ```bash
 curl -X PUT "${API_URL}/api/v1/product/1/bookmark" \
@@ -612,7 +703,7 @@ curl -X PUT "${API_URL}/api/v1/product/1/bookmark" \
 
 ### Product investor interest request example
 
-`interested: true` marks interest, `interested: false` removes it. Requires `investor` role.
+`interested: true` marks interest, `interested: false` removes it. Requires `investor` role. Returns 404 on non-approved products.
 
 ```bash
 curl -X PUT "${API_URL}/api/v1/product/1/interest" \
@@ -625,7 +716,7 @@ curl -X PUT "${API_URL}/api/v1/product/1/interest" \
 
 ## Product comments flow
 
-Comments are scoped to a product. Any authenticated user can create a comment. Only the comment owner or an admin can update or delete a comment. The list endpoint is public.
+Comments are scoped to a product. Any authenticated user can create a comment. Only the comment owner or an admin can update or delete a comment. The list endpoint is public. All comment endpoints return 404 for non-approved products.
 
 ### Comment response shape
 
