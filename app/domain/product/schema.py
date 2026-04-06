@@ -4,13 +4,12 @@ from pydantic import Field
 
 from app.common.schema import CamelModel
 from app.domain.category.schema import CategoryOutSchema
-from app.enums.enums import ProductSector, ProductStage, ProductStatus
+from app.enums.enums import ProductStage, ProductStatus
 
 
 class ProductCreateSchema(CamelModel):
     name: str = Field(max_length=150)
     description: str | None = None
-    sector: ProductSector
     stage: ProductStage | None = None
     funding: float | None = None
     founded: int | None = None
@@ -23,7 +22,6 @@ class ProductCreateSchema(CamelModel):
 class ProductUpdateSchema(CamelModel):
     name: str | None = Field(default=None, max_length=150)
     description: str | None = None
-    sector: ProductSector | None = None
     stage: ProductStage | None = None
     funding: float | None = None
     founded: int | None = None
@@ -39,7 +37,6 @@ class ProductOutSchema(CamelModel):
     slug: str
     name: str
     description: str | None
-    sector: ProductSector
     stage: ProductStage | None
     funding: float | None
     founded: int | None
