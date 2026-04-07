@@ -7,6 +7,13 @@ from app.domain.category.schema import CategoryOutSchema
 from app.enums.enums import PaperSourceType, PaperStatus
 
 
+class PaperSummarySchema(CamelModel):
+    id: int
+    title: str
+    slug: str
+    published_at: datetime | None
+
+
 class PaperCreateSchema(CamelModel):
     product_id: int | None = None
     title: str = Field(max_length=255)

@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import Field
 
 from app.common.schema import CamelModel
-from app.domain.category.schema import CategoryOutSchema
+from app.domain.paper.schema import PaperSummarySchema
 from app.enums.enums import ProductStage, ProductStatus
 
 
@@ -31,7 +31,7 @@ class ProductUpdateSchema(CamelModel):
     category_ids: list[int] | None = None
 
 
-class ProductOutSchema(CamelModel):
+class ProductBaseSchema(CamelModel):
     id: int
     user_id: int | None
     slug: str
@@ -47,9 +47,20 @@ class ProductOutSchema(CamelModel):
     vote_count: int = 0
     bookmark_count: int = 0
     investor_interest_count: int = 0
-    categories: list[CategoryOutSchema] = Field(default_factory=list)
+    category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class ProductListSchema(ProductBaseSchema):
+    bookmarked: bool | None = None
+
+
+class ProductOutSchema(ProductBaseSchema):
+    papers: list[PaperSummarySchema] = Field(default_factory=list)
+    voted: bool | None = None
+    bookmarked: bool | None = None
+    interested: bool | None = None
 
 
 class ProductStatusUpdateSchema(CamelModel):

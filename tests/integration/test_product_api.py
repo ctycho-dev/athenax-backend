@@ -197,7 +197,7 @@ class TestProductAPI:
             app.dependency_overrides[get_current_user] = override_admin
             try:
                 verify_resp = await client.patch(
-                    f"/api/v1/product/{product_id}/verify", json={"status": "approved"}
+                    f"/api/v1/product/{product_id}/status", json={"status": "approved"}
                 )
             finally:
                 app.dependency_overrides[get_current_user] = original
@@ -612,7 +612,7 @@ class TestProductAPI:
         app.dependency_overrides[get_current_user] = override_admin
         try:
             response = await client.patch(
-                f"/api/v1/product/{product_id}/verify", json={"status": "approved"}
+                f"/api/v1/product/{product_id}/status", json={"status": "approved"}
             )
         finally:
             app.dependency_overrides[get_current_user] = original
@@ -634,7 +634,7 @@ class TestProductAPI:
         app.dependency_overrides[get_current_user] = override_admin
         try:
             response = await client.patch(
-                f"/api/v1/product/{product_id}/verify", json={"status": "rejected"}
+                f"/api/v1/product/{product_id}/status", json={"status": "rejected"}
             )
         finally:
             app.dependency_overrides[get_current_user] = original
@@ -652,7 +652,7 @@ class TestProductAPI:
         app.dependency_overrides[get_current_user] = override_founder
         try:
             response = await client.patch(
-                f"/api/v1/product/{product_id}/verify", json={"status": "approved"}
+                f"/api/v1/product/{product_id}/status", json={"status": "approved"}
             )
         finally:
             app.dependency_overrides[get_current_user] = original

@@ -15,6 +15,7 @@ from app.domain.product.schema import (
     CommentUpdateSchema,
     InvestorInterestSchema,
     ProductCreateSchema,
+    ProductListSchema,
     ProductOutSchema,
     ProductStatusUpdateSchema,
     ProductUpdateSchema,
@@ -41,7 +42,7 @@ async def create_product(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[ProductOutSchema])
+@router.get("", response_model=list[ProductListSchema])
 @limiter.limit("60/minute")
 async def list_products(
     request: Request,
@@ -53,6 +54,32 @@ async def list_products(
     service: ProductService = Depends(get_product_service),
 ):
     return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user)
+
+
+@router.get("/me", response_model=list[ProductListSchema])
+@limiter.limit("60/minute")
+async def list_my_products(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    status: ProductStatus | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_founder_or_admin),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user, owner_only=True)
+
+
+@router.get("/slug/{slug}", response_model=ProductOutSchema)
+@limiter.limit("60/minute")
+async def get_product_by_slug(
+    request: Request,
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.get_by_slug(db, slug=slug, current_user=current_user)
 
 
 @router.get("/{product_id}", response_model=ProductOutSchema)
@@ -98,10 +125,10 @@ async def update_product_status(
     product_id: int,
     payload: ProductStatusUpdateSchema,
     db: AsyncSession = Depends(get_db),
-    _: UserOutSchema = Depends(require_admin_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: ProductService = Depends(get_product_service),
 ):
-    return await service.update_status(db, product_id=product_id, data=payload)
+    return await service.update_status(db, product_id=product_id, data=payload, current_user=current_user)
 
 
 @router.put("/{product_id}/vote", response_model=ToggleOutSchema)

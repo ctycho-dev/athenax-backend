@@ -8,6 +8,10 @@ def is_admin(current_user: UserOutSchema) -> bool:
     return current_user.role == UserRole.ADMIN
 
 
+def is_owner(entity, current_user: UserOutSchema) -> bool:
+    return entity.user_id is not None and entity.user_id == current_user.id
+
+
 def assert_can_modify(entity, current_user: UserOutSchema) -> None:
     """Check if the current user is allowed to modify this resource (product, paper, lab, etc).
 
@@ -19,5 +23,5 @@ def assert_can_modify(entity, current_user: UserOutSchema) -> None:
     """
     if is_admin(current_user):
         return
-    if entity.user_id is None or entity.user_id != current_user.id:
+    if not is_owner(entity, current_user):
         raise ValidationError("You do not have permission to modify this resource")
