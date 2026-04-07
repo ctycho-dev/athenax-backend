@@ -1,25 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_categories
 from app.common.permissions import assert_can_modify, is_admin
 from app.domain.category.repository import CategoryRepository
-from app.domain.category.schema import CategoryOutSchema
 from app.domain.product.model import ProductCategory
 from app.domain.product.repository import ProductRepository
+from app.domain.paper.schema import PaperSummarySchema
 from app.domain.product.schema import (
     CommentCreateSchema,
     CommentOutSchema,
     CommentUpdateSchema,
     ProductCreateSchema,
+    ProductListSchema,
     ProductOutSchema,
     ProductStatusUpdateSchema,
     ProductUpdateSchema,
     ToggleOutSchema,
-
 )
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductStatus
@@ -27,10 +29,45 @@ from app.exceptions.exceptions import NotFoundError
 from app.utils.slug import generate_slug
 
 
+@dataclass
+class _InteractionData:
+    vote_counts: dict[int, int]
+    bookmark_counts: dict[int, int]
+    investor_interest_counts: dict[int, int]
+    categories_map: dict[int, list]
+    user_votes: set[int] = field(default_factory=set)
+    user_bookmarks: set[int] = field(default_factory=set)
+    user_interests: set[int] = field(default_factory=set)
+
+
 class ProductService:
     def __init__(self, repo: ProductRepository, category_repo: CategoryRepository):
         self.repo = repo
         self.category_repo = category_repo
+
+    async def _fetch_interaction_data(
+        self,
+        db: AsyncSession,
+        product_ids: list[int],
+        current_user: UserOutSchema | None,
+    ) -> _InteractionData:
+        tasks = [
+            self.repo.get_vote_counts(db, product_ids),
+            self.repo.get_bookmark_counts(db, product_ids),
+            self.repo.get_investor_interest_counts(db, product_ids),
+            self.repo.get_categories_for_products(db, product_ids),
+        ]
+        if current_user:
+            tasks += [
+                self.repo.get_user_votes(db, product_ids, current_user.id),
+                self.repo.get_user_bookmarks(db, product_ids, current_user.id),
+                self.repo.get_user_investor_interests(db, product_ids, current_user.id),
+            ]
+        gathered = await asyncio.gather(*tasks)
+        data = _InteractionData(*gathered[:4])
+        if current_user:
+            data.user_votes, data.user_bookmarks, data.user_interests = gathered[4], gathered[5], gathered[6]
+        return data
 
     async def create(
         self,
@@ -59,36 +96,44 @@ class ProductService:
         offset: int,
         status: ProductStatus | None = None,
         current_user: UserOutSchema | None = None,
-    ) -> list[ProductOutSchema]:
-        # Non-admins can only ever see approved products regardless of requested status
-        if current_user is None or not is_admin(current_user):
+        owner_only: bool = False,
+    ) -> list[ProductListSchema]:
+        user_id: int | None = None
+        if owner_only and current_user is not None:
+            # Founder viewing their own products — allow any status, filter by user
+            user_id = current_user.id
+        elif current_user is None or not is_admin(current_user):
+            # Non-admins can only see approved products
             status = ProductStatus.APPROVED
-        products = await self.repo.get_all_by_status(db, status, limit=limit, offset=offset)
+        products = await self.repo.get_all_by_status(db, status, limit=limit, offset=offset, user_id=user_id)
         if not products:
             return []
         product_ids = [p.id for p in products]
-        vote_counts, bookmark_counts, investor_interest_counts, categories_map = await asyncio.gather(
-            self.repo.get_vote_counts(db, product_ids),
-            self.repo.get_bookmark_counts(db, product_ids),
-            self.repo.get_investor_interest_counts(db, product_ids),
-            self.repo.get_categories_for_products(db, product_ids),
-        )
+        ix = await self._fetch_interaction_data(db, product_ids, current_user)
+
         results = []
         for product in products:
-            out = ProductOutSchema.model_validate(product, from_attributes=True)
-            out.vote_count = vote_counts[product.id]
-            out.bookmark_count = bookmark_counts[product.id]
-            out.investor_interest_count = investor_interest_counts[product.id]
-            out.categories = [
-                CategoryOutSchema.model_validate(c, from_attributes=True)
-                for c in categories_map[product.id]
-            ]
+            out = ProductListSchema.model_validate(product, from_attributes=True)
+            out.vote_count = ix.vote_counts[product.id]
+            out.bookmark_count = ix.bookmark_counts[product.id]
+            out.investor_interest_count = ix.investor_interest_counts[product.id]
+            out.category_ids = [c.id for c in ix.categories_map[product.id]]
+            if current_user:
+                out.bookmarked = product.id in ix.user_bookmarks
             results.append(out)
         return results
 
     async def get_by_id(self, db: AsyncSession, product_id: int) -> ProductOutSchema:
         product = await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
         return await self._to_schema(db, product)
+
+    async def get_by_slug(
+        self, db: AsyncSession, slug: str, current_user: UserOutSchema | None = None
+    ) -> ProductOutSchema:
+        product = await self.repo.get_by_slug(db, slug)
+        if not product or product.status != ProductStatus.APPROVED:
+            raise NotFoundError(f"Product with slug '{slug}' not found")
+        return await self._to_schema(db, product, current_user=current_user)
 
     async def update(
         self,
@@ -150,7 +195,16 @@ class ProductService:
             current_user,
         )
 
-    async def _toggle(self, db, product_id, toggled, add_fn, remove_fn, count_fn, current_user) -> ToggleOutSchema:
+    async def _toggle(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        toggled: bool,
+        add_fn: Callable,
+        remove_fn: Callable,
+        count_fn: Callable,
+        current_user: UserOutSchema,
+    ) -> ToggleOutSchema:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
         if toggled:
             await add_fn(db, product_id, current_user.id)
@@ -177,7 +231,6 @@ class ProductService:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
         comment = await self.repo.create_comment(db, product_id, current_user.id, data.text)
         await db.commit()
-        await db.refresh(comment)
         return CommentOutSchema.model_validate(comment, from_attributes=True)
 
     async def update_comment(
@@ -216,26 +269,29 @@ class ProductService:
         db: AsyncSession,
         product_id: int,
         data: ProductStatusUpdateSchema,
+        current_user: UserOutSchema,
     ) -> ProductOutSchema:
-        await self.repo.get_by_id(db, product_id)
-        product = await self.repo.update(db, product_id, {"status": data.status})
+        product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)
         return await self._to_schema(db, product)
 
-    async def _to_schema(self, db: AsyncSession, product) -> ProductOutSchema:
-        categories, vote_count, bookmark_count, investor_interest_count = await asyncio.gather(
-            self.repo.get_categories_for_product(db, product.id),
-            self.repo.get_vote_count(db, product.id),
-            self.repo.get_bookmark_count(db, product.id),
-            self.repo.get_investor_interest_count(db, product.id),
+    async def _to_schema(
+        self, db: AsyncSession, product, current_user: UserOutSchema | None = None
+    ) -> ProductOutSchema:
+        ix, papers = await asyncio.gather(
+            self._fetch_interaction_data(db, [product.id], current_user),
+            self.repo.get_papers_for_product(db, product.id),
         )
         result = ProductOutSchema.model_validate(product, from_attributes=True)
-        result.categories = [
-            CategoryOutSchema.model_validate(c, from_attributes=True) for c in categories
-        ]
-        result.vote_count = vote_count
-        result.bookmark_count = bookmark_count
-        result.investor_interest_count = investor_interest_count
+        result.category_ids = [c.id for c in ix.categories_map[product.id]]
+        result.vote_count = ix.vote_counts[product.id]
+        result.bookmark_count = ix.bookmark_counts[product.id]
+        result.investor_interest_count = ix.investor_interest_counts[product.id]
+        result.papers = [PaperSummarySchema.model_validate(p, from_attributes=True) for p in papers]
+        if current_user:
+            result.voted = product.id in ix.user_votes
+            result.bookmarked = product.id in ix.user_bookmarks
+            result.interested = product.id in ix.user_interests
         return result
 

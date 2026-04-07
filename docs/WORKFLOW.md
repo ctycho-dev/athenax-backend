@@ -573,10 +573,13 @@ Every product starts with `status: "pending"` and must be approved by an admin b
 | --------------------------- | ---------------------------------------------------------------------------------------------- |
 | Unauthenticated / non-admin | Approved products only, regardless of any `?status=` param passed                              |
 | Admin                       | Any status via `?status=pending/approved/rejected`, or all products when `?status=` is omitted |
+| Founder (`GET /me`)         | All of their own products across all statuses (pending, approved, rejected)                    |
 
 **All interactions (vote, bookmark, investor interest, and comments) are blocked on non-approved products** — they return 404.
 
-### Product response shape
+### Product list response shape
+
+Returned by `GET /api/v1/product`. Includes `github`, `demo`, and `bookmarked` when the caller is authenticated (otherwise `bookmarked` is `null`).
 
 ```json
 {
@@ -595,7 +598,46 @@ Every product starts with `status: "pending"` and must be approved by an admin b
   "voteCount": 12,
   "bookmarkCount": 5,
   "investorInterestCount": 3,
-  "categories": [{ "id": 1, "name": "AI & Agents" }],
+  "categoryIds": [1, 3],
+  "bookmarked": true,
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-01-01T00:00:00Z"
+}
+```
+
+### Product detail response shape
+
+Returned by `GET /api/v1/product/{product_id}` and `GET /api/v1/product/slug/{slug}`. Includes published papers only and user interaction state (`voted`, `bookmarked`, `interested`) when the caller is authenticated (otherwise `null`).
+
+```json
+{
+  "id": 1,
+  "userId": 1,
+  "slug": "axonos",
+  "name": "Axonos",
+  "description": "An AI-powered research assistant.",
+  "stage": "Seed",
+  "funding": 500000.0,
+  "founded": 2024,
+  "github": "https://github.com/org/axonos",
+  "demo": "https://axonos.ai",
+  "qualityBadge": null,
+  "status": "approved",
+  "voteCount": 12,
+  "bookmarkCount": 5,
+  "investorInterestCount": 3,
+  "categoryIds": [1, 3],
+  "papers": [
+    {
+      "id": 7,
+      "title": "Attention Is All You Need",
+      "slug": "attention-is-all-you-need",
+      "publishedAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "voted": false,
+  "bookmarked": true,
+  "interested": null,
   "createdAt": "2026-01-01T00:00:00Z",
   "updatedAt": "2026-01-01T00:00:00Z"
 }
@@ -640,6 +682,20 @@ curl -X GET "${API_URL}/api/v1/product" \
   -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
+### My products request example (founder)
+
+Requires `founder` or `admin` role. Returns all of the caller's own products across all statuses. Supports the same `limit`, `offset`, and `status` query params.
+
+```bash
+# All statuses
+curl -X GET "${API_URL}/api/v1/product/me" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+
+# Filter to pending only
+curl -X GET "${API_URL}/api/v1/product/me?status=pending" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
 ### Product get request example
 
 Returns 404 for non-approved products.
@@ -647,6 +703,20 @@ Returns 404 for non-approved products.
 ```bash
 curl -X GET "${API_URL}/api/v1/product/1" \
   -H "Accept: application/json"
+```
+
+### Product get by slug request example
+
+Returns full detail including linked papers and user interaction state. Pass the auth cookie to get `voted`/`bookmarked`/`interested`.
+
+```bash
+# Unauthenticated — interaction fields are null
+curl -X GET "${API_URL}/api/v1/product/slug/axonos" \
+  -H "Accept: application/json"
+
+# Authenticated — interaction fields populated
+curl -X GET "${API_URL}/api/v1/product/slug/axonos" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
 ### Product update request example

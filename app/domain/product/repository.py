@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
 from app.domain.category.model import Category
-from app.enums.enums import ProductStatus
+from app.domain.paper.model import Paper
+from app.enums.enums import PaperStatus, ProductStatus
 from app.exceptions.exceptions import NotFoundError
 from app.domain.product.model import (
     Product,
@@ -24,14 +25,21 @@ class ProductRepository(BaseRepository[Product]):
     # Status filtering
     # -------------------------
     async def get_all_by_status(
-        self, db: AsyncSession, status: ProductStatus | None, limit: int, offset: int
+        self, db: AsyncSession, status: ProductStatus | None, limit: int, offset: int,
+        user_id: int | None = None,
     ) -> list[Product]:
         q = select(Product)
         if status is not None:
             q = q.where(Product.status == status)
+        if user_id is not None:
+            q = q.where(Product.user_id == user_id)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def get_by_slug(self, db: AsyncSession, slug: str) -> Product | None:
+        result = await db.execute(select(Product).where(Product.slug == slug))
+        return result.scalar_one_or_none()
 
     async def get_by_id_with_status_check(
         self, db: AsyncSession, product_id: int, required_status: ProductStatus | None = None
@@ -65,6 +73,14 @@ class ProductRepository(BaseRepository[Product]):
     ) -> list[Category]:
         return (await self.get_categories_for_products(db, [product_id]))[product_id]
 
+    async def get_papers_for_product(self, db: AsyncSession, product_id: int) -> list[Paper]:
+        result = await db.execute(
+            select(Paper)
+            .where(Paper.product_id == product_id, Paper.status == PaperStatus.PUBLISHED)
+            .order_by(Paper.published_at.desc())
+        )
+        return list(result.scalars().all())
+
     # -------------------------
     # Votes
     # -------------------------
@@ -81,6 +97,18 @@ class ProductRepository(BaseRepository[Product]):
 
     async def get_vote_count(self, db: AsyncSession, product_id: int) -> int:
         return (await self.get_vote_counts(db, [product_id]))[product_id]
+
+    async def get_user_votes(
+        self, db: AsyncSession, product_ids: list[int], user_id: int
+    ) -> set[int]:
+        result = await db.execute(
+            select(ProductVote.__table__.c.product_id)
+            .where(
+                ProductVote.__table__.c.product_id.in_(product_ids),
+                ProductVote.__table__.c.user_id == user_id,
+            )
+        )
+        return {row.product_id for row in result}
 
     async def add_vote(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
@@ -114,6 +142,18 @@ class ProductRepository(BaseRepository[Product]):
     async def get_bookmark_count(self, db: AsyncSession, product_id: int) -> int:
         return (await self.get_bookmark_counts(db, [product_id]))[product_id]
 
+    async def get_user_bookmarks(
+        self, db: AsyncSession, product_ids: list[int], user_id: int
+    ) -> set[int]:
+        result = await db.execute(
+            select(ProductBookmark.__table__.c.product_id)
+            .where(
+                ProductBookmark.__table__.c.product_id.in_(product_ids),
+                ProductBookmark.__table__.c.user_id == user_id,
+            )
+        )
+        return {row.product_id for row in result}
+
     async def add_bookmark(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
             pg_insert(ProductBookmark.__table__)
@@ -145,6 +185,18 @@ class ProductRepository(BaseRepository[Product]):
 
     async def get_investor_interest_count(self, db: AsyncSession, product_id: int) -> int:
         return (await self.get_investor_interest_counts(db, [product_id]))[product_id]
+
+    async def get_user_investor_interests(
+        self, db: AsyncSession, product_ids: list[int], user_id: int
+    ) -> set[int]:
+        result = await db.execute(
+            select(ProductInvestorInterest.__table__.c.product_id)
+            .where(
+                ProductInvestorInterest.__table__.c.product_id.in_(product_ids),
+                ProductInvestorInterest.__table__.c.user_id == user_id,
+            )
+        )
+        return {row.product_id for row in result}
 
     async def add_investor_interest(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
