@@ -20,6 +20,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductStatusUpdateSchema,
+    ProductSummarySchema,
     ProductUpdateSchema,
     ToggleOutSchema,
 )
@@ -167,6 +168,38 @@ class ProductService:
         assert_can_modify(product, current_user)
         await self.repo.delete_by_id(db, product_id)
         await db.commit()
+
+    async def list_voted(
+        self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
+    ) -> list[ProductSummarySchema]:
+        product_ids = await self.repo.get_voted_product_ids_by_user(db, current_user.id, limit, offset)
+        return await self._to_summary_list(db, product_ids)
+
+    async def list_bookmarked(
+        self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
+    ) -> list[ProductSummarySchema]:
+        product_ids = await self.repo.get_bookmarked_product_ids_by_user(db, current_user.id, limit, offset)
+        return await self._to_summary_list(db, product_ids)
+
+    async def _to_summary_list(
+        self, db: AsyncSession, product_ids: list[int]
+    ) -> list[ProductSummarySchema]:
+        if not product_ids:
+            return []
+        products, vote_counts, bookmark_counts, categories_map = await asyncio.gather(
+            self.repo.get_by_ids(db, product_ids),
+            self.repo.get_vote_counts(db, product_ids),
+            self.repo.get_bookmark_counts(db, product_ids),
+            self.repo.get_categories_for_products(db, product_ids),
+        )
+        results = []
+        for product in products:
+            out = ProductSummarySchema.model_validate(product, from_attributes=True)
+            out.vote_count = vote_counts[product.id]
+            out.bookmark_count = bookmark_counts[product.id]
+            out.category_ids = [c.id for c in categories_map[product.id]]
+            results.append(out)
+        return results
 
     async def toggle_vote(
         self, db: AsyncSession, product_id: int, toggled: bool, current_user: UserOutSchema

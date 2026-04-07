@@ -37,6 +37,11 @@ class ProductRepository(BaseRepository[Product]):
         result = await db.execute(q)
         return list(result.scalars().all())
 
+    async def get_by_ids(self, db: AsyncSession, product_ids: list[int]) -> list[Product]:
+        result = await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        products_by_id = {p.id: p for p in result.scalars().all()}
+        return [products_by_id[pid] for pid in product_ids if pid in products_by_id]
+
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Product | None:
         result = await db.execute(select(Product).where(Product.slug == slug))
         return result.scalar_one_or_none()
@@ -110,6 +115,18 @@ class ProductRepository(BaseRepository[Product]):
         )
         return {row.product_id for row in result}
 
+    async def get_voted_product_ids_by_user(
+        self, db: AsyncSession, user_id: int, limit: int, offset: int
+    ) -> list[int]:
+        result = await db.execute(
+            select(ProductVote.__table__.c.product_id)
+            .where(ProductVote.__table__.c.user_id == user_id)
+            .order_by(ProductVote.__table__.c.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return [row.product_id for row in result]
+
     async def add_vote(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
             pg_insert(ProductVote.__table__)
@@ -153,6 +170,18 @@ class ProductRepository(BaseRepository[Product]):
             )
         )
         return {row.product_id for row in result}
+
+    async def get_bookmarked_product_ids_by_user(
+        self, db: AsyncSession, user_id: int, limit: int, offset: int
+    ) -> list[int]:
+        result = await db.execute(
+            select(ProductBookmark.__table__.c.product_id)
+            .where(ProductBookmark.__table__.c.user_id == user_id)
+            .order_by(ProductBookmark.__table__.c.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return [row.product_id for row in result]
 
     async def add_bookmark(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(

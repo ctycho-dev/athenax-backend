@@ -696,6 +696,54 @@ curl -X GET "${API_URL}/api/v1/product/me?status=pending" \
   -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
+### My voted products request example
+
+Requires authentication. Returns a summary of the products the caller has voted on, ordered by most recently voted. Supports `limit` and `offset` query params.
+
+```bash
+curl -X GET "${API_URL}/api/v1/product/me/voted?limit=50&offset=0" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+```json
+[
+  {
+    "id": 1,
+    "slug": "axonos",
+    "name": "Axonos",
+    "stage": "Seed",
+    "voteCount": 12,
+    "bookmarkCount": 5,
+    "categoryIds": [1, 3],
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]
+```
+
+### My bookmarked products request example
+
+Requires authentication. Returns a summary of the products the caller has bookmarked, ordered by most recently bookmarked. Supports `limit` and `offset` query params.
+
+```bash
+curl -X GET "${API_URL}/api/v1/product/me/bookmarked?limit=50&offset=0" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+```json
+[
+  {
+    "id": 2,
+    "slug": "neuromorph",
+    "name": "Neuromorph",
+    "stage": "Series A",
+    "voteCount": 34,
+    "bookmarkCount": 18,
+    "categoryIds": [2],
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]
+```
+
 ### Product get request example
 
 Returns 404 for non-approved products.
