@@ -84,6 +84,16 @@ class PaperRepository(BaseRepository[Paper]):
     ) -> list[Category]:
         return (await self.get_categories_for_papers(db, [paper_id]))[paper_id]
 
+    async def get_user_votes(
+        self, db: AsyncSession, paper_ids: list[int], user_id: int
+    ) -> set[int]:
+        result = await db.execute(
+            select(PaperVote.__table__.c.paper_id)
+            .where(PaperVote.__table__.c.paper_id.in_(paper_ids))
+            .where(PaperVote.__table__.c.user_id == user_id)
+        )
+        return {row.paper_id for row in result}
+
     async def get_vote_counts(
         self, db: AsyncSession, paper_ids: list[int]
     ) -> dict[int, int]:
