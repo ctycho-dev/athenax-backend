@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_categories
-from app.common.permissions import assert_can_modify, is_admin
+from app.common.permissions import assert_can_modify, is_admin, is_owner
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
 from app.domain.product.repository import ProductRepository
@@ -20,6 +20,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductStatusUpdateSchema,
+    ProductSummarySchema,
     ProductUpdateSchema,
     ToggleOutSchema,
 )
@@ -123,16 +124,24 @@ class ProductService:
             results.append(out)
         return results
 
-    async def get_by_id(self, db: AsyncSession, product_id: int) -> ProductOutSchema:
-        product = await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        return await self._to_schema(db, product)
+    async def get_by_id(
+        self, db: AsyncSession, product_id: int, current_user: UserOutSchema | None = None
+    ) -> ProductOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        if product.status != ProductStatus.APPROVED:
+            if current_user is None or (not is_admin(current_user) and not is_owner(product, current_user)):
+                raise NotFoundError(f"Product with id '{product_id}' not found")
+        return await self._to_schema(db, product, current_user=current_user)
 
     async def get_by_slug(
         self, db: AsyncSession, slug: str, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
         product = await self.repo.get_by_slug(db, slug)
-        if not product or product.status != ProductStatus.APPROVED:
+        if not product:
             raise NotFoundError(f"Product with slug '{slug}' not found")
+        if product.status != ProductStatus.APPROVED:
+            if current_user is None or (not is_admin(current_user) and not is_owner(product, current_user)):
+                raise NotFoundError(f"Product with slug '{slug}' not found")
         return await self._to_schema(db, product, current_user=current_user)
 
     async def update(
@@ -167,6 +176,38 @@ class ProductService:
         assert_can_modify(product, current_user)
         await self.repo.delete_by_id(db, product_id)
         await db.commit()
+
+    async def list_voted(
+        self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
+    ) -> list[ProductSummarySchema]:
+        product_ids = await self.repo.get_voted_product_ids_by_user(db, current_user.id, limit, offset)
+        return await self._to_summary_list(db, product_ids)
+
+    async def list_bookmarked(
+        self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
+    ) -> list[ProductSummarySchema]:
+        product_ids = await self.repo.get_bookmarked_product_ids_by_user(db, current_user.id, limit, offset)
+        return await self._to_summary_list(db, product_ids)
+
+    async def _to_summary_list(
+        self, db: AsyncSession, product_ids: list[int]
+    ) -> list[ProductSummarySchema]:
+        if not product_ids:
+            return []
+        products, vote_counts, bookmark_counts, categories_map = await asyncio.gather(
+            self.repo.get_by_ids(db, product_ids),
+            self.repo.get_vote_counts(db, product_ids),
+            self.repo.get_bookmark_counts(db, product_ids),
+            self.repo.get_categories_for_products(db, product_ids),
+        )
+        results = []
+        for product in products:
+            out = ProductSummarySchema.model_validate(product, from_attributes=True)
+            out.vote_count = vote_counts[product.id]
+            out.bookmark_count = bookmark_counts[product.id]
+            out.category_ids = [c.id for c in categories_map[product.id]]
+            results.append(out)
+        return results
 
     async def toggle_vote(
         self, db: AsyncSession, product_id: int, toggled: bool, current_user: UserOutSchema

@@ -52,6 +52,17 @@ class ProductBaseSchema(CamelModel):
     updated_at: datetime
 
 
+class ProductSummarySchema(CamelModel):
+    id: int
+    slug: str
+    name: str
+    stage: ProductStage | None
+    vote_count: int = 0
+    bookmark_count: int = 0
+    category_ids: list[int] = Field(default_factory=list)
+    created_at: datetime
+
+
 class ProductListSchema(ProductBaseSchema):
     bookmarked: bool | None = None
 

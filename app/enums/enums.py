@@ -40,11 +40,14 @@ class ProductStage(str, Enum):
     SERIES_B = "Series B"
 
 
-class ProductStatus(str, Enum):
-    """Verification/approval status of a product."""
+class VerificationStatus(str, Enum):
+    """Shared pending/approved/rejected values for admin verification."""
     PENDING  = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+ProductStatus = VerificationStatus
 
 
 class PaperStatus(str, Enum):
@@ -52,6 +55,9 @@ class PaperStatus(str, Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
+
+
+PaperVerificationStatus = VerificationStatus
 
 
 class PaperSourceType(str, Enum):

@@ -452,7 +452,35 @@ curl -X DELETE "${API_URL}/api/v1/lab/1" \
 
 ## Paper CRUD + voting flow
 
-Papers are researcher-created resources with many-to-many categories and a vote count. `POST` requires the `researcher` role. `PATCH` and `DELETE` require ownership or `admin`. Read endpoints are public.
+Papers are researcher-created resources with many-to-many categories and a vote count. `POST` requires the `researcher` role. `PATCH` and `DELETE` require ownership or `admin`. Admin verification uses a dedicated endpoint. Read endpoints return only `approved` papers to public/unauthenticated callers.
+
+### Status workflow
+
+Papers have two independent status fields:
+
+**`status`** — controlled by the paper owner via `PATCH /{paper_id}`:
+
+| Status      | Meaning                             |
+| ----------- | ----------------------------------- |
+| `draft`     | Default on creation                 |
+| `published` | Publicly submitted; `publishedAt` set |
+| `archived`  | No longer active                    |
+
+**`verificationStatus`** — controlled by admins via `PATCH /{paper_id}/verification-status`:
+
+| Status     | Meaning                                |
+| ---------- | -------------------------------------- |
+| `pending`  | Newly submitted, awaiting admin review |
+| `approved` | Visible to everyone                    |
+| `rejected` | Not visible publicly                   |
+
+**Visibility rules:**
+
+| Caller                        | What they see                              |
+| ----------------------------- | ------------------------------------------ |
+| Unauthenticated / non-admin   | `approved` papers only                     |
+| Admin                         | All papers regardless of verification status |
+| Researcher (`GET /me`)        | All of their own papers across all statuses |
 
 ### Paper response shape
 
@@ -466,11 +494,12 @@ Papers are researcher-created resources with many-to-many categories and a vote 
   "abstract": "We propose a new network architecture...",
   "status": "published",
   "publishedAt": "2026-01-01T00:00:00Z",
-  "sourceType": "external",
+  "sourceType": "link",
   "externalUrl": "https://arxiv.org/abs/1706.03762",
   "content": null,
+  "verificationStatus": "approved",
   "voteCount": 42,
-  "categories": [{ "id": 1, "name": "Machine Learning" }],
+  "categoryIds": [1, 2],
   "createdAt": "2026-01-01T00:00:00Z",
   "updatedAt": "2026-01-01T00:00:00Z"
 }
@@ -486,7 +515,6 @@ curl -X POST "${API_URL}/api/v1/paper" \
     "title": "Attention Is All You Need",
     "sourceType": "link",
     "externalUrl": "https://arxiv.org/abs/1706.03762",
-    "status": "draft",
     "categoryIds": [1, 2]
   }'
 ```
@@ -502,7 +530,6 @@ curl -X POST "${API_URL}/api/v1/paper" \
     "sourceType": "editor",
     "abstract": "This paper explores...",
     "content": "Full paper body goes here...",
-    "status": "draft",
     "categoryIds": [1, 2]
   }'
 ```
@@ -510,18 +537,43 @@ curl -X POST "${API_URL}/api/v1/paper" \
 ### Paper list request example
 
 ```bash
+# Public — approved papers only
 curl -X GET "${API_URL}/api/v1/paper?limit=50&offset=0" \
   -H "Accept: application/json"
+
+# Admin — all papers regardless of verification status
+curl -X GET "${API_URL}/api/v1/paper" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
 ```
 
-### Paper get request example
+### My papers request example (researcher)
+
+Requires `researcher` role. Returns all of the caller's own papers across all verification statuses.
+
+```bash
+curl -X GET "${API_URL}/api/v1/paper/me" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### Paper get by ID request example
+
+Returns 404 for non-approved papers when called by a non-admin.
 
 ```bash
 curl -X GET "${API_URL}/api/v1/paper/1" \
   -H "Accept: application/json"
 ```
 
+### Paper get by slug request example
+
+```bash
+curl -X GET "${API_URL}/api/v1/paper/slug/attention-is-all-you-need" \
+  -H "Accept: application/json"
+```
+
 ### Paper update request example
+
+Owner or admin only. `status` can be included to change the paper's publication state.
 
 ```bash
 curl -X PATCH "${API_URL}/api/v1/paper/1" \
@@ -531,6 +583,15 @@ curl -X PATCH "${API_URL}/api/v1/paper/1" \
     "status": "published",
     "categoryIds": [1, 3]
   }'
+```
+
+### Paper verification status update request example (admin only)
+
+```bash
+curl -X PATCH "${API_URL}/api/v1/paper/1/verification-status" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}" \
+  -d '{"verificationStatus": "approved"}'
 ```
 
 ### Paper delete request example
@@ -694,6 +755,54 @@ curl -X GET "${API_URL}/api/v1/product/me" \
 # Filter to pending only
 curl -X GET "${API_URL}/api/v1/product/me?status=pending" \
   -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+### My voted products request example
+
+Requires authentication. Returns a summary of the products the caller has voted on, ordered by most recently voted. Supports `limit` and `offset` query params.
+
+```bash
+curl -X GET "${API_URL}/api/v1/product/me/voted?limit=50&offset=0" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+```json
+[
+  {
+    "id": 1,
+    "slug": "axonos",
+    "name": "Axonos",
+    "stage": "Seed",
+    "voteCount": 12,
+    "bookmarkCount": 5,
+    "categoryIds": [1, 3],
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]
+```
+
+### My bookmarked products request example
+
+Requires authentication. Returns a summary of the products the caller has bookmarked, ordered by most recently bookmarked. Supports `limit` and `offset` query params.
+
+```bash
+curl -X GET "${API_URL}/api/v1/product/me/bookmarked?limit=50&offset=0" \
+  -H "Cookie: access_token=${ACCESS_TOKEN}"
+```
+
+```json
+[
+  {
+    "id": 2,
+    "slug": "neuromorph",
+    "name": "Neuromorph",
+    "stage": "Series A",
+    "voteCount": 34,
+    "bookmarkCount": 18,
+    "categoryIds": [2],
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]
 ```
 
 ### Product get request example

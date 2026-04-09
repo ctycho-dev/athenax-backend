@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.audit_mixin import TimestampMixin
 from app.database.connection import Base
-from app.enums.enums import PaperSourceType, PaperStatus
+from app.enums.enums import PaperSourceType, PaperStatus, PaperVerificationStatus
 
 
 class PaperCategory(Base, TimestampMixin):
@@ -61,3 +61,8 @@ class Paper(Base, TimestampMixin):
     )
     external_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verification_status: Mapped[PaperVerificationStatus] = mapped_column(
+        SQLEnum(PaperVerificationStatus, name="paper_verification_status", values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        server_default="pending",
+    )

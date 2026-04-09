@@ -18,6 +18,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductStatusUpdateSchema,
+    ProductSummarySchema,
     ProductUpdateSchema,
     ToggleOutSchema,
     VoteSchema,
@@ -70,6 +71,32 @@ async def list_my_products(
     return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user, owner_only=True)
 
 
+@router.get("/me/voted", response_model=list[ProductSummarySchema])
+@limiter.limit("60/minute")
+async def list_voted_products(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_voted(db, limit=limit, offset=offset, current_user=current_user)
+
+
+@router.get("/me/bookmarked", response_model=list[ProductSummarySchema])
+@limiter.limit("60/minute")
+async def list_bookmarked_products(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_bookmarked(db, limit=limit, offset=offset, current_user=current_user)
+
+
 @router.get("/slug/{slug}", response_model=ProductOutSchema)
 @limiter.limit("60/minute")
 async def get_product_by_slug(
@@ -88,9 +115,10 @@ async def get_product(
     request: Request,
     product_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
 ):
-    return await service.get_by_id(db, product_id=product_id)
+    return await service.get_by_id(db, product_id=product_id, current_user=current_user)
 
 
 @router.patch("/{product_id}", response_model=ProductOutSchema)

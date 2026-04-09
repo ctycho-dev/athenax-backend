@@ -3,7 +3,6 @@ from datetime import datetime
 from pydantic import Field
 
 from app.common.schema import CamelModel
-from app.domain.category.schema import CategoryOutSchema
 
 
 class LabBaseSchema(CamelModel):
@@ -29,6 +28,6 @@ class LabUpdateSchema(CamelModel):
 
 class LabOutSchema(LabBaseSchema):
     id: int
-    categories: list[CategoryOutSchema] = Field(default_factory=list)
+    category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
