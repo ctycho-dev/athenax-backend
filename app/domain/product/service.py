@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_categories
-from app.common.permissions import assert_can_modify, is_admin
+from app.common.permissions import assert_can_modify, is_admin, is_owner
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
 from app.domain.product.repository import ProductRepository
@@ -124,16 +124,24 @@ class ProductService:
             results.append(out)
         return results
 
-    async def get_by_id(self, db: AsyncSession, product_id: int) -> ProductOutSchema:
-        product = await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        return await self._to_schema(db, product)
+    async def get_by_id(
+        self, db: AsyncSession, product_id: int, current_user: UserOutSchema | None = None
+    ) -> ProductOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        if product.status != ProductStatus.APPROVED:
+            if current_user is None or (not is_admin(current_user) and not is_owner(product, current_user)):
+                raise NotFoundError(f"Product with id '{product_id}' not found")
+        return await self._to_schema(db, product, current_user=current_user)
 
     async def get_by_slug(
         self, db: AsyncSession, slug: str, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
         product = await self.repo.get_by_slug(db, slug)
-        if not product or product.status != ProductStatus.APPROVED:
+        if not product:
             raise NotFoundError(f"Product with slug '{slug}' not found")
+        if product.status != ProductStatus.APPROVED:
+            if current_user is None or (not is_admin(current_user) and not is_owner(product, current_user)):
+                raise NotFoundError(f"Product with slug '{slug}' not found")
         return await self._to_schema(db, product, current_user=current_user)
 
     async def update(

@@ -115,9 +115,10 @@ async def get_product(
     request: Request,
     product_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
 ):
-    return await service.get_by_id(db, product_id=product_id)
+    return await service.get_by_id(db, product_id=product_id, current_user=current_user)
 
 
 @router.patch("/{product_id}", response_model=ProductOutSchema)

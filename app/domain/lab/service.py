@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_categories
 from app.domain.category.repository import CategoryRepository
-from app.domain.category.schema import CategoryOutSchema
 from app.domain.lab.model import LabCategory
 from app.domain.lab.repository import LabRepository
 from app.domain.lab.schema import LabCreateSchema, LabOutSchema, LabUpdateSchema
@@ -77,7 +76,7 @@ class LabService:
     async def _to_schema(self, db: AsyncSession, lab) -> LabOutSchema:
         categories = await self.repo.get_categories_for_lab(db, lab.id)
         result = LabOutSchema.model_validate(lab, from_attributes=True)
-        result.categories = [CategoryOutSchema.model_validate(c, from_attributes=True) for c in categories]
+        result.category_ids = [c.id for c in categories]
         return result
 
     async def _ensure_university_exists(self, db: AsyncSession, university_id: int) -> None:
