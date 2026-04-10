@@ -23,6 +23,7 @@ class PaperCreateSchema(CamelModel):
     external_url: str | None = Field(default=None, max_length=500)
     content: str | None = None
     category_ids: list[int] = Field(default_factory=list)
+    status: PaperStatus = PaperStatus.DRAFT
 
 
 class PaperUpdateSchema(CamelModel):

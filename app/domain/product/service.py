@@ -302,6 +302,7 @@ class ProductService:
         assert_can_modify(comment, current_user)
         comment = await self.comment_repo.update_instance(db, comment, {"text": data.text})
         await db.commit()
+        await db.refresh(comment)
         return CommentOutSchema.model_validate(comment, from_attributes=True)
 
     async def delete_comment(

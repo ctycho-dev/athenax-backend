@@ -37,7 +37,8 @@ class PaperService:
 
         payload["user_id"] = current_user.id
         payload["slug"] = generate_slug(data.title)
-        payload["status"] = PaperStatus.DRAFT
+        if payload.get("status") == PaperStatus.PUBLISHED:
+            payload["published_at"] = datetime.now(timezone.utc)
 
         paper = await self.repo.create(db, payload, current_user_id=current_user.id)
 
