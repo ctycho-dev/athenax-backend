@@ -6,6 +6,10 @@ filters:
     (): app.middleware.logging.RequestIDFilter
 
 formatters:
+  pretty:
+    (): app.core.logging_formatter.ReadableFormatter
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    use_colors: false
   json:
     (): pythonjsonlogger.jsonlogger.JsonFormatter
     format: >-
@@ -17,7 +21,7 @@ handlers:
   console:
     class: logging.StreamHandler
     level: DEBUG
-    formatter: json
+    formatter: pretty
     stream: ext://sys.stdout
     filters: [request_id_filter]
 
