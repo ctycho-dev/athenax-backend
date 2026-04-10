@@ -2,7 +2,6 @@ import logging
 import logging.config
 from pathlib import Path
 import yaml
-from app.core.config import settings
 
 
 def setup_logging() -> None:
@@ -16,13 +15,6 @@ def setup_logging() -> None:
     """
     with open(Path("logger_config.yaml"), "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-
-    log_format = settings.LOG_FORMAT.lower()
-    if log_format == "json":
-        config["handlers"]["console"]["formatter"] = "json"
-    else:
-        config["handlers"]["console"]["formatter"] = "pretty"
-        config["formatters"]["pretty"]["use_colors"] = bool(settings.LOG_COLORS)
 
     config["root"]["level"] = config["root"].get("level", "INFO")
     if "app" in config.get("loggers", {}):

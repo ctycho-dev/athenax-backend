@@ -38,15 +38,6 @@ class CommentRepository(BaseRepository[ProductComment]):
         )
         return list(result.scalars().all())
 
-    async def create_for_product(
-        self, db: AsyncSession, product_id: int, user_id: int, text: str
-    ) -> ProductComment:
-        return await super().create(db, {"product_id": product_id, "user_id": user_id, "text": text})
-
-    async def update_text(
-        self, db: AsyncSession, comment: ProductComment, text: str
-    ) -> ProductComment:
-        return await super().update(db, comment.id, {"text": text})
 
 
 class ProductRepository(BaseRepository[Product]):
@@ -98,10 +89,10 @@ class ProductRepository(BaseRepository[Product]):
         if sort_by == ProductSortBy.TOP:
             vote_subq = (
                 select(
-                    ProductVote.__table__.c.product_id,
+                    ProductVote.product_id,
                     func.count().label("vote_count"),
                 )
-                .group_by(ProductVote.__table__.c.product_id)
+                .group_by(ProductVote.product_id)
                 .subquery()
             )
             q = select(Product).outerjoin(vote_subq, vote_subq.c.product_id == Product.id)
@@ -115,8 +106,8 @@ class ProductRepository(BaseRepository[Product]):
         if category_id is not None:
             q = q.where(
                 Product.id.in_(
-                    select(ProductCategory.__table__.c.product_id).where(
-                        ProductCategory.__table__.c.category_id == category_id
+                    select(ProductCategory.product_id).where(
+                        ProductCategory.category_id == category_id
                     )
                 )
             )
@@ -160,9 +151,9 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int]
     ) -> dict[int, list[Category]]:
         result = await db.execute(
-            select(ProductCategory.__table__.c.product_id, Category)
-            .join(Category, Category.id == ProductCategory.__table__.c.category_id)
-            .where(ProductCategory.__table__.c.product_id.in_(product_ids))
+            select(ProductCategory.product_id, Category)
+            .join(Category, Category.id == ProductCategory.category_id)
+            .where(ProductCategory.product_id.in_(product_ids))
         )
         groups: dict[int, list[Category]] = {pid: [] for pid in product_ids}
         for row in result:
@@ -212,9 +203,9 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int]
     ) -> dict[int, int]:
         result = await db.execute(
-            select(ProductVote.__table__.c.product_id, func.count().label("cnt"))
-            .where(ProductVote.__table__.c.product_id.in_(product_ids))
-            .group_by(ProductVote.__table__.c.product_id)
+            select(ProductVote.product_id, func.count().label("cnt"))
+            .where(ProductVote.product_id.in_(product_ids))
+            .group_by(ProductVote.product_id)
         )
         counts = {row.product_id: row.cnt for row in result}
         return {pid: counts.get(pid, 0) for pid in product_ids}
@@ -226,10 +217,10 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int], user_id: int
     ) -> set[int]:
         result = await db.execute(
-            select(ProductVote.__table__.c.product_id)
+            select(ProductVote.product_id)
             .where(
-                ProductVote.__table__.c.product_id.in_(product_ids),
-                ProductVote.__table__.c.user_id == user_id,
+                ProductVote.product_id.in_(product_ids),
+                ProductVote.user_id == user_id,
             )
         )
         return {row.product_id for row in result}
@@ -238,9 +229,9 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, user_id: int, limit: int, offset: int
     ) -> list[int]:
         result = await db.execute(
-            select(ProductVote.__table__.c.product_id)
-            .where(ProductVote.__table__.c.user_id == user_id)
-            .order_by(ProductVote.__table__.c.created_at.desc())
+            select(ProductVote.product_id)
+            .where(ProductVote.user_id == user_id)
+            .order_by(ProductVote.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -248,16 +239,16 @@ class ProductRepository(BaseRepository[Product]):
 
     async def add_vote(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
-            pg_insert(ProductVote.__table__)
+            pg_insert(ProductVote)
             .values(product_id=product_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
     async def remove_vote(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
-            delete(ProductVote.__table__).where(
-                ProductVote.__table__.c.product_id == product_id,
-                ProductVote.__table__.c.user_id == user_id,
+            delete(ProductVote).where(
+                ProductVote.product_id == product_id,
+                ProductVote.user_id == user_id,
             )
         )
 
@@ -268,9 +259,9 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int]
     ) -> dict[int, int]:
         result = await db.execute(
-            select(ProductBookmark.__table__.c.product_id, func.count().label("cnt"))
-            .where(ProductBookmark.__table__.c.product_id.in_(product_ids))
-            .group_by(ProductBookmark.__table__.c.product_id)
+            select(ProductBookmark.product_id, func.count().label("cnt"))
+            .where(ProductBookmark.product_id.in_(product_ids))
+            .group_by(ProductBookmark.product_id)
         )
         counts = {row.product_id: row.cnt for row in result}
         return {pid: counts.get(pid, 0) for pid in product_ids}
@@ -282,10 +273,10 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int], user_id: int
     ) -> set[int]:
         result = await db.execute(
-            select(ProductBookmark.__table__.c.product_id)
+            select(ProductBookmark.product_id)
             .where(
-                ProductBookmark.__table__.c.product_id.in_(product_ids),
-                ProductBookmark.__table__.c.user_id == user_id,
+                ProductBookmark.product_id.in_(product_ids),
+                ProductBookmark.user_id == user_id,
             )
         )
         return {row.product_id for row in result}
@@ -294,9 +285,9 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, user_id: int, limit: int, offset: int
     ) -> list[int]:
         result = await db.execute(
-            select(ProductBookmark.__table__.c.product_id)
-            .where(ProductBookmark.__table__.c.user_id == user_id)
-            .order_by(ProductBookmark.__table__.c.created_at.desc())
+            select(ProductBookmark.product_id)
+            .where(ProductBookmark.user_id == user_id)
+            .order_by(ProductBookmark.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -304,16 +295,16 @@ class ProductRepository(BaseRepository[Product]):
 
     async def add_bookmark(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
-            pg_insert(ProductBookmark.__table__)
+            pg_insert(ProductBookmark)
             .values(product_id=product_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
     async def remove_bookmark(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
-            delete(ProductBookmark.__table__).where(
-                ProductBookmark.__table__.c.product_id == product_id,
-                ProductBookmark.__table__.c.user_id == user_id,
+            delete(ProductBookmark).where(
+                ProductBookmark.product_id == product_id,
+                ProductBookmark.user_id == user_id,
             )
         )
 
@@ -324,9 +315,9 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int]
     ) -> dict[int, int]:
         result = await db.execute(
-            select(ProductInvestorInterest.__table__.c.product_id, func.count().label("cnt"))
-            .where(ProductInvestorInterest.__table__.c.product_id.in_(product_ids))
-            .group_by(ProductInvestorInterest.__table__.c.product_id)
+            select(ProductInvestorInterest.product_id, func.count().label("cnt"))
+            .where(ProductInvestorInterest.product_id.in_(product_ids))
+            .group_by(ProductInvestorInterest.product_id)
         )
         counts = {row.product_id: row.cnt for row in result}
         return {pid: counts.get(pid, 0) for pid in product_ids}
@@ -338,26 +329,26 @@ class ProductRepository(BaseRepository[Product]):
         self, db: AsyncSession, product_ids: list[int], user_id: int
     ) -> set[int]:
         result = await db.execute(
-            select(ProductInvestorInterest.__table__.c.product_id)
+            select(ProductInvestorInterest.product_id)
             .where(
-                ProductInvestorInterest.__table__.c.product_id.in_(product_ids),
-                ProductInvestorInterest.__table__.c.user_id == user_id,
+                ProductInvestorInterest.product_id.in_(product_ids),
+                ProductInvestorInterest.user_id == user_id,
             )
         )
         return {row.product_id for row in result}
 
     async def add_investor_interest(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
-            pg_insert(ProductInvestorInterest.__table__)
+            pg_insert(ProductInvestorInterest)
             .values(product_id=product_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
     async def remove_investor_interest(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
-            delete(ProductInvestorInterest.__table__).where(
-                ProductInvestorInterest.__table__.c.product_id == product_id,
-                ProductInvestorInterest.__table__.c.user_id == user_id,
+            delete(ProductInvestorInterest).where(
+                ProductInvestorInterest.product_id == product_id,
+                ProductInvestorInterest.user_id == user_id,
             )
         )
 

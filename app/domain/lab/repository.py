@@ -13,8 +13,8 @@ class LabRepository(BaseRepository[Lab]):
     async def get_categories_for_lab(self, db: AsyncSession, lab_id: int) -> list[Category]:
         result = await db.execute(
             select(Category)
-            .join(LabCategory.__table__, Category.id == LabCategory.__table__.c.category_id)
-            .where(LabCategory.__table__.c.lab_id == lab_id)
+            .join(LabCategory, Category.id == LabCategory.category_id)
+            .where(LabCategory.lab_id == lab_id)
         )
         return list(result.scalars().all())
 

@@ -33,8 +33,6 @@ class Settings(BaseSettings):
     BASE_URL: str
     api: ApiPrefix = ApiPrefix()
     RUN_MODE: str = 'prod'
-    LOG_FORMAT: Literal['pretty', 'json'] = 'pretty'
-    LOG_COLORS: bool = True
     COOKIE_SECURE: bool = True
     COOKIE_SAMESITE: Literal['lax', 'strict', 'none'] = 'none'
     PROXY_URL: str | None = None

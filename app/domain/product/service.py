@@ -284,7 +284,7 @@ class ProductService:
         current_user: UserOutSchema,
     ) -> CommentOutSchema:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        comment = await self.comment_repo.create_for_product(db, product_id, current_user.id, data.text)
+        comment = await self.comment_repo.create(db, {"product_id": product_id, "user_id": current_user.id, "text": data.text})
         await db.commit()
         return CommentOutSchema.model_validate(comment, from_attributes=True)
 
@@ -300,7 +300,7 @@ class ProductService:
         if comment.product_id != product_id:
             raise NotFoundError("Comment not found")
         assert_can_modify(comment, current_user)
-        comment = await self.comment_repo.update_text(db, comment, data.text)
+        comment = await self.comment_repo.update_instance(db, comment, {"text": data.text})
         await db.commit()
         return CommentOutSchema.model_validate(comment, from_attributes=True)
 
