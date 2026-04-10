@@ -64,3 +64,17 @@ class PaperSourceType(str, Enum):
     """How the paper content is provided."""
     LINK = "link"
     EDITOR = "editor"
+
+
+class ProductSortBy(str, Enum):
+    """Sort order for product list endpoints."""
+    NEWEST = "newest"
+    TOP = "top"
+
+
+class ProductDateFilter(str, Enum):
+    """Time window filter for product list endpoints."""
+    TODAY = "today"
+    THIS_WEEK = "this_week"
+    THIS_MONTH = "this_month"
+    THIS_YEAR = "this_year"

@@ -1,11 +1,16 @@
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
 from app.domain.category.model import Category
+from app.domain.lab.model import Lab
 from app.domain.paper.model import Paper
-from app.enums.enums import PaperStatus, ProductStatus
+from app.domain.university.model import University
+from app.domain.user.model import ResearcherProfile, User
+from app.enums.enums import PaperStatus, ProductDateFilter, ProductSortBy, ProductStatus
 from app.exceptions.exceptions import NotFoundError
 from app.domain.product.model import (
     Product,
@@ -17,22 +22,113 @@ from app.domain.product.model import (
 )
 
 
+class CommentRepository(BaseRepository[ProductComment]):
+    def __init__(self) -> None:
+        super().__init__(ProductComment)
+
+    async def get_by_product(
+        self, db: AsyncSession, product_id: int, limit: int, offset: int
+    ) -> list[ProductComment]:
+        result = await db.execute(
+            select(ProductComment)
+            .where(ProductComment.product_id == product_id)
+            .order_by(ProductComment.created_at.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
+
+    async def create_for_product(
+        self, db: AsyncSession, product_id: int, user_id: int, text: str
+    ) -> ProductComment:
+        return await super().create(db, {"product_id": product_id, "user_id": user_id, "text": text})
+
+    async def update_text(
+        self, db: AsyncSession, comment: ProductComment, text: str
+    ) -> ProductComment:
+        return await super().update(db, comment.id, {"text": text})
+
+
 class ProductRepository(BaseRepository[Product]):
     def __init__(self) -> None:
         super().__init__(Product)
 
     # -------------------------
+    # Stats
+    # -------------------------
+    async def get_release_stats(self, db: AsyncSession) -> dict[str, int]:
+        now = datetime.now(tz=timezone.utc)
+        cutoffs = {
+            "total": None,
+            "today": now - timedelta(hours=24),
+            "this_week": now - timedelta(weeks=1),
+            "this_month": now - timedelta(days=30),
+        }
+        result = {}
+        for key, cutoff in cutoffs.items():
+            q = select(func.count()).where(Product.status == ProductStatus.APPROVED)
+            if cutoff is not None:
+                q = q.where(Product.created_at >= cutoff)
+            row = await db.execute(q)
+            result[key] = row.scalar_one()
+        return result
+
+    # -------------------------
     # Status filtering
     # -------------------------
+    _DATE_FILTER_DELTAS: dict[ProductDateFilter, timedelta] = {
+        ProductDateFilter.TODAY: timedelta(hours=24),
+        ProductDateFilter.THIS_WEEK: timedelta(weeks=1),
+        ProductDateFilter.THIS_MONTH: timedelta(days=30),
+        ProductDateFilter.THIS_YEAR: timedelta(days=365),
+    }
+
     async def get_all_by_status(
-        self, db: AsyncSession, status: ProductStatus | None, limit: int, offset: int,
+        self,
+        db: AsyncSession,
+        status: ProductStatus | None,
+        limit: int,
+        offset: int,
         user_id: int | None = None,
+        category_id: int | None = None,
+        date_filter: ProductDateFilter | None = None,
+        sort_by: ProductSortBy | None = None,
     ) -> list[Product]:
-        q = select(Product)
+        vote_subq = None
+        if sort_by == ProductSortBy.TOP:
+            vote_subq = (
+                select(
+                    ProductVote.__table__.c.product_id,
+                    func.count().label("vote_count"),
+                )
+                .group_by(ProductVote.__table__.c.product_id)
+                .subquery()
+            )
+            q = select(Product).outerjoin(vote_subq, vote_subq.c.product_id == Product.id)
+        else:
+            q = select(Product)
+
         if status is not None:
             q = q.where(Product.status == status)
         if user_id is not None:
             q = q.where(Product.user_id == user_id)
+        if category_id is not None:
+            q = q.where(
+                Product.id.in_(
+                    select(ProductCategory.__table__.c.product_id).where(
+                        ProductCategory.__table__.c.category_id == category_id
+                    )
+                )
+            )
+        if date_filter is not None:
+            cutoff = datetime.now(tz=timezone.utc) - self._DATE_FILTER_DELTAS[date_filter]
+            q = q.where(Product.created_at >= cutoff)
+
+        if vote_subq is not None:
+            q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
+        else:
+            q = q.order_by(Product.created_at.desc())
+
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
@@ -85,6 +181,29 @@ class ProductRepository(BaseRepository[Product]):
             .order_by(Paper.published_at.desc())
         )
         return list(result.scalars().all())
+
+    async def get_founder_summary(self, db: AsyncSession, user_id: int) -> dict | None:
+        result = await db.execute(
+            select(
+                User.id,
+                User.name,
+                Lab.name.label("lab_name"),
+                University.name.label("university_name"),
+            )
+            .outerjoin(ResearcherProfile, ResearcherProfile.user_id == User.id)
+            .outerjoin(Lab, Lab.id == ResearcherProfile.lab_id)
+            .outerjoin(University, University.id == Lab.university_id)
+            .where(User.id == user_id)
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        return {
+            "id": row.id,
+            "name": row.name,
+            "lab_name": row.lab_name,
+            "university_name": row.university_name,
+        }
 
     # -------------------------
     # Votes
@@ -242,47 +361,3 @@ class ProductRepository(BaseRepository[Product]):
             )
         )
 
-    # -------------------------
-    # Comments
-    # -------------------------
-    async def get_comments(
-        self, db: AsyncSession, product_id: int, limit: int, offset: int
-    ) -> list[ProductComment]:
-        result = await db.execute(
-            select(ProductComment)
-            .where(ProductComment.product_id == product_id)
-            .order_by(ProductComment.created_at.asc())
-            .limit(limit)
-            .offset(offset)
-        )
-        return list(result.scalars().all())
-
-    async def get_comment_by_id(
-        self, db: AsyncSession, comment_id: int
-    ) -> ProductComment | None:
-        result = await db.execute(
-            select(ProductComment).where(ProductComment.id == comment_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def create_comment(
-        self, db: AsyncSession, product_id: int, user_id: int, text: str
-    ) -> ProductComment:
-        comment = ProductComment(product_id=product_id, user_id=user_id, text=text)
-        db.add(comment)
-        await db.flush()
-        await db.refresh(comment)
-        return comment
-
-    async def update_comment(
-        self, db: AsyncSession, comment: ProductComment, text: str
-    ) -> ProductComment:
-        comment.text = text
-        await db.flush()
-        await db.refresh(comment)
-        return comment
-
-    async def delete_comment(self, db: AsyncSession, comment_id: int) -> None:
-        await db.execute(
-            delete(ProductComment).where(ProductComment.id == comment_id)
-        )

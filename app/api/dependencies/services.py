@@ -16,7 +16,7 @@ from app.domain.lab.repository import LabRepository
 from app.domain.lab.service import LabService
 from app.domain.paper.repository import PaperRepository
 from app.domain.paper.service import PaperService
-from app.domain.product.repository import ProductRepository
+from app.domain.product.repository import CommentRepository, ProductRepository
 from app.domain.product.service import ProductService
 
 
@@ -65,6 +65,10 @@ def get_paper_repo() -> PaperRepository:
 
 def get_product_repo() -> ProductRepository:
     return ProductRepository()
+
+
+def get_comment_repo() -> CommentRepository:
+    return CommentRepository()
 
 
 # -------------------------
@@ -120,5 +124,6 @@ def get_paper_service(
 def get_product_service(
     repo: ProductRepository = Depends(get_product_repo),
     category_repo: CategoryRepository = Depends(get_category_repo),
+    comment_repo: CommentRepository = Depends(get_comment_repo),
 ) -> ProductService:
-    return ProductService(repo=repo, category_repo=category_repo)
+    return ProductService(repo=repo, category_repo=category_repo, comment_repo=comment_repo)
