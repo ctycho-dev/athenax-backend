@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +37,8 @@ class PaperService:
 
         payload["user_id"] = current_user.id
         payload["slug"] = generate_slug(data.title)
-        payload["status"] = PaperStatus.DRAFT
+        if payload.get("status") == PaperStatus.PUBLISHED:
+            payload["published_at"] = datetime.now(timezone.utc)
 
         paper = await self.repo.create(db, payload, current_user_id=current_user.id)
 
@@ -44,7 +46,7 @@ class PaperService:
 
         await db.commit()
         await db.refresh(paper)
-        return await self._to_schema(db, paper)
+        return await self._to_schema(db, paper, current_user=current_user)
 
     async def list_papers(
         self,
@@ -64,13 +66,22 @@ class PaperService:
         if not papers:
             return []
         paper_ids = [p.id for p in papers]
-        vote_counts = await self.repo.get_vote_counts(db, paper_ids)
-        categories_map = await self.repo.get_categories_for_papers(db, paper_ids)
+        tasks = [
+            self.repo.get_vote_counts(db, paper_ids),
+            self.repo.get_categories_for_papers(db, paper_ids),
+        ]
+        if current_user:
+            tasks.append(self.repo.get_user_votes(db, paper_ids, current_user.id))
+        gathered = await asyncio.gather(*tasks)
+        vote_counts, categories_map = gathered[0], gathered[1]
+        user_votes: set[int] = gathered[2] if current_user else set()
         results = []
         for paper in papers:
             out = PaperOutSchema.model_validate(paper, from_attributes=True)
             out.vote_count = vote_counts[paper.id]
             out.category_ids = [c.id for c in categories_map[paper.id]]
+            if current_user:
+                out.voted = paper.id in user_votes
             results.append(out)
         return results
 
@@ -81,7 +92,7 @@ class PaperService:
         if paper.verification_status != PaperVerificationStatus.APPROVED:
             if current_user is None or (not is_admin(current_user) and not is_owner(paper, current_user)):
                 raise NotFoundError(f"Paper with id '{paper_id}' not found")
-        return await self._to_schema(db, paper)
+        return await self._to_schema(db, paper, current_user=current_user)
 
     async def get_by_slug(
         self, db: AsyncSession, slug: str, current_user: UserOutSchema | None = None
@@ -90,7 +101,7 @@ class PaperService:
         if paper.verification_status != PaperVerificationStatus.APPROVED:
             if current_user is None or (not is_admin(current_user) and not is_owner(paper, current_user)):
                 raise NotFoundError(f"Paper with slug '{slug}' not found")
-        return await self._to_schema(db, paper)
+        return await self._to_schema(db, paper, current_user=current_user)
 
     async def update(
         self,
@@ -201,11 +212,19 @@ class PaperService:
             results.append(out)
         return results
 
-    async def _to_schema(self, db: AsyncSession, paper) -> PaperOutSchema:
-        categories = await self.repo.get_categories_for_paper(db, paper.id)
-        vote_count = await self.repo.get_vote_count(db, paper.id)
+    async def _to_schema(self, db: AsyncSession, paper, current_user: UserOutSchema | None = None) -> PaperOutSchema:
+        tasks = [
+            self.repo.get_categories_for_paper(db, paper.id),
+            self.repo.get_vote_count(db, paper.id),
+        ]
+        if current_user:
+            tasks.append(self.repo.get_user_votes(db, [paper.id], current_user.id))
+        gathered = await asyncio.gather(*tasks)
+        categories, vote_count = gathered[0], gathered[1]
         result = PaperOutSchema.model_validate(paper, from_attributes=True)
         result.category_ids = [c.id for c in categories]
         result.vote_count = vote_count
+        if current_user:
+            result.voted = paper.id in gathered[2]
         return result
 

@@ -70,9 +70,9 @@ class PaperRepository(BaseRepository[Paper]):
         self, db: AsyncSession, paper_ids: list[int]
     ) -> dict[int, list[Category]]:
         result = await db.execute(
-            select(PaperCategory.__table__.c.paper_id, Category)
-            .join(Category, Category.id == PaperCategory.__table__.c.category_id)
-            .where(PaperCategory.__table__.c.paper_id.in_(paper_ids))
+            select(PaperCategory.paper_id, Category)
+            .join(Category, Category.id == PaperCategory.category_id)
+            .where(PaperCategory.paper_id.in_(paper_ids))
         )
         groups: dict[int, list[Category]] = {pid: [] for pid in paper_ids}
         for row in result:
@@ -84,13 +84,23 @@ class PaperRepository(BaseRepository[Paper]):
     ) -> list[Category]:
         return (await self.get_categories_for_papers(db, [paper_id]))[paper_id]
 
+    async def get_user_votes(
+        self, db: AsyncSession, paper_ids: list[int], user_id: int
+    ) -> set[int]:
+        result = await db.execute(
+            select(PaperVote.paper_id)
+            .where(PaperVote.paper_id.in_(paper_ids))
+            .where(PaperVote.user_id == user_id)
+        )
+        return {row.paper_id for row in result}
+
     async def get_vote_counts(
         self, db: AsyncSession, paper_ids: list[int]
     ) -> dict[int, int]:
         result = await db.execute(
-            select(PaperVote.__table__.c.paper_id, func.count().label("cnt"))
-            .where(PaperVote.__table__.c.paper_id.in_(paper_ids))
-            .group_by(PaperVote.__table__.c.paper_id)
+            select(PaperVote.paper_id, func.count().label("cnt"))
+            .where(PaperVote.paper_id.in_(paper_ids))
+            .group_by(PaperVote.paper_id)
         )
         counts = {row.paper_id: row.cnt for row in result}
         return {pid: counts.get(pid, 0) for pid in paper_ids}
@@ -100,16 +110,16 @@ class PaperRepository(BaseRepository[Paper]):
 
     async def add_vote(self, db: AsyncSession, paper_id: int, user_id: int) -> None:
         await db.execute(
-            pg_insert(PaperVote.__table__)
+            pg_insert(PaperVote)
             .values(paper_id=paper_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
     async def remove_vote(self, db: AsyncSession, paper_id: int, user_id: int) -> None:
         await db.execute(
-            delete(PaperVote.__table__).where(
-                PaperVote.__table__.c.paper_id == paper_id,
-                PaperVote.__table__.c.user_id == user_id,
+            delete(PaperVote).where(
+                PaperVote.paper_id == paper_id,
+                PaperVote.user_id == user_id,
             )
         )
 
@@ -126,9 +136,9 @@ class PaperRepository(BaseRepository[Paper]):
         conditions = []
         if category_ids:
             same_topic = (
-                select(PaperCategory.__table__.c.paper_id)
-                .where(PaperCategory.__table__.c.category_id.in_(category_ids))
-                .where(PaperCategory.__table__.c.paper_id != paper_id)
+                select(PaperCategory.paper_id)
+                .where(PaperCategory.category_id.in_(category_ids))
+                .where(PaperCategory.paper_id != paper_id)
                 .scalar_subquery()
             )
             conditions.append(Paper.id.in_(same_topic))

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
+from app.api.dependencies.auth import get_optional_user
 from app.domain.category.model import Category
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
@@ -178,7 +179,7 @@ class TestPaperAPI:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 201
-        assert any(c["id"] == category_id for c in response.json()["categories"])
+        assert category_id in response.json()["categoryIds"]
 
     async def test_create_paper_invalid_category_returns_404(self, client: ClientWithEmail):
         original = app.dependency_overrides[get_current_user]
@@ -278,7 +279,10 @@ class TestPaperAPI:
 
     async def test_update_title_regenerates_slug(self, client: ClientWithEmail):
         paper_id = await self._create_paper_as_researcher(client)
+        mock_owner = build_mock_user(UserRole.RESEARCHER, user_id=1)
+        app.dependency_overrides[get_optional_user] = lambda: mock_owner
         original_slug = (await client.get(f"/api/v1/paper/{paper_id}")).json()["slug"]
+        del app.dependency_overrides[get_optional_user]
 
         original = app.dependency_overrides[get_current_user]
 
@@ -391,7 +395,10 @@ class TestPaperAPI:
         paper_id = await self._create_paper_as_researcher(client)
 
         await client.put(f"/api/v1/paper/{paper_id}/vote", json={"voted": True})
+        mock_owner = build_mock_user(UserRole.RESEARCHER, user_id=1)
+        app.dependency_overrides[get_optional_user] = lambda: mock_owner
         response = await client.get(f"/api/v1/paper/{paper_id}")
+        del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
         assert response.json()["voteCount"] == 1

@@ -10,22 +10,25 @@ from app.common.db_utils import sync_categories
 from app.common.permissions import assert_can_modify, is_admin, is_owner
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
-from app.domain.product.repository import ProductRepository
+from app.domain.product.repository import CommentRepository, ProductRepository
 from app.domain.paper.schema import PaperSummarySchema
 from app.domain.product.schema import (
     CommentCreateSchema,
     CommentOutSchema,
     CommentUpdateSchema,
+    FounderSummarySchema,
     ProductCreateSchema,
     ProductListSchema,
     ProductOutSchema,
+    ProductReleaseStatsSchema,
     ProductStatusUpdateSchema,
     ProductSummarySchema,
     ProductUpdateSchema,
+    ReleasePeriodSchema,
     ToggleOutSchema,
 )
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductStatus
+from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStatus
 from app.exceptions.exceptions import NotFoundError
 from app.utils.slug import generate_slug
 
@@ -42,9 +45,10 @@ class _InteractionData:
 
 
 class ProductService:
-    def __init__(self, repo: ProductRepository, category_repo: CategoryRepository):
+    def __init__(self, repo: ProductRepository, category_repo: CategoryRepository, comment_repo: CommentRepository):
         self.repo = repo
         self.category_repo = category_repo
+        self.comment_repo = comment_repo
 
     async def _fetch_interaction_data(
         self,
@@ -69,6 +73,10 @@ class ProductService:
         if current_user:
             data.user_votes, data.user_bookmarks, data.user_interests = gathered[4], gathered[5], gathered[6]
         return data
+
+    async def get_release_stats(self, db: AsyncSession) -> ProductReleaseStatsSchema:
+        stats = await self.repo.get_release_stats(db)
+        return ProductReleaseStatsSchema(releases=ReleasePeriodSchema(**stats))
 
     async def create(
         self,
@@ -98,6 +106,9 @@ class ProductService:
         status: ProductStatus | None = None,
         current_user: UserOutSchema | None = None,
         owner_only: bool = False,
+        category_id: int | None = None,
+        date_filter: ProductDateFilter | None = None,
+        sort_by: ProductSortBy | None = None,
     ) -> list[ProductListSchema]:
         user_id: int | None = None
         if owner_only and current_user is not None:
@@ -106,7 +117,10 @@ class ProductService:
         elif current_user is None or not is_admin(current_user):
             # Non-admins can only see approved products
             status = ProductStatus.APPROVED
-        products = await self.repo.get_all_by_status(db, status, limit=limit, offset=offset, user_id=user_id)
+        products = await self.repo.get_all_by_status(
+            db, status, limit=limit, offset=offset, user_id=user_id,
+            category_id=category_id, date_filter=date_filter, sort_by=sort_by,
+        )
         if not products:
             return []
         product_ids = [p.id for p in products]
@@ -259,7 +273,7 @@ class ProductService:
         self, db: AsyncSession, product_id: int, limit: int, offset: int
     ) -> list[CommentOutSchema]:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        comments = await self.repo.get_comments(db, product_id, limit, offset)
+        comments = await self.comment_repo.get_by_product(db, product_id, limit, offset)
         return [CommentOutSchema.model_validate(c, from_attributes=True) for c in comments]
 
     async def create_comment(
@@ -270,7 +284,7 @@ class ProductService:
         current_user: UserOutSchema,
     ) -> CommentOutSchema:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        comment = await self.repo.create_comment(db, product_id, current_user.id, data.text)
+        comment = await self.comment_repo.create(db, {"product_id": product_id, "user_id": current_user.id, "text": data.text})
         await db.commit()
         return CommentOutSchema.model_validate(comment, from_attributes=True)
 
@@ -282,11 +296,11 @@ class ProductService:
         data: CommentUpdateSchema,
         current_user: UserOutSchema,
     ) -> CommentOutSchema:
-        comment = await self.repo.get_comment_by_id(db, comment_id)
-        if comment is None or comment.product_id != product_id:
+        comment = await self.comment_repo.get_by_id(db, comment_id)
+        if comment.product_id != product_id:
             raise NotFoundError("Comment not found")
         assert_can_modify(comment, current_user)
-        comment = await self.repo.update_comment(db, comment, data.text)
+        comment = await self.comment_repo.update_instance(db, comment, {"text": data.text})
         await db.commit()
         await db.refresh(comment)
         return CommentOutSchema.model_validate(comment, from_attributes=True)
@@ -298,11 +312,11 @@ class ProductService:
         comment_id: int,
         current_user: UserOutSchema,
     ) -> None:
-        comment = await self.repo.get_comment_by_id(db, comment_id)
-        if comment is None or comment.product_id != product_id:
+        comment = await self.comment_repo.get_by_id(db, comment_id)
+        if comment.product_id != product_id:
             raise NotFoundError("Comment not found")
         assert_can_modify(comment, current_user)
-        await self.repo.delete_comment(db, comment_id)
+        await self.comment_repo.delete_by_id(db, comment_id)
         await db.commit()
 
     async def update_status(
@@ -320,16 +334,23 @@ class ProductService:
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
-        ix, papers = await asyncio.gather(
+        tasks = [
             self._fetch_interaction_data(db, [product.id], current_user),
             self.repo.get_papers_for_product(db, product.id),
-        )
+        ]
+        if product.user_id is not None:
+            tasks.append(self.repo.get_founder_summary(db, product.user_id))
+        gathered = await asyncio.gather(*tasks)
+        ix, papers = gathered[0], gathered[1]
+        founder_data = gathered[2] if product.user_id is not None else None
+
         result = ProductOutSchema.model_validate(product, from_attributes=True)
         result.category_ids = [c.id for c in ix.categories_map[product.id]]
         result.vote_count = ix.vote_counts[product.id]
         result.bookmark_count = ix.bookmark_counts[product.id]
         result.investor_interest_count = ix.investor_interest_counts[product.id]
         result.papers = [PaperSummarySchema.model_validate(p, from_attributes=True) for p in papers]
+        result.founder = FounderSummarySchema(**founder_data) if founder_data else None
         if current_user:
             result.voted = product.id in ix.user_votes
             result.bookmarked = product.id in ix.user_bookmarks

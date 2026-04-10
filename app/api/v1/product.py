@@ -17,13 +17,14 @@ from app.domain.product.schema import (
     ProductCreateSchema,
     ProductListSchema,
     ProductOutSchema,
+    ProductReleaseStatsSchema,
     ProductStatusUpdateSchema,
     ProductSummarySchema,
     ProductUpdateSchema,
     ToggleOutSchema,
     VoteSchema,
 )
-from app.enums.enums import ProductStage, ProductStatus
+from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStage, ProductStatus
 from app.domain.product.service import ProductService
 from app.domain.user.schema import UserOutSchema
 from app.middleware.rate_limiter import limiter
@@ -50,11 +51,27 @@ async def list_products(
     limit: int = 50,
     offset: int = 0,
     status: ProductStatus | None = None,
+    category_id: int | None = None,
+    date_filter: ProductDateFilter | None = None,
+    sort_by: ProductSortBy | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
 ):
-    return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user)
+    return await service.list(
+        db, limit=limit, offset=offset, status=status, current_user=current_user,
+        category_id=category_id, date_filter=date_filter, sort_by=sort_by,
+    )
+
+
+@router.get("/stats", response_model=ProductReleaseStatsSchema)
+@limiter.limit("60/minute")
+async def get_product_stats(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.get_release_stats(db)
 
 
 @router.get("/me", response_model=list[ProductListSchema])

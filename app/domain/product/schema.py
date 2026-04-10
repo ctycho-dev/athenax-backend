@@ -67,8 +67,16 @@ class ProductListSchema(ProductBaseSchema):
     bookmarked: bool | None = None
 
 
+class FounderSummarySchema(CamelModel):
+    id: int
+    name: str
+    lab_name: str | None = None
+    university_name: str | None = None
+
+
 class ProductOutSchema(ProductBaseSchema):
     papers: list[PaperSummarySchema] = Field(default_factory=list)
+    founder: FounderSummarySchema | None = None
     voted: bool | None = None
     bookmarked: bool | None = None
     interested: bool | None = None
@@ -110,3 +118,14 @@ class CommentOutSchema(CamelModel):
     text: str
     created_at: datetime
     updated_at: datetime
+
+
+class ReleasePeriodSchema(CamelModel):
+    total: int
+    today: int
+    this_week: int
+    this_month: int
+
+
+class ProductReleaseStatsSchema(CamelModel):
+    releases: ReleasePeriodSchema

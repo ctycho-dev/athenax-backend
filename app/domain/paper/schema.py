@@ -10,7 +10,9 @@ class PaperSummarySchema(CamelModel):
     id: int
     title: str
     slug: str
+    abstract: str | None
     published_at: datetime | None
+    vote_count: int = 0
 
 
 class PaperCreateSchema(CamelModel):
@@ -21,6 +23,7 @@ class PaperCreateSchema(CamelModel):
     external_url: str | None = Field(default=None, max_length=500)
     content: str | None = None
     category_ids: list[int] = Field(default_factory=list)
+    status: PaperStatus = PaperStatus.DRAFT
 
 
 class PaperUpdateSchema(CamelModel):
@@ -53,6 +56,7 @@ class PaperOutSchema(CamelModel):
     content: str | None
     verification_status: PaperVerificationStatus = PaperVerificationStatus.PENDING
     vote_count: int = 0
+    voted: bool | None = None
     category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
