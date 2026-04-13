@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, Float, Text, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index
+from sqlalchemy import String, Integer, Float, Text, Boolean, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -93,6 +93,9 @@ class Product(Base, TimestampMixin):
     github: Mapped[str | None] = mapped_column(String(200), nullable=True)
     demo: Mapped[str | None] = mapped_column(String(200), nullable=True)
     quality_badge: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    imported: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    twitter: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[ProductStatus] = mapped_column(
         SQLEnum(ProductStatus, name="product_status", values_callable=lambda x: [e.value for e in x]),
         nullable=False,

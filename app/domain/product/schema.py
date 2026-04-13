@@ -16,6 +16,9 @@ class ProductCreateSchema(CamelModel):
     github: str | None = Field(default=None, max_length=200)
     demo: str | None = Field(default=None, max_length=200)
     quality_badge: str | None = Field(default=None, max_length=50)
+    imported: bool = False
+    email: str | None = Field(default=None, max_length=200)
+    twitter: str | None = Field(default=None, max_length=200)
     category_ids: list[int] = Field(default_factory=list)
 
 
@@ -28,6 +31,9 @@ class ProductUpdateSchema(CamelModel):
     github: str | None = Field(default=None, max_length=200)
     demo: str | None = Field(default=None, max_length=200)
     quality_badge: str | None = Field(default=None, max_length=50)
+    imported: bool | None = None
+    email: str | None = Field(default=None, max_length=200)
+    twitter: str | None = Field(default=None, max_length=200)
     category_ids: list[int] | None = None
 
 
@@ -43,6 +49,9 @@ class ProductBaseSchema(CamelModel):
     github: str | None
     demo: str | None
     quality_badge: str | None
+    imported: bool
+    email: str | None
+    twitter: str | None
     status: ProductStatus
     vote_count: int = 0
     bookmark_count: int = 0
