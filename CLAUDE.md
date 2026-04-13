@@ -35,12 +35,12 @@ FastAPI + async SQLAlchemy 2.0 backend using Domain-Driven Design with a strict 
 
 ### Layer Responsibilities
 
-| Layer | File | Role |
-|-------|------|------|
-| API | `app/api/v1/<domain>.py` | Route handlers, rate limiting, dependency injection via `Depends()` |
-| Service | `app/domain/<domain>/service.py` | Business logic, permission checks, orchestration |
-| Repository | `app/domain/<domain>/repository.py` | Async SQLAlchemy queries, wraps errors into custom exceptions |
-| Model/Schema | `app/domain/<domain>/model.py` + `schema.py` | ORM models (TimestampMixin) + Pydantic I/O schemas |
+| Layer        | File                                         | Role                                                                |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------- |
+| API          | `app/api/v1/<domain>.py`                     | Route handlers, rate limiting, dependency injection via `Depends()` |
+| Service      | `app/domain/<domain>/service.py`             | Business logic, permission checks, orchestration                    |
+| Repository   | `app/domain/<domain>/repository.py`          | Async SQLAlchemy queries, wraps errors into custom exceptions       |
+| Model/Schema | `app/domain/<domain>/model.py` + `schema.py` | ORM models (TimestampMixin) + Pydantic I/O schemas                  |
 
 ### Key Shared Infrastructure
 
@@ -82,10 +82,11 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 - Many-to-many updates: use `sync_association()` from `app/common/db_utils.py` — diffs existing vs new, never delete-all-reinsert.
 - Association tables must be ORM classes extending `Base, TimestampMixin` with `PrimaryKeyConstraint`, not bare `Table(...)` constructs.
 - Out schemas belong to their own domain, not the domain that uses them.
-- Custom repo methods must delegate to `super().create()`/`super().update()` — never duplicate base logic. Handle associations after the base call, within the same transaction.
+- Never add wrapper methods in repos for create/update (e.g. `create_for_product`, `update_text`). Services call `self.repo.create()` / `self.repo.update_instance()` directly with a dict. Repos only contain custom query methods.
 - Repos are pure data access — no orchestration, no calling other repos, no mixed read/write methods (no `get_or_create`). Service owns all coordination.
 - `sync_association()` is called from the service, not the repo.
 - Categories are a managed resource (admin CRUD API). Clients pass `category_ids` only — never create categories as a side effect of another domain's create/update.
+- In ORM queries, use mapped model attributes; use `__table__.c` only for explicit SQLAlchemy Core table-level access.
 
 ### Avoiding N+1 Queries
 
@@ -101,6 +102,7 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 ### Testing Patterns
 
 Tests are async integration tests in `tests/integration/`. The `conftest.py` provides:
+
 - A real test PostgreSQL database (tables created/dropped per session).
 - `FakeEmailService` overriding SMTP to prevent actual email sends.
 - `client` fixture with `AsyncClient` and dependency overrides for auth (mock `current_user`).
