@@ -67,6 +67,13 @@ class UserService:
     async def get_by_id(self, db: AsyncSession, user_id: int) -> User:
         return await self.repo.get_by_id(db, user_id)
 
+    async def update_user(
+        self, db: AsyncSession, user_id: int, data: dict
+    ) -> UserOutSchema:
+        updated = await self.repo.update(db, user_id, data)
+        await db.commit()
+        return self._require_user(updated)
+
     async def delete_by_id(
         self, db: AsyncSession, current_user: UserOutSchema, user_id: int
     ) -> None:

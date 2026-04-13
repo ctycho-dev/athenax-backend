@@ -110,6 +110,10 @@ class UserCategorySetSchema(CamelModel):
     category_ids: list[int]
 
 
+class UserUpdateSchema(CamelModel):
+    name: str
+
+
 # ---------------------------------------------------------------------------
 # Auth / utility schemas
 # ---------------------------------------------------------------------------
