@@ -22,6 +22,7 @@ from app.domain.user.schema import (
     SponsorProfileOutSchema,
     CategoryRefSchema,
     UserCategorySetSchema,
+    UserUpdateSchema,
     Token,
     MessageSchema,
     EmailTokenSchema,
@@ -167,6 +168,19 @@ async def get_user(
     user_service: UserService = Depends(get_user_service),
 ):
     return await user_service.get_user_with_profile(db, user_id)
+
+
+@router.patch("/{user_id}", response_model=UserOutSchema)
+@limiter.limit("20/minute")
+async def update_user(
+    request: Request,
+    user_id: int,
+    data: UserUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    _: UserOutSchema = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+):
+    return await user_service.update_user(db, user_id, data.model_dump())
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
