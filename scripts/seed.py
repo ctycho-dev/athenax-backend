@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 #     "Climate & Energy",
 # ]
 
-CSV_PATH = Path(__file__).parent.parent / "docs" / "Projects_Data.csv"
+CSV_PATH = Path(__file__).parent.parent / "Projects.csv"
 
 
 def _load_csv() -> list[dict]:
