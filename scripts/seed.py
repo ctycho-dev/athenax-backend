@@ -19,7 +19,7 @@ from app.domain.lab.model import Lab, LabCategory
 from app.domain.product.model import Product, ProductCategory
 from app.domain.university.model import University
 from app.domain.user.model import User  # noqa: F401 — registers 'users' table in metadata
-from app.enums.enums import ProductStatus
+from app.enums.enums import ProductStage, ProductStatus
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -271,6 +271,9 @@ def _slug(name: str) -> str:
     return slug[:150]
 
 
+_STAGE_MAP: dict[str, ProductStage] = {s.value.lower(): s for s in ProductStage}
+
+
 async def seed_products(
     session: AsyncSession,
     rows: list[dict],
@@ -294,16 +297,26 @@ async def seed_products(
         raw_cat = row.get("Main Category", "").strip()
         category_id = category_id_by_name.get(raw_cat) if raw_cat else None
 
-        github_repo = row.get("GitHub Rep", "").strip() or None
-        github_org = row.get("GitHub Org", "").strip() or None
-        github = github_repo or github_org or None
+        github = row.get("GitHub Rep", "").strip() or None
+
+        raw_year = row.get("Year", "").strip()
+        founded = int(raw_year) if raw_year.isdigit() else None
+
+        raw_stage = row.get("Stage", "").strip().lower()
+        stage = _STAGE_MAP.get(raw_stage)
 
         product = Product(
+            user_id=None,
             slug=slug,
             name=name,
             description=row.get("One Line Description", "").strip() or None,
-            demo=row.get("Website", "").strip() or None,
+            demo=row.get("Website / github / demo", "").strip() or None,
             github=github,
+            founded=founded,
+            stage=stage,
+            email=row.get("Email", "").strip() or None,
+            twitter=row.get("Twitter", "").strip() or None,
+            imported=True,
             status=ProductStatus.APPROVED,
         )
         session.add(product)
