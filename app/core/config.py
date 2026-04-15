@@ -30,23 +30,17 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    BASE_URL: str
     api: ApiPrefix = ApiPrefix()
     RUN_MODE: str = 'prod'
     COOKIE_SECURE: bool = True
     COOKIE_SAMESITE: Literal['lax', 'strict', 'none'] = 'none'
     PROXY_URL: str | None = None
 
-    ADMIN_LOGIN: str
-    ADMIN_PWD: str
-
     # Postgres
     DATABASE_URL: str
 
     # Redis
-    REDIS_HOST: str
-    REDIS_PORT: int
-    REDIS_PASSWORD: str
+    REDIS_URL: str
 
     # Oauth2
     SECRET_KEY: str
@@ -55,7 +49,7 @@ class Settings(BaseSettings):
 
     # Resend
     RESEND_API_KEY: str
-    RESEND_FROM: str = "AthenaX <noreply@athenax.com>"
+    RESEND_FROM: str = "AthenaX <noreply@athenax.co>"
 
     FRONTEND_URL: str = 'http://localhost:3000'
 

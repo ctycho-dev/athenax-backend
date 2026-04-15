@@ -8,19 +8,14 @@ logger = get_logger()
 
 
 # Initialize the Redis client
-redis_client = Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    password=settings.REDIS_PASSWORD,
-    username="default"
-)
+redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=False)
 
 
 @retry(wait=wait_fixed(2), stop=stop_after_delay(30), reraise=True)
 async def connect_to_redis() -> Redis:
     """Ensure the Redis client can connect."""
     try:
-        await redis_client.ping()
+        await redis_client.ping()  # type: ignore[misc]
         return redis_client
     except ConnectionError as e:
         logger.error(f"Could not connect to Redis: {e}")

@@ -18,11 +18,7 @@ class EmailService:
         resend.api_key = settings.RESEND_API_KEY
 
     async def send_verification_email(self, email: str, name: str, token: str) -> None:
-        verification_url = self._build_url(
-            settings.EMAIL_VERIFY_URL,
-            f"{settings.BASE_URL.rstrip('/')}{settings.api.v1.prefix}{settings.api.v1.user}/verify-email",
-            token,
-        )
+        verification_url = self._build_url(settings.EMAIL_VERIFY_URL, token)
         subject = "Verify your AthenaX account"
         html = f"""<!DOCTYPE html>
 <html>
@@ -48,11 +44,7 @@ class EmailService:
         await self.send_email(email, subject, html)
 
     async def send_password_reset_email(self, email: str, name: str, token: str) -> None:
-        reset_url = self._build_url(
-            settings.PASSWORD_RESET_URL,
-            f"{settings.BASE_URL.rstrip('/')}{settings.api.v1.prefix}{settings.api.v1.user}/reset-password",
-            token,
-        )
+        reset_url = self._build_url(settings.PASSWORD_RESET_URL, token)
         subject = "Reset your AthenaX password"
         html = f"""<!DOCTYPE html>
 <html>
@@ -87,7 +79,7 @@ class EmailService:
         await to_thread.run_sync(lambda: resend.Emails.send(params))
 
     @staticmethod
-    def _build_url(base_url: str | None, fallback_url: str, token: str) -> str:
-        target = (base_url or fallback_url).rstrip("?")
+    def _build_url(base_url: str, token: str) -> str:
+        target = base_url.rstrip("?")
         separator = "&" if "?" in target else "?"
         return f"{target}{separator}{urlencode({'token': token})}"
