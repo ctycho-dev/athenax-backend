@@ -4,6 +4,7 @@ from app.middleware.logging import AccessLogMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from app.database.connection import db_manager
+from app.infrastructure.redis.client import RedisClient
 from app.api.v1 import router as api_router
 # Import models so SQLAlchemy metadata knows about every table before create_all().
 from app.domain.product.model import Product, ProductCategory, ProductVote, ProductBookmark, ProductInvestorInterest, ProductComment  # noqa: F401
@@ -26,11 +27,16 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     """FastAPI application lifecycle."""
     try:
         setup_logging()
         db_manager.init_engine()
+
+        app.state.redis_client = RedisClient()
+        await app.state.redis_client.ping()
+        logger.info("Redis initialized")
+
         logger.info("Application startup complete")
         yield
     except Exception as e:
@@ -39,6 +45,7 @@ async def lifespan(_: FastAPI):
     finally:
         logger.info("Application shutting down")
         await db_manager.close()
+        await app.state.redis_client.close()
 
 
 app = FastAPI(lifespan=lifespan)
