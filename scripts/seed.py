@@ -29,17 +29,22 @@ log = logging.getLogger(__name__)
 # Seed data
 # ---------------------------------------------------------------------------
 
-# CATEGORIES: list[str] = [
-#     "AI & Agents",
-#     "Robotics",
-#     "Biotech",
-#     "Crypto & DeFi",
-#     "Developer Tools",
-#     "Infrastructure",
-#     "Climate & Energy",
-# ]
-
 CSV_PATH = Path(__file__).parent.parent / "Projects.csv"
+
+CATEGORIES: list[str] = [
+    "AI & Agents",
+    "Biotech",
+    "Climate & Energy",
+    "Crypto & DeFi",
+    "Developer Tools",
+    "Infrastructure",
+    "Robotics",
+]
+
+# Normalize CSV category names that differ from canonical CATEGORIES values
+CATEGORY_ALIASES: dict[str, str] = {
+    "Crypto": "Crypto & DeFi",
+}
 
 
 def _load_csv() -> list[dict]:
@@ -49,16 +54,6 @@ def _load_csv() -> list[dict]:
             row for row in csv.DictReader(fh)
             if row.get("Project Name", "").strip()
         ]
-
-
-def _csv_categories(rows: list[dict]) -> list[str]:
-    """Derive unique category names from already-loaded CSV rows."""
-    seen: dict[str, None] = {}
-    for row in rows:
-        raw = row.get("Main Category", "").strip()
-        if raw:
-            seen[raw] = None
-    return list(seen)
 
 # key → {country (ISO 3166-1 alpha-3), focus}
 UNIVERSITIES: dict[str, dict] = {
@@ -85,7 +80,7 @@ LABS: list[dict] = [
             "proofs, Layer 2 scaling, and DeFi protocol design."
         ),
         "active":         True,
-        "categories":     ["Infrastructure", "Crypto"],
+        "categories":     ["Infrastructure", "Crypto & DeFi"],
     },
     {
         "name":           "MIT DCI",
@@ -96,7 +91,7 @@ LABS: list[dict] = [
             "practical implementation of digital currencies and decentralised systems."
         ),
         "active":         True,
-        "categories":     ["Crypto"],
+        "categories":     ["Crypto & DeFi"],
     },
     {
         "name":           "Stanford Blockchain",
@@ -129,7 +124,7 @@ LABS: list[dict] = [
             "protocol — consensus, data availability, execution, and beyond."
         ),
         "active":         True,
-        "categories":     ["Infrastructure", "Crypto"],
+        "categories":     ["Infrastructure", "Crypto & DeFi"],
     },
     {
         "name":           "Consensys R&D",
@@ -188,12 +183,12 @@ async def upsert_simple(
 # Seed functions
 # ---------------------------------------------------------------------------
 
-async def seed_categories(session: AsyncSession, rows: list[dict]) -> dict[str, int]:
+async def seed_categories(session: AsyncSession) -> dict[str, int]:
     return await upsert_simple(
         session,
         name_col=Category.name,
         id_col=Category.id,
-        names=_csv_categories(rows),
+        names=CATEGORIES,
         build=lambda name: Category(name=name),
         label="categories",
     )
@@ -248,15 +243,7 @@ async def seed_labs(
     if pending:
         await session.flush()  # one flush to get all IDs at once
         for new_lab, cat_names in pending:
-            for cat_name in cat_names:
-                cat_id = category_id_by_name.get(cat_name)
-                if cat_id is None:
-                    log.warning(
-                        "  [labs] unknown category %r for lab %r — skipping association",
-                        cat_name, new_lab.name,
-                    )
-                    continue
-                session.add(LabCategory(lab_id=new_lab.id, category_id=cat_id))
+            _link_categories(session, new_lab.id, cat_names, category_id_by_name, LabCategory, "lab_id", "labs")
         log.info("  [labs] seeded %d: %s", len(pending), [lab.name for lab, _ in pending])
     else:
         log.info("  [labs] all present, skipping")
@@ -264,11 +251,27 @@ async def seed_labs(
 
 def _slug(name: str) -> str:
     """Convert a product name to a URL-safe slug."""
-    slug = name.lower().strip()
-    slug = re.sub(r"[^\w\s-]", "", slug)
-    slug = re.sub(r"[\s_]+", "-", slug)
-    slug = re.sub(r"-+", "-", slug).strip("-")
+    slug = re.sub(r"[^\w\s-]", "", name.lower().strip())
+    slug = re.sub(r"[\s_-]+", "-", slug).strip("-")
     return slug[:150]
+
+
+def _link_categories(
+    session: AsyncSession,
+    entity_id: int,
+    cat_names: list[str],
+    category_id_by_name: dict[str, int],
+    AssocModel,
+    fk_field: str,
+    label: str,
+) -> None:
+    """Add category association rows for a single entity."""
+    for cat_name in cat_names:
+        cat_id = category_id_by_name.get(cat_name)
+        if cat_id is None:
+            log.warning("  [%s] unknown category %r — skipping", label, cat_name)
+            continue
+        session.add(AssocModel(**{fk_field: entity_id, "category_id": cat_id}))
 
 
 _STAGE_MAP: dict[str, ProductStage] = {s.value.lower(): s for s in ProductStage}
@@ -284,57 +287,45 @@ async def seed_products(
         (await session.execute(select(Product.slug))).scalars().all()
     )
 
-    # Build all new product objects first, track pending category associations
-    new_products: list[tuple[Product, int | None]] = []
-    seen_slugs: set[str] = set()
+    new_products: list[tuple[Product, str | None]] = []
     for row in rows:
         name = row["Project Name"].strip()
         slug = _slug(name)
-        if slug in existing_slugs or slug in seen_slugs:
+        if slug in existing_slugs:
             continue
-        seen_slugs.add(slug)
-
-        raw_cat = row.get("Main Category", "").strip()
-        category_id = category_id_by_name.get(raw_cat) if raw_cat else None
-
-        github = row.get("GitHub Rep", "").strip() or None
+        existing_slugs.add(slug)
 
         raw_year = row.get("Year", "").strip()
-        founded = int(raw_year) if raw_year.isdigit() else None
-
-        raw_stage = row.get("Stage", "").strip().lower()
-        stage = _STAGE_MAP.get(raw_stage)
-
         product = Product(
             user_id=None,
             slug=slug,
             name=name,
             description=row.get("One Line Description", "").strip() or None,
             demo=row.get("Website / github / demo", "").strip() or None,
-            github=github,
-            founded=founded,
-            stage=stage,
+            github=row.get("GitHub Rep", "").strip() or None,
+            founded=int(raw_year) if raw_year.isdigit() else None,
+            stage=_STAGE_MAP.get(row.get("Stage", "").strip().lower()),
             email=row.get("Email", "").strip() or None,
             twitter=row.get("Twitter", "").strip() or None,
             imported=True,
             status=ProductStatus.APPROVED,
         )
         session.add(product)
-        new_products.append((product, category_id))
+        raw_cat = row.get("Main Category", "").strip() or None
+        cat = CATEGORY_ALIASES.get(raw_cat, raw_cat) if raw_cat else None
+        new_products.append((product, cat))
 
     if not new_products:
         log.info("  [products] all present, skipping")
         return
 
-    # Single flush to get all IDs at once
     await session.flush()
 
-    for product, category_id in new_products:
-        if category_id:
-            session.add(ProductCategory(product_id=product.id, category_id=category_id))
+    for product, raw_cat in new_products:
+        if raw_cat:
+            _link_categories(session, product.id, [raw_cat], category_id_by_name, ProductCategory, "product_id", "products")
 
     log.info("  [products] seeded %d products", len(new_products))
-
 
 
 # ---------------------------------------------------------------------------
@@ -348,7 +339,7 @@ async def main() -> None:
     rows = _load_csv()
 
     async with db_manager.session_scope() as session:
-        category_id_by_name = await seed_categories(session, rows)
+        category_id_by_name = await seed_categories(session)
         university_id_by_name = await seed_universities(session)
         await seed_labs(session, university_id_by_name, category_id_by_name)
         await seed_products(session, rows, category_id_by_name)
