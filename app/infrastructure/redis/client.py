@@ -8,7 +8,7 @@ logger = get_logger()
 
 
 # Initialize the Redis client
-redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=False)
+redis_client = Redis.from_url(settings.redis.url, decode_responses=False)
 
 
 @retry(wait=wait_fixed(2), stop=stop_after_delay(30), reraise=True)

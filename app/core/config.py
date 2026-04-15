@@ -3,6 +3,16 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _cfg(env_prefix: str = "") -> SettingsConfigDict:
+    return SettingsConfigDict(
+        env_file=['.env'],
+        env_file_encoding='utf-8',
+        extra="allow",
+        case_sensitive=False,
+        env_prefix=env_prefix,
+    )
+
+
 class ApiV1Prefix(BaseModel):
     prefix: str = "/api/v1"
     user: str = "/user"
@@ -13,59 +23,61 @@ class ApiV1Prefix(BaseModel):
     product: str = "/product"
 
 
-class ApiV2Prefix(BaseModel):
-    prefix: str = "/api/v2"
-
-
 class ApiPrefix(BaseModel):
     v1: ApiV1Prefix = ApiV1Prefix()
-    v2: ApiV2Prefix = ApiV2Prefix()
+
+
+class DbConfig(BaseSettings):
+    url: str
+
+    model_config = _cfg("DATABASE_")
+
+    @property
+    def sync_url(self) -> str:
+        return self.url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+class RedisConfig(BaseSettings):
+    url: str
+
+    model_config = _cfg("REDIS_")
+
+
+class AuthConfig(BaseSettings):
+    secret_key: str
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int
+    cookie_secure: bool = True
+    cookie_samesite: Literal['lax', 'strict', 'none'] = 'none'
+
+    model_config = _cfg("")
+
+
+class ResendConfig(BaseSettings):
+    api_key: str
+    from_address: str = "AthenaX <noreply@athenax.co>"
+
+    model_config = _cfg("RESEND_")
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=['.env'],
-        env_file_encoding='utf-8',
-        extra="allow",
-        case_sensitive=False,
-    )
+    model_config = _cfg("")
+
+    cors_origin: str = ''
+    frontend_url: str = 'http://localhost:3000'
 
     api: ApiPrefix = ApiPrefix()
-    RUN_MODE: str = 'prod'
-    COOKIE_SECURE: bool = True
-    COOKIE_SAMESITE: Literal['lax', 'strict', 'none'] = 'none'
-    PROXY_URL: str | None = None
-
-    # Postgres
-    DATABASE_URL: str
-
-    # Redis
-    REDIS_URL: str
-
-    # Oauth2
-    SECRET_KEY: str
-    ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int
-
-    # Resend
-    RESEND_API_KEY: str
-    RESEND_FROM: str = "AthenaX <noreply@athenax.co>"
-
-    FRONTEND_URL: str = 'http://localhost:3000'
+    db: DbConfig = DbConfig()  # pyright: ignore[reportCallIssue]
+    redis: RedisConfig = RedisConfig()  # pyright: ignore[reportCallIssue]
+    auth: AuthConfig = AuthConfig()  # pyright: ignore[reportCallIssue]
+    resend: ResendConfig = ResendConfig()  # pyright: ignore[reportCallIssue]
 
     @property
-    def EMAIL_VERIFY_URL(self) -> str:
-        return f"{self.FRONTEND_URL.rstrip('/')}/verify-email"
+    def email_verify_url(self) -> str:
+        return f"{self.frontend_url.rstrip('/')}/verify-email"
 
     @property
-    def PASSWORD_RESET_URL(self) -> str:
-        return f"{self.FRONTEND_URL.rstrip('/')}/reset-password"
-
-    @property
-    def SYNC_DATABASE_URL(self) -> str:
-        """Convert async URL to sync URL for Alembic"""
-        # Convert postgresql+asyncpg://... to postgresql://...
-        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
-
+    def password_reset_url(self) -> str:
+        return f"{self.frontend_url.rstrip('/')}/reset-password"
 
 settings = Settings()  # pyright: ignore[reportCallIssue] - values come from .env
