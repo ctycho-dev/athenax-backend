@@ -53,16 +53,9 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
-    # SMTP
-    SMTP_HOST: str
-    SMTP_PORT: int
-    SMTP_USER: str
-    SMTP_PASS: str
-    SMTP_FROM: str
-    SMTP_FROM_NAME: str = "AthenaX"
-    SMTP_STARTTLS: bool = True
-    SMTP_USE_SSL: bool = False
-    SMTP_TIMEOUT: float = 10.0
+    # Resend
+    RESEND_API_KEY: str
+    RESEND_FROM: str = "AthenaX <noreply@athenax.com>"
 
     FRONTEND_URL: str = 'http://localhost:3000'
 
