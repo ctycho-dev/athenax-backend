@@ -71,3 +71,6 @@ migration_data/
 
 # Alembic
 alembic/versions/*.pyc
+
+# Data files
+*Projects.csv

@@ -1,4 +1,4 @@
-name: fastapi-prod-starter
+name: athenax-backend
 
 x-healthcheck-postgres-template: &postgreshealthcheck
   healthcheck:
@@ -32,7 +32,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fastapi-app
+    container_name: athenax-be-app
     restart: unless-stopped
     volumes:
       - .:/app
@@ -42,9 +42,7 @@ services:
       RUN_MODE: ${RUN_MODE:-prod}
       HOST: 0.0.0.0
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,7 +55,7 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    container_name: fastapi-postgres
+    container_name: athenax-pg
     restart: unless-stopped
     ports:
       - "5432:5432"
@@ -71,7 +69,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: fastapi-redis
+    container_name: athenax-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -87,7 +85,7 @@ services:
 
   postgres-test:
     image: postgres:17-alpine
-    container_name: fastapi-postgres-test
+    container_name: athenax-pg-test
     restart: unless-stopped
     profiles: ["test"]
     ports:

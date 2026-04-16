@@ -21,6 +21,7 @@ dependencies = [
     "python-multipart>=0.0.21",
     "pyyaml>=6.0.3",
     "redis[hiredis]>=7.1.0",
+    "resend>=2.0.0",
     "slowapi>=0.1.9",
     "sqlalchemy>=2.0.45",
     "tenacity>=9.1.2",

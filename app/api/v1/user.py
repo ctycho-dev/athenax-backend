@@ -46,9 +46,9 @@ def _set_access_token_cookie(response: Response, access_token: str) -> None:
         key="access_token",
         value=access_token,
         httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite=settings.COOKIE_SAMESITE,
-        secure=settings.COOKIE_SECURE,
+        max_age=settings.auth.access_token_expire_minutes * 60,
+        samesite=settings.auth.cookie_samesite,
+        secure=settings.auth.cookie_secure,
         path="/"
     )
 
@@ -250,8 +250,8 @@ async def logout(response: Response):
     response.delete_cookie(
         key="access_token",
         path="/",
-        samesite=settings.COOKIE_SAMESITE,
-        secure=settings.COOKIE_SECURE,
+        samesite=settings.auth.cookie_samesite,
+        secure=settings.auth.cookie_secure,
     )
     return {"message": "Logged out successfully"}
 

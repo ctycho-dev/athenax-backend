@@ -5,7 +5,7 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from app.core.config import settings  # Import your settings
+from app.core.config import settings
 
 from app.domain.user.model import User, InvestorProfile, ResearcherProfile, SponsorProfile, UserCategory
 from app.domain.product.model import Product, ProductCategory, ProductVote, ProductBookmark, ProductInvestorInterest, ProductComment
@@ -24,7 +24,7 @@ from app.database.connection import Base
 config = context.config
 
 # Set the URL dynamically
-config.set_main_option('sqlalchemy.url', settings.SYNC_DATABASE_URL)
+config.set_main_option('sqlalchemy.url', settings.db.sync_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

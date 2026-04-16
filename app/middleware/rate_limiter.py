@@ -28,7 +28,7 @@ def rate_limit_key(request: Request):
 limiter = Limiter(
     key_func=rate_limit_key,
     default_limits=["200/minute", "20/second"],
-    storage_uri=f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}",
+    storage_uri=settings.redis.url,
 )
 
 

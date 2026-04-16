@@ -1,23 +1,17 @@
-# app/database/connection.py
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     create_async_engine,
     async_sessionmaker
 )
-from sqlalchemy.orm import sessionmaker, declarative_base
-from app.core.config import settings
+from sqlalchemy.orm import declarative_base
 from contextlib import asynccontextmanager
+from app.core.config import settings
 from app.core.logger import get_logger
 
 
 logger = get_logger()
 
-# Set up logging
-# logging.basicConfig()
-# logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
-
-# Base for models
 Base = declarative_base()
 
 
@@ -30,12 +24,8 @@ class DatabaseManager:
         """
         Initialize the async engine.
         """
-        DATABASE_URL = settings.DATABASE_URL
-        if not DATABASE_URL:
-            raise ValueError("DATABASE_URL is not set")
-
         self.engine = create_async_engine(
-            DATABASE_URL,
+            settings.db.url,
             echo=False,
             pool_size=20,
             pool_pre_ping=True,
