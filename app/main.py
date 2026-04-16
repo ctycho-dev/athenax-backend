@@ -52,11 +52,11 @@ app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
 
-# CORS last = outermost layer
-add_cors_middleware(app)
-
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(SlowAPIMiddleware)
+
+# CORS added last = registered outermost, handles requests first
+add_cors_middleware(app)
 
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 add_exception_handlers(app)

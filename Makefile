@@ -8,6 +8,8 @@ HAS_REVISIONS := $(shell find alembic/versions -maxdepth 1 -name '*.py' -print -
 
 help:
 	@echo "Available commands:"
+	@echo "  make start                  Start Docker containers and follow app logs"
+	@echo "  make start-build            Build Docker images, start containers, and follow app logs"
 	@echo "  make dev                    Start Docker and follow app logs"
 	@echo "  make dev-build              Build Docker images, start containers, and follow app logs"
 	@echo "  make local                  Start postgres/redis, set up .venv, install deps, and run the app locally"
