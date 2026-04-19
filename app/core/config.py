@@ -29,16 +29,14 @@ class ApiPrefix(BaseModel):
 
 class DbConfig(BaseSettings):
     url: str
+    direct_url: str
 
     model_config = _cfg("DATABASE_")
-
-    @property
-    def sync_url(self) -> str:
-        return self.url.replace("postgresql+asyncpg://", "postgresql://")
 
 
 class RedisConfig(BaseSettings):
     url: str
+    use_ipv6: bool = False
 
     model_config = _cfg("REDIS_")
 
