@@ -2,7 +2,7 @@ from sqlalchemy import String, Integer, Float, Text, Boolean, ForeignKey, Enum a
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
-from app.common.audit_mixin import TimestampMixin
+from app.common.audit_mixin import TimestampMixin, UserAuditMixin
 from app.enums.enums import ProductStage, ProductStatus
 
 
@@ -54,11 +54,10 @@ class ProductInvestorInterest(Base, TimestampMixin):
     )
 
 
-class ProductComment(Base, TimestampMixin):
+class ProductComment(Base, TimestampMixin, UserAuditMixin):
     __tablename__ = "product_comments"
     __table_args__ = (
         Index("ix_product_comments_product_id", "product_id"),
-        Index("ix_product_comments_user_id", "user_id"),
         Index("ix_product_comments_product_created", "product_id", "created_at"),
     )
 
@@ -66,20 +65,14 @@ class ProductComment(Base, TimestampMixin):
     product_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
 
-class Product(Base, TimestampMixin):
+class Product(Base, TimestampMixin, UserAuditMixin):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
-    )
-    user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     slug: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -96,6 +89,7 @@ class Product(Base, TimestampMixin):
     imported: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     email: Mapped[str | None] = mapped_column(String(200), nullable=True)
     twitter: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    founders: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[ProductStatus] = mapped_column(
         SQLEnum(ProductStatus, name="product_status", values_callable=lambda x: [e.value for e in x]),
         nullable=False,

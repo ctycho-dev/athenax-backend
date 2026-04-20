@@ -44,7 +44,6 @@ class PaperVerificationStatusUpdateSchema(CamelModel):
 
 class PaperOutSchema(CamelModel):
     id: int
-    user_id: int
     product_id: int | None
     title: str
     slug: str
@@ -60,6 +59,7 @@ class PaperOutSchema(CamelModel):
     category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    created_by_id: int
 
 
 class VoteSchema(CamelModel):

@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, PrimaryKeyConstraint, Stri
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.common.audit_mixin import TimestampMixin
+from app.common.audit_mixin import TimestampMixin, UserAuditMixin
 from app.database.connection import Base
 from app.enums.enums import PaperSourceType, PaperStatus, PaperVerificationStatus
 
@@ -35,13 +35,10 @@ class PaperVote(Base, TimestampMixin):
     )
 
 
-class Paper(Base, TimestampMixin):
+class Paper(Base, TimestampMixin, UserAuditMixin):
     __tablename__ = "papers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False
-    )
     product_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("products.id"), nullable=True
     )

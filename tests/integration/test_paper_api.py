@@ -111,7 +111,7 @@ class TestPaperAPI:
         data = response.json()
         assert data["title"] == PAPER_PAYLOAD["title"]
         assert data["slug"] != ""
-        assert data["userId"] == 1
+        assert data["createdById"] == 1
         assert data["voteCount"] == 0
 
     async def test_create_paper_allowed_for_admin(self, client: ClientWithEmail):

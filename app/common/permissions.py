@@ -9,7 +9,7 @@ def is_admin(current_user: UserOutSchema) -> bool:
 
 
 def is_owner(entity, current_user: UserOutSchema) -> bool:
-    return entity.user_id is not None and entity.user_id == current_user.id
+    return entity.created_by_id is not None and entity.created_by_id == current_user.id
 
 
 def assert_can_modify(entity, current_user: UserOutSchema) -> None:
@@ -17,7 +17,7 @@ def assert_can_modify(entity, current_user: UserOutSchema) -> None:
 
     Allowed if:
       - user is an admin, OR
-      - user is the owner — meaning entity.user_id (whoever created it) matches current_user.id
+      - user is the owner — meaning entity.created_by_id (whoever created it) matches current_user.id
 
     Raises ValidationError if neither — nothing is modified.
     """

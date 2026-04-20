@@ -297,7 +297,7 @@ async def seed_products(
 
         raw_year = row.get("Year", "").strip()
         product = Product(
-            user_id=None,
+            created_by_id=None,
             slug=slug,
             name=name,
             description=row.get("One Line Description", "").strip() or None,

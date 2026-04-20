@@ -35,7 +35,7 @@ class PaperService:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
 
-        payload["user_id"] = current_user.id
+        payload["created_by_id"] = current_user.id
         payload["slug"] = generate_slug(data.title)
         if payload.get("status") == PaperStatus.PUBLISHED:
             payload["published_at"] = datetime.now(timezone.utc)

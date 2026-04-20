@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: cdd53ad36286
+Revision ID: a2f1654026c9
 Revises: 
-Create Date: 2026-04-13 04:59:13.394402
+Create Date: 2026-04-20 10:18:12.872730
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'cdd53ad36286'
+revision: str = 'a2f1654026c9'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -76,7 +76,6 @@ def upgrade() -> None:
     )
     op.create_table('products',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=True),
     sa.Column('slug', sa.String(length=150), nullable=False),
     sa.Column('name', sa.String(length=150), nullable=False),
     sa.Column('desc', sa.Text(), nullable=True),
@@ -86,13 +85,22 @@ def upgrade() -> None:
     sa.Column('github', sa.String(length=200), nullable=True),
     sa.Column('demo', sa.String(length=200), nullable=True),
     sa.Column('quality_badge', sa.String(length=50), nullable=True),
+    sa.Column('imported', sa.Boolean(), server_default='false', nullable=False),
+    sa.Column('email', sa.String(length=200), nullable=True),
+    sa.Column('twitter', sa.String(length=200), nullable=True),
+    sa.Column('founders', sa.Text(), nullable=True),
     sa.Column('status', sa.Enum('pending', 'approved', 'rejected', name='product_status'), server_default='pending', nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),
+    sa.Column('created_by_id', sa.Integer(), nullable=True),
+    sa.Column('updated_by_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['updated_by_id'], ['users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_products_created_by_id'), 'products', ['created_by_id'], unique=False)
     op.create_index(op.f('ix_products_slug'), 'products', ['slug'], unique=True)
+    op.create_index(op.f('ix_products_updated_by_id'), 'products', ['updated_by_id'], unique=False)
     op.create_table('sponsor_profiles',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('bio', sa.Text(), nullable=True),
@@ -122,7 +130,6 @@ def upgrade() -> None:
     )
     op.create_table('papers',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('product_id', sa.Integer(), nullable=True),
     sa.Column('title', sa.String(length=255), nullable=False),
     sa.Column('slug', sa.String(length=255), nullable=False),
@@ -135,11 +142,16 @@ def upgrade() -> None:
     sa.Column('verification_status', sa.Enum('pending', 'approved', 'rejected', name='paper_verification_status'), server_default='pending', nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_by_id', sa.Integer(), nullable=True),
+    sa.Column('updated_by_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['product_id'], ['products.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['updated_by_id'], ['users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('slug')
     )
+    op.create_index(op.f('ix_papers_created_by_id'), 'papers', ['created_by_id'], unique=False)
+    op.create_index(op.f('ix_papers_updated_by_id'), 'papers', ['updated_by_id'], unique=False)
     op.create_table('product_bookmarks',
     sa.Column('product_id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -161,17 +173,20 @@ def upgrade() -> None:
     op.create_table('product_comments',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('product_id', sa.Integer(), nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('text', sa.Text(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_by_id', sa.Integer(), nullable=True),
+    sa.Column('updated_by_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['updated_by_id'], ['users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_product_comments_created_by_id'), 'product_comments', ['created_by_id'], unique=False)
     op.create_index('ix_product_comments_product_created', 'product_comments', ['product_id', 'created_at'], unique=False)
     op.create_index('ix_product_comments_product_id', 'product_comments', ['product_id'], unique=False)
-    op.create_index('ix_product_comments_user_id', 'product_comments', ['user_id'], unique=False)
+    op.create_index(op.f('ix_product_comments_updated_by_id'), 'product_comments', ['updated_by_id'], unique=False)
     op.create_table('product_investor_interests',
     sa.Column('product_id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -229,17 +244,22 @@ def downgrade() -> None:
     op.drop_table('researcher_profiles')
     op.drop_table('product_votes')
     op.drop_table('product_investor_interests')
-    op.drop_index('ix_product_comments_user_id', table_name='product_comments')
+    op.drop_index(op.f('ix_product_comments_updated_by_id'), table_name='product_comments')
     op.drop_index('ix_product_comments_product_id', table_name='product_comments')
     op.drop_index('ix_product_comments_product_created', table_name='product_comments')
+    op.drop_index(op.f('ix_product_comments_created_by_id'), table_name='product_comments')
     op.drop_table('product_comments')
     op.drop_table('product_category')
     op.drop_table('product_bookmarks')
+    op.drop_index(op.f('ix_papers_updated_by_id'), table_name='papers')
+    op.drop_index(op.f('ix_papers_created_by_id'), table_name='papers')
     op.drop_table('papers')
     op.drop_table('lab_category')
     op.drop_table('user_category')
     op.drop_table('sponsor_profiles')
+    op.drop_index(op.f('ix_products_updated_by_id'), table_name='products')
     op.drop_index(op.f('ix_products_slug'), table_name='products')
+    op.drop_index(op.f('ix_products_created_by_id'), table_name='products')
     op.drop_table('products')
     op.drop_table('labs')
     op.drop_table('investor_profiles')
