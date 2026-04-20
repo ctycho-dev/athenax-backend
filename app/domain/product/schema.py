@@ -62,7 +62,7 @@ class ProductBaseSchema(CamelModel):
     category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
-    created_by_id: int
+    created_by_id: int | None
 
     @field_validator("founders", mode="before")
     @classmethod
