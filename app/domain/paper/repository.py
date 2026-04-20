@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.base_repository import BaseRepository
 from app.domain.category.model import Category
 from app.domain.paper.model import Paper, PaperCategory, PaperVote
-from app.enums.enums import PaperVerificationStatus
+from app.enums.enums import PaperStatus, PaperVerificationStatus
 
 
 class PaperRepository(BaseRepository[Paper]):
@@ -20,12 +20,15 @@ class PaperRepository(BaseRepository[Paper]):
         limit: int,
         offset: int,
         user_id: int | None = None,
+        paper_status: PaperStatus | None = None,
     ) -> list[Paper]:
         q = select(Paper)
         if verification_status is not None:
             q = q.where(Paper.verification_status == verification_status)
         if user_id is not None:
             q = q.where(Paper.user_id == user_id)
+        if paper_status is not None:
+            q = q.where(Paper.status == paper_status)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
