@@ -181,7 +181,7 @@ class ProductRepository(BaseRepository[Product]):
                 Lab.name.label("lab_name"),
                 University.name.label("university_name"),
             )
-            .outerjoin(ResearcherProfile, ResearcherProfile.created_by_id == User.id)
+            .outerjoin(ResearcherProfile, ResearcherProfile.user_id == User.id)
             .outerjoin(Lab, Lab.id == ResearcherProfile.lab_id)
             .outerjoin(University, University.id == Lab.university_id)
             .where(User.id == user_id)
@@ -220,7 +220,7 @@ class ProductRepository(BaseRepository[Product]):
             select(ProductVote.product_id)
             .where(
                 ProductVote.product_id.in_(product_ids),
-                ProductVote.created_by_id == user_id,
+                ProductVote.user_id == user_id,
             )
         )
         return {row.product_id for row in result}
@@ -230,7 +230,7 @@ class ProductRepository(BaseRepository[Product]):
     ) -> list[int]:
         result = await db.execute(
             select(ProductVote.product_id)
-            .where(ProductVote.created_by_id == user_id)
+            .where(ProductVote.user_id == user_id)
             .order_by(ProductVote.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -240,7 +240,7 @@ class ProductRepository(BaseRepository[Product]):
     async def add_vote(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
             pg_insert(ProductVote)
-            .values(product_id=product_id, created_by_id=user_id)
+            .values(product_id=product_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
@@ -248,7 +248,7 @@ class ProductRepository(BaseRepository[Product]):
         await db.execute(
             delete(ProductVote).where(
                 ProductVote.product_id == product_id,
-                ProductVote.created_by_id == user_id,
+                ProductVote.user_id == user_id,
             )
         )
 
@@ -276,7 +276,7 @@ class ProductRepository(BaseRepository[Product]):
             select(ProductBookmark.product_id)
             .where(
                 ProductBookmark.product_id.in_(product_ids),
-                ProductBookmark.created_by_id == user_id,
+                ProductBookmark.user_id == user_id,
             )
         )
         return {row.product_id for row in result}
@@ -286,7 +286,7 @@ class ProductRepository(BaseRepository[Product]):
     ) -> list[int]:
         result = await db.execute(
             select(ProductBookmark.product_id)
-            .where(ProductBookmark.created_by_id == user_id)
+            .where(ProductBookmark.user_id == user_id)
             .order_by(ProductBookmark.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -296,7 +296,7 @@ class ProductRepository(BaseRepository[Product]):
     async def add_bookmark(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
             pg_insert(ProductBookmark)
-            .values(product_id=product_id, created_by_id=user_id)
+            .values(product_id=product_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
@@ -304,7 +304,7 @@ class ProductRepository(BaseRepository[Product]):
         await db.execute(
             delete(ProductBookmark).where(
                 ProductBookmark.product_id == product_id,
-                ProductBookmark.created_by_id == user_id,
+                ProductBookmark.user_id == user_id,
             )
         )
 
@@ -332,7 +332,7 @@ class ProductRepository(BaseRepository[Product]):
             select(ProductInvestorInterest.product_id)
             .where(
                 ProductInvestorInterest.product_id.in_(product_ids),
-                ProductInvestorInterest.created_by_id == user_id,
+                ProductInvestorInterest.user_id == user_id,
             )
         )
         return {row.product_id for row in result}
@@ -340,7 +340,7 @@ class ProductRepository(BaseRepository[Product]):
     async def add_investor_interest(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
             pg_insert(ProductInvestorInterest)
-            .values(product_id=product_id, created_by_id=user_id)
+            .values(product_id=product_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
@@ -348,7 +348,7 @@ class ProductRepository(BaseRepository[Product]):
         await db.execute(
             delete(ProductInvestorInterest).where(
                 ProductInvestorInterest.product_id == product_id,
-                ProductInvestorInterest.created_by_id == user_id,
+                ProductInvestorInterest.user_id == user_id,
             )
         )
 

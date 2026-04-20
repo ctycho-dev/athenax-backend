@@ -93,7 +93,7 @@ class PaperRepository(BaseRepository[Paper]):
         result = await db.execute(
             select(PaperVote.paper_id)
             .where(PaperVote.paper_id.in_(paper_ids))
-            .where(PaperVote.created_by_id == user_id)
+            .where(PaperVote.user_id == user_id)
         )
         return {row.paper_id for row in result}
 
@@ -114,7 +114,7 @@ class PaperRepository(BaseRepository[Paper]):
     async def add_vote(self, db: AsyncSession, paper_id: int, user_id: int) -> None:
         await db.execute(
             pg_insert(PaperVote)
-            .values(paper_id=paper_id, created_by_id=user_id)
+            .values(paper_id=paper_id, user_id=user_id)
             .on_conflict_do_nothing()
         )
 
@@ -122,7 +122,7 @@ class PaperRepository(BaseRepository[Paper]):
         await db.execute(
             delete(PaperVote).where(
                 PaperVote.paper_id == paper_id,
-                PaperVote.created_by_id == user_id,
+                PaperVote.user_id == user_id,
             )
         )
 

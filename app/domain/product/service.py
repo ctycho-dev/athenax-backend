@@ -342,13 +342,11 @@ class ProductService:
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
-        tasks = [
+        ix, papers, founder_data = await asyncio.gather(
             self._fetch_interaction_data(db, [product.id], current_user),
             self.repo.get_papers_for_product(db, product.id),
             self.repo.get_founder_summary(db, product.created_by_id),
-        ]
-        gathered = await asyncio.gather(*tasks)
-        ix, papers, founder_data = gathered[0], gathered[1], gathered[2]
+        )
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
         result.category_ids = [c.id for c in ix.categories_map[product.id]]

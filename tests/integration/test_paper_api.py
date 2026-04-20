@@ -264,7 +264,7 @@ class TestPaperAPI:
         original = app.dependency_overrides[get_current_user]
 
         async def override_admin():
-            return build_mock_user(UserRole.ADMIN, user_id=99)
+            return build_mock_user(UserRole.ADMIN, user_id=2)
 
         app.dependency_overrides[get_current_user] = override_admin
         try:
