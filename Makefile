@@ -43,7 +43,7 @@ dev:
 		lsof -nP -iTCP:$$_port -sTCP:LISTEN; \
 		exit 1; \
 	fi
-	RUN_MODE=dev sh ./start.sh
+	RUN_MODE=dev PORT=$${PORT:-8000} HOST=0.0.0.0 "$(PYTHON)" -m uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload
 
 recreate:
 	$(COMPOSE) up -d --force-recreate $(APP_SERVICE)
