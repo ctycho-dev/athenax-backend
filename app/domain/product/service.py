@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -87,7 +88,10 @@ class ProductService:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
 
-        payload["user_id"] = current_user.id
+        founders = payload.get("founders")
+        payload["founders"] = json.dumps(founders) if founders else None
+
+        payload["created_by_id"] = current_user.id
         payload["slug"] = generate_slug(data.name, max_length=150)
 
         product = await self.repo.create(db, payload, current_user_id=current_user.id)
@@ -170,6 +174,10 @@ class ProductService:
 
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
+
+        if "founders" in payload:
+            founders = payload["founders"]
+            payload["founders"] = json.dumps(founders) if founders else None
 
         product = await self.repo.update(db, product_id, payload, current_user_id=current_user.id)
 
@@ -284,7 +292,7 @@ class ProductService:
         current_user: UserOutSchema,
     ) -> CommentOutSchema:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        comment = await self.comment_repo.create(db, {"product_id": product_id, "user_id": current_user.id, "text": data.text})
+        comment = await self.comment_repo.create(db, {"product_id": product_id, "created_by_id": current_user.id, "text": data.text})
         await db.commit()
         return CommentOutSchema.model_validate(comment, from_attributes=True)
 
@@ -334,15 +342,11 @@ class ProductService:
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
-        tasks = [
+        ix, papers, founder_data = await asyncio.gather(
             self._fetch_interaction_data(db, [product.id], current_user),
             self.repo.get_papers_for_product(db, product.id),
-        ]
-        if product.user_id is not None:
-            tasks.append(self.repo.get_founder_summary(db, product.user_id))
-        gathered = await asyncio.gather(*tasks)
-        ix, papers = gathered[0], gathered[1]
-        founder_data = gathered[2] if product.user_id is not None else None
+            self.repo.get_founder_summary(db, product.created_by_id),
+        )
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
         result.category_ids = [c.id for c in ix.categories_map[product.id]]

@@ -35,7 +35,7 @@ class PaperService:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
 
-        payload["user_id"] = current_user.id
+        payload["created_by_id"] = current_user.id
         payload["slug"] = generate_slug(data.title)
         if payload.get("status") == PaperStatus.PUBLISHED:
             payload["published_at"] = datetime.now(timezone.utc)
@@ -54,6 +54,7 @@ class PaperService:
         limit: int,
         offset: int,
         verification_status: PaperVerificationStatus | None = None,
+        paper_status: PaperStatus | None = None,
         current_user: UserOutSchema | None = None,
         owner_only: bool = False,
     ) -> list[PaperOutSchema]:
@@ -62,7 +63,7 @@ class PaperService:
             user_id = current_user.id
         elif current_user is None or not is_admin(current_user):
             verification_status = PaperVerificationStatus.APPROVED
-        papers = await self.repo.get_all_by_verification_status(db, verification_status, limit=limit, offset=offset, user_id=user_id)
+        papers = await self.repo.get_all_by_verification_status(db, verification_status, limit=limit, offset=offset, user_id=user_id, paper_status=paper_status)
         if not papers:
             return []
         paper_ids = [p.id for p in papers]

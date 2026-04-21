@@ -102,7 +102,7 @@ class ProductRepository(BaseRepository[Product]):
         if status is not None:
             q = q.where(Product.status == status)
         if user_id is not None:
-            q = q.where(Product.user_id == user_id)
+            q = q.where(Product.created_by_id == user_id)
         if category_id is not None:
             q = q.where(
                 Product.id.in_(

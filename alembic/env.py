@@ -13,10 +13,6 @@ from app.domain.university.model import University
 from app.domain.lab.model import Lab, LabCategory
 from app.domain.category.model import Category
 from app.domain.paper.model import Paper, PaperCategory, PaperVote
-# from app.domain.camera.model import Camera
-# from app.domain.company.model import Company
-# from app.domain.notification.model import Notification
-# from app.domain.report.model import Report
 from app.database.connection import Base
 
 # this is the Alembic Config object, which provides
@@ -24,7 +20,7 @@ from app.database.connection import Base
 config = context.config
 
 # Set the URL dynamically
-config.set_main_option('sqlalchemy.url', settings.db.sync_url)
+config.set_main_option('sqlalchemy.url', settings.db.direct_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

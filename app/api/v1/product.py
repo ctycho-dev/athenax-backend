@@ -38,7 +38,7 @@ async def create_product(
     request: Request,
     payload: ProductCreateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(require_founder_or_admin),
+    current_user: UserOutSchema = Depends(get_current_user),
     service: ProductService = Depends(get_product_service),
 ):
     return await service.create(db, payload, current_user=current_user)
@@ -82,7 +82,7 @@ async def list_my_products(
     offset: int = 0,
     status: ProductStatus | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(require_founder_or_admin),
+    current_user: UserOutSchema = Depends(get_current_user),
     service: ProductService = Depends(get_product_service),
 ):
     return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user, owner_only=True)
@@ -145,7 +145,7 @@ async def update_product(
     product_id: int,
     payload: ProductUpdateSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(require_founder_or_admin),
+    current_user: UserOutSchema = Depends(get_current_user),
     service: ProductService = Depends(get_product_service),
 ):
     return await service.update(db, product_id=product_id, data=payload, current_user=current_user)
@@ -157,7 +157,7 @@ async def delete_product(
     request: Request,
     product_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(require_founder_or_admin),
+    current_user: UserOutSchema = Depends(get_current_user),
     service: ProductService = Depends(get_product_service),
 ):
     await service.delete_by_id(db, product_id=product_id, current_user=current_user)

@@ -18,7 +18,7 @@ from app.domain.paper.schema import (
     VoteOutSchema,
     VoteSchema,
 )
-from app.enums.enums import PaperVerificationStatus
+from app.enums.enums import PaperStatus, PaperVerificationStatus
 from app.domain.paper.service import PaperService
 from app.domain.user.schema import UserOutSchema
 from app.middleware.rate_limiter import limiter
@@ -58,11 +58,12 @@ async def list_my_papers(
     request: Request,
     limit: int = 50,
     offset: int = 0,
+    status: PaperStatus | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema = Depends(require_researcher_user),
     service: PaperService = Depends(get_paper_service),
 ):
-    return await service.list_papers(db, limit=limit, offset=offset, current_user=current_user, owner_only=True)
+    return await service.list_papers(db, limit=limit, offset=offset, paper_status=status, current_user=current_user, owner_only=True)
 
 
 @router.get("/slug/{slug}", response_model=PaperOutSchema)

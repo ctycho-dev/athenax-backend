@@ -1,6 +1,7 @@
+import json
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.common.schema import CamelModel
 from app.domain.paper.schema import PaperSummarySchema
@@ -19,6 +20,7 @@ class ProductCreateSchema(CamelModel):
     imported: bool = False
     email: str | None = Field(default=None, max_length=200)
     twitter: str | None = Field(default=None, max_length=200)
+    founders: list[str] = Field(default_factory=list)
     category_ids: list[int] = Field(default_factory=list)
 
 
@@ -34,12 +36,12 @@ class ProductUpdateSchema(CamelModel):
     imported: bool | None = None
     email: str | None = Field(default=None, max_length=200)
     twitter: str | None = Field(default=None, max_length=200)
+    founders: list[str] | None = None
     category_ids: list[int] | None = None
 
 
 class ProductBaseSchema(CamelModel):
     id: int
-    user_id: int | None
     slug: str
     name: str
     description: str | None
@@ -52,6 +54,7 @@ class ProductBaseSchema(CamelModel):
     imported: bool
     email: str | None
     twitter: str | None
+    founders: list[str] = Field(default_factory=list)
     status: ProductStatus
     vote_count: int = 0
     bookmark_count: int = 0
@@ -59,6 +62,18 @@ class ProductBaseSchema(CamelModel):
     category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    created_by_id: int | None
+
+    @field_validator("founders", mode="before")
+    @classmethod
+    def parse_founders(cls, v):
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                return []
+        return v or []
 
 
 class ProductSummarySchema(CamelModel):
@@ -123,10 +138,10 @@ class CommentUpdateSchema(CamelModel):
 class CommentOutSchema(CamelModel):
     id: int
     product_id: int
-    user_id: int
     text: str
     created_at: datetime
     updated_at: datetime
+    created_by_id: int
 
 
 class ReleasePeriodSchema(CamelModel):

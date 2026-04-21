@@ -104,10 +104,22 @@ class TestProductAPI:
     # RBAC — create
     # ------------------------------------------------------------------
 
-    async def test_create_product_forbidden_for_regular_user(self, client: ClientWithEmail):
-        response = await client.post("/api/v1/product", json=PRODUCT_PAYLOAD)
-        assert response.status_code == 403
-        assert response.json()["detail"] == "Founder or admin role required"
+    async def test_create_product_allowed_for_any_authenticated_user(self, client: ClientWithEmail):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_regular_user():
+            return build_mock_user(UserRole.USER)
+
+        app.dependency_overrides[get_current_user] = override_regular_user
+        try:
+            payload = {**PRODUCT_PAYLOAD, "name": "Regular User Product"}
+            response = await client.post("/api/v1/product", json=payload)
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Regular User Product"
 
     async def test_create_product_allowed_for_founder(self, client: ClientWithEmail):
         original = app.dependency_overrides[get_current_user]
@@ -126,7 +138,7 @@ class TestProductAPI:
         data = response.json()
         assert data["name"] == "Founder Product 1"
         assert data["slug"]
-        assert data["userId"] == 1
+        assert data["createdById"] == 1
         assert data["status"] == "pending"
         assert data["voteCount"] == 0
         assert data["bookmarkCount"] == 0
@@ -456,7 +468,7 @@ class TestProductAPI:
         data = response.json()
         assert data["text"] == "Great product!"
         assert data["productId"] == product_id
-        assert data["userId"] == 1
+        assert data["createdById"] == 1
 
     async def test_list_comments(self, client: ClientWithEmail):
         product_id = await self._create_product_as_founder(client)

@@ -111,7 +111,7 @@ class TestPaperAPI:
         data = response.json()
         assert data["title"] == PAPER_PAYLOAD["title"]
         assert data["slug"] != ""
-        assert data["userId"] == 1
+        assert data["createdById"] == 1
         assert data["voteCount"] == 0
 
     async def test_create_paper_allowed_for_admin(self, client: ClientWithEmail):
@@ -264,7 +264,7 @@ class TestPaperAPI:
         original = app.dependency_overrides[get_current_user]
 
         async def override_admin():
-            return build_mock_user(UserRole.ADMIN, user_id=99)
+            return build_mock_user(UserRole.ADMIN, user_id=2)
 
         app.dependency_overrides[get_current_user] = override_admin
         try:
