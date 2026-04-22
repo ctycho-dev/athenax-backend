@@ -60,7 +60,7 @@ async def list_my_papers(
     offset: int = 0,
     status: PaperStatus | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: UserOutSchema = Depends(require_researcher_user),
+    current_user: UserOutSchema = Depends(get_current_user),
     service: PaperService = Depends(get_paper_service),
 ):
     return await service.list_papers(db, limit=limit, offset=offset, paper_status=status, current_user=current_user, owner_only=True)
