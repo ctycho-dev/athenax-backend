@@ -12,7 +12,7 @@ from app.api.dependencies.auth import get_optional_user
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
-from app.main import app                                                     
+from app.main import app
 from tests.conftest import TEST_DATABASE_URL, ClientWithEmail
 
 
