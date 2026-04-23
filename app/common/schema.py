@@ -1,5 +1,9 @@
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
+
+T = TypeVar("T")
 
 
 class CamelModel(BaseModel):
@@ -11,3 +15,8 @@ class CamelModel(BaseModel):
         from_attributes=True,
         populate_by_name=True
     )
+
+
+class PaginatedSchema(CamelModel, Generic[T]):
+    items: list[T]
+    total: int

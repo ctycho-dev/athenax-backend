@@ -7,6 +7,7 @@ from app.api.dependencies import (
     get_product_service,
 )
 from app.api.dependencies.auth import get_optional_user, require_admin_user, require_founder_or_admin, require_investor_user
+from app.common.schema import PaginatedSchema
 from app.core.config import settings
 from app.domain.product.schema import (
     BookmarkSchema,
@@ -44,7 +45,7 @@ async def create_product(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[ProductListSchema])
+@router.get("", response_model=PaginatedSchema[ProductListSchema])
 @limiter.limit("60/minute")
 async def list_products(
     request: Request,
@@ -74,7 +75,7 @@ async def get_product_stats(
     return await service.get_release_stats(db)
 
 
-@router.get("/me", response_model=list[ProductListSchema])
+@router.get("/me", response_model=PaginatedSchema[ProductListSchema])
 @limiter.limit("60/minute")
 async def list_my_products(
     request: Request,

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_categories
 from app.common.permissions import assert_can_modify, is_admin, is_owner
+from app.common.schema import PaginatedSchema
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
 from app.domain.product.repository import CommentRepository, ProductRepository
@@ -113,7 +114,7 @@ class ProductService:
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
-    ) -> list[ProductListSchema]:
+    ) -> PaginatedSchema[ProductListSchema]:
         user_id: int | None = None
         if owner_only and current_user is not None:
             # Founder viewing their own products — allow any status, filter by user
@@ -125,8 +126,14 @@ class ProductService:
             db, status, limit=limit, offset=offset, user_id=user_id,
             category_id=category_id, date_filter=date_filter, sort_by=sort_by,
         )
+        total = await self.repo.count_by_status(
+            db, status, user_id=user_id,
+            category_id=category_id, date_filter=date_filter,
+        )
+
         if not products:
-            return []
+            return PaginatedSchema(items=[], total=total)
+
         product_ids = [p.id for p in products]
         ix = await self._fetch_interaction_data(db, product_ids, current_user)
 
@@ -140,7 +147,7 @@ class ProductService:
             if current_user:
                 out.bookmarked = product.id in ix.user_bookmarks
             results.append(out)
-        return results
+        return PaginatedSchema(items=results, total=total)
 
     async def get_by_id(
         self, db: AsyncSession, product_id: int, current_user: UserOutSchema | None = None
