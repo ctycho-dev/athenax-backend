@@ -74,17 +74,14 @@ class ProductRepository(BaseRepository[Product]):
         ProductDateFilter.THIS_YEAR: timedelta(days=365),
     }
 
-    async def get_all_by_status(
+    def _build_status_query(
         self,
-        db: AsyncSession,
-        status: ProductStatus | None,
-        limit: int,
-        offset: int,
+        status: ProductStatus | None = None,
         user_id: int | None = None,
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
-    ) -> list[Product]:
+    ):
         vote_subq = None
         if sort_by == ProductSortBy.TOP:
             vote_subq = (
@@ -120,9 +117,36 @@ class ProductRepository(BaseRepository[Product]):
         else:
             q = q.order_by(Product.created_at.desc())
 
+        return q, vote_subq
+
+    async def get_all_by_status(
+        self,
+        db: AsyncSession,
+        status: ProductStatus | None,
+        limit: int,
+        offset: int,
+        user_id: int | None = None,
+        category_id: int | None = None,
+        date_filter: ProductDateFilter | None = None,
+        sort_by: ProductSortBy | None = None,
+    ) -> list[Product]:
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def count_by_status(
+        self,
+        db: AsyncSession,
+        status: ProductStatus | None = None,
+        user_id: int | None = None,
+        category_id: int | None = None,
+        date_filter: ProductDateFilter | None = None,
+    ) -> int:
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter)
+        q = select(func.count()).select_from(q.subquery())
+        result = await db.execute(q)
+        return result.scalar() or 0
 
     async def get_by_ids(self, db: AsyncSession, product_ids: list[int]) -> list[Product]:
         result = await db.execute(select(Product).where(Product.id.in_(product_ids)))

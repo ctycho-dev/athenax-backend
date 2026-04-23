@@ -11,7 +11,7 @@ from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductStatus, UserRole
+from app.enums.enums import UserRole
 from app.main import app
 from tests.conftest import TEST_DATABASE_URL, ClientWithEmail
 
@@ -78,7 +78,9 @@ class TestProductAPI:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "items" in data and "total" in data
 
     async def test_get_product_not_found(self, client: ClientWithEmail):
         response = await client.get("/api/v1/product/999999")
@@ -582,7 +584,8 @@ class TestProductAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        matching = [p for p in response.json() if p["id"] == product_id]
+        data = response.json()
+        matching = [p for p in data["items"] if p["id"] == product_id]
         assert len(matching) == 1
         assert matching[0]["status"] == "pending"
 
@@ -590,7 +593,8 @@ class TestProductAPI:
         product_id = await self._create_product_as_founder(client, approve=False)
         response = await client.get("/api/v1/product")
         assert response.status_code == 200
-        ids = [p["id"] for p in response.json()]
+        data = response.json()
+        ids = [p["id"] for p in data["items"]]
         assert product_id not in ids
 
     async def test_list_with_status_pending_returns_pending(self, client: ClientWithEmail):
@@ -606,7 +610,8 @@ class TestProductAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        ids = [p["id"] for p in response.json()]
+        data = response.json()
+        ids = [p["id"] for p in data["items"]]
         assert product_id in ids
 
     async def test_get_pending_product_returns_404(self, client: ClientWithEmail):
@@ -703,5 +708,6 @@ class TestProductAPI:
         product_id = await self._create_product_as_founder(client, approve=True)
         response = await client.get("/api/v1/product")
         assert response.status_code == 200
-        ids = [p["id"] for p in response.json()]
+        data = response.json()
+        ids = [p["id"] for p in data["items"]]
         assert product_id in ids
