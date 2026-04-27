@@ -18,6 +18,7 @@ class ProductCreateSchema(CamelModel):
     demo: str | None = Field(default=None, max_length=200)
     quality_badge: str | None = Field(default=None, max_length=50)
     imported: bool = False
+    logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
     twitter: str | None = Field(default=None, max_length=200)
     founders: list[str] = Field(default_factory=list)
@@ -34,6 +35,7 @@ class ProductUpdateSchema(CamelModel):
     demo: str | None = Field(default=None, max_length=200)
     quality_badge: str | None = Field(default=None, max_length=50)
     imported: bool | None = None
+    logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
     twitter: str | None = Field(default=None, max_length=200)
     founders: list[str] | None = None
@@ -52,6 +54,7 @@ class ProductBaseSchema(CamelModel):
     demo: str | None
     quality_badge: str | None
     imported: bool
+    logo: str | None
     email: str | None
     twitter: str | None
     founders: list[str] = Field(default_factory=list)

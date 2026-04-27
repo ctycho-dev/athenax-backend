@@ -43,7 +43,7 @@ dev:
 		lsof -nP -iTCP:$$_port -sTCP:LISTEN; \
 		exit 1; \
 	fi
-	RUN_MODE=dev PORT=$${PORT:-8000} HOST=0.0.0.0 "$(PYTHON)" -m uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload
+	RUN_MODE=dev PORT=$${PORT:-8000} HOST=0.0.0.0 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload
 
 recreate:
 	$(COMPOSE) up -d --force-recreate $(APP_SERVICE)
@@ -105,4 +105,4 @@ history:
 
 seed:
 	$(COMPOSE) up -d postgres redis
-	$(COMPOSE) run --rm --no-deps $(APP_SERVICE) python scripts/seed.py
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed.py

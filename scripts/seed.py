@@ -307,6 +307,7 @@ async def seed_products(
             stage=_STAGE_MAP.get(row.get("Stage", "").strip().lower()),
             email=row.get("Email", "").strip() or None,
             twitter=row.get("Twitter", "").strip() or None,
+            logo=row.get("Logo", "").strip() or None,
             imported=True,
             status=ProductStatus.APPROVED,
         )
