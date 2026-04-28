@@ -16,7 +16,11 @@ from app.domain.lab.repository import LabRepository
 from app.domain.lab.service import LabService
 from app.domain.paper.repository import PaperRepository
 from app.domain.paper.service import PaperService
-from app.domain.product.repository import CommentRepository, ProductRepository
+from app.domain.product.repository import (
+    CommentRepository, ProductRepository,
+    ProductLinkRepository, ProductMediaRepository, ProductTeamRepository,
+    ProductBackerRepository, ProductVoiceRepository, BountyRepository,
+)
 from app.domain.product.service import ProductService
 
 
@@ -69,6 +73,30 @@ def get_product_repo() -> ProductRepository:
 
 def get_comment_repo() -> CommentRepository:
     return CommentRepository()
+
+
+def get_link_repo() -> ProductLinkRepository:
+    return ProductLinkRepository()
+
+
+def get_media_repo() -> ProductMediaRepository:
+    return ProductMediaRepository()
+
+
+def get_team_repo() -> ProductTeamRepository:
+    return ProductTeamRepository()
+
+
+def get_backer_repo() -> ProductBackerRepository:
+    return ProductBackerRepository()
+
+
+def get_voice_repo() -> ProductVoiceRepository:
+    return ProductVoiceRepository()
+
+
+def get_bounty_repo() -> BountyRepository:
+    return BountyRepository()
 
 
 # -------------------------
@@ -125,5 +153,21 @@ def get_product_service(
     repo: ProductRepository = Depends(get_product_repo),
     category_repo: CategoryRepository = Depends(get_category_repo),
     comment_repo: CommentRepository = Depends(get_comment_repo),
+    link_repo: ProductLinkRepository = Depends(get_link_repo),
+    media_repo: ProductMediaRepository = Depends(get_media_repo),
+    team_repo: ProductTeamRepository = Depends(get_team_repo),
+    backer_repo: ProductBackerRepository = Depends(get_backer_repo),
+    voice_repo: ProductVoiceRepository = Depends(get_voice_repo),
+    bounty_repo: BountyRepository = Depends(get_bounty_repo),
 ) -> ProductService:
-    return ProductService(repo=repo, category_repo=category_repo, comment_repo=comment_repo)
+    return ProductService(
+        repo=repo,
+        category_repo=category_repo,
+        comment_repo=comment_repo,
+        link_repo=link_repo,
+        media_repo=media_repo,
+        team_repo=team_repo,
+        backer_repo=backer_repo,
+        voice_repo=voice_repo,
+        bounty_repo=bounty_repo,
+    )

@@ -19,7 +19,14 @@ from app.domain.product.model import (
     ProductComment,
     ProductInvestorInterest,
     ProductVote,
+    ProductLink,
+    ProductMedia,
+    ProductTeamMember,
+    ProductBacker,
+    ProductVoice,
+    Bounty,
 )
+from app.enums.enums import VerificationStatus
 
 
 class CommentRepository(BaseRepository[ProductComment]):
@@ -38,6 +45,97 @@ class CommentRepository(BaseRepository[ProductComment]):
         )
         return list(result.scalars().all())
 
+
+
+class ProductLinkRepository(BaseRepository[ProductLink]):
+    def __init__(self) -> None:
+        super().__init__(ProductLink)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductLink]:
+        result = await db.execute(
+            select(ProductLink)
+            .where(ProductLink.product_id == product_id)
+            .order_by(ProductLink.link_type.asc(), ProductLink.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+
+class ProductMediaRepository(BaseRepository[ProductMedia]):
+    def __init__(self) -> None:
+        super().__init__(ProductMedia)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductMedia]:
+        result = await db.execute(
+            select(ProductMedia)
+            .where(ProductMedia.product_id == product_id)
+            .order_by(ProductMedia.sort_order.asc(), ProductMedia.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+
+class ProductTeamRepository(BaseRepository[ProductTeamMember]):
+    def __init__(self) -> None:
+        super().__init__(ProductTeamMember)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int,
+        status: VerificationStatus | None = None,
+    ) -> list[ProductTeamMember]:
+        q = select(ProductTeamMember).where(ProductTeamMember.product_id == product_id)
+        if status is not None:
+            q = q.where(ProductTeamMember.status == status)
+        q = q.order_by(ProductTeamMember.created_at.asc())
+        result = await db.execute(q)
+        return list(result.scalars().all())
+
+
+class ProductBackerRepository(BaseRepository[ProductBacker]):
+    def __init__(self) -> None:
+        super().__init__(ProductBacker)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductBacker]:
+        result = await db.execute(
+            select(ProductBacker)
+            .where(ProductBacker.product_id == product_id)
+            .order_by(ProductBacker.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+
+class ProductVoiceRepository(BaseRepository[ProductVoice]):
+    def __init__(self) -> None:
+        super().__init__(ProductVoice)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductVoice]:
+        result = await db.execute(
+            select(ProductVoice)
+            .where(ProductVoice.product_id == product_id)
+            .order_by(ProductVoice.sort_order.asc(), ProductVoice.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+
+class BountyRepository(BaseRepository[Bounty]):
+    def __init__(self) -> None:
+        super().__init__(Bounty)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int
+    ) -> list[Bounty]:
+        result = await db.execute(
+            select(Bounty)
+            .where(Bounty.product_id == product_id)
+            .order_by(Bounty.created_at.desc())
+        )
+        return list(result.scalars().all())
 
 
 class ProductRepository(BaseRepository[Product]):

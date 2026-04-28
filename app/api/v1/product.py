@@ -13,6 +13,7 @@ from app.domain.product.schema import (
     BookmarkSchema,
     CommentCreateSchema,
     CommentOutSchema,
+    CommentPinSchema,
     CommentUpdateSchema,
     InvestorInterestSchema,
     ProductCreateSchema,
@@ -24,6 +25,12 @@ from app.domain.product.schema import (
     ProductUpdateSchema,
     ToggleOutSchema,
     VoteSchema,
+    ProductLinkCreateSchema, ProductLinkUpdateSchema, ProductLinkOutSchema,
+    ProductMediaCreateSchema, ProductMediaUpdateSchema, ProductMediaOutSchema,
+    TeamMemberCreateSchema, TeamMemberUpdateSchema, TeamMemberStatusUpdateSchema, TeamMemberOutSchema,
+    ProductBackerCreateSchema, ProductBackerOutSchema,
+    ProductVoiceCreateSchema, ProductVoiceUpdateSchema, ProductVoiceOutSchema,
+    BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
 from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStage, ProductStatus
 from app.domain.product.service import ProductService
@@ -267,3 +274,348 @@ async def delete_comment(
     service: ProductService = Depends(get_product_service),
 ):
     await service.delete_comment(db, product_id=product_id, comment_id=comment_id, current_user=current_user)
+
+
+@router.patch("/{product_id}/comments/{comment_id}/pin", response_model=CommentOutSchema)
+@limiter.limit("30/minute")
+async def pin_comment(
+    request: Request,
+    product_id: int,
+    comment_id: int,
+    payload: CommentPinSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.pin_comment(db, product_id=product_id, comment_id=comment_id, data=payload, current_user=current_user)
+
+
+# -------------------------
+# Product Links
+# -------------------------
+
+@router.get("/{product_id}/links", response_model=list[ProductLinkOutSchema])
+@limiter.limit("60/minute")
+async def list_links(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_links(db, product_id=product_id)
+
+
+@router.post("/{product_id}/links", status_code=status.HTTP_201_CREATED, response_model=ProductLinkOutSchema)
+@limiter.limit("30/minute")
+async def create_link(
+    request: Request,
+    product_id: int,
+    payload: ProductLinkCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_link(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/links/{link_id}", response_model=ProductLinkOutSchema)
+@limiter.limit("30/minute")
+async def update_link(
+    request: Request,
+    product_id: int,
+    link_id: int,
+    payload: ProductLinkUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_link(db, product_id=product_id, link_id=link_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_link(
+    request: Request,
+    product_id: int,
+    link_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_link(db, product_id=product_id, link_id=link_id, current_user=current_user)
+
+
+# -------------------------
+# Product Media
+# -------------------------
+
+@router.get("/{product_id}/media", response_model=list[ProductMediaOutSchema])
+@limiter.limit("60/minute")
+async def list_media(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_media(db, product_id=product_id)
+
+
+@router.post("/{product_id}/media", status_code=status.HTTP_201_CREATED, response_model=ProductMediaOutSchema)
+@limiter.limit("30/minute")
+async def create_media(
+    request: Request,
+    product_id: int,
+    payload: ProductMediaCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_media(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/media/{media_id}", response_model=ProductMediaOutSchema)
+@limiter.limit("30/minute")
+async def update_media(
+    request: Request,
+    product_id: int,
+    media_id: int,
+    payload: ProductMediaUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_media(db, product_id=product_id, media_id=media_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/media/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_media(
+    request: Request,
+    product_id: int,
+    media_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_media(db, product_id=product_id, media_id=media_id, current_user=current_user)
+
+
+# -------------------------
+# Product Team
+# -------------------------
+
+@router.get("/{product_id}/team", response_model=list[TeamMemberOutSchema])
+@limiter.limit("60/minute")
+async def list_team(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_team(db, product_id=product_id, current_user=current_user)
+
+
+@router.post("/{product_id}/team", status_code=status.HTTP_201_CREATED, response_model=TeamMemberOutSchema)
+@limiter.limit("30/minute")
+async def create_team_member(
+    request: Request,
+    product_id: int,
+    payload: TeamMemberCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_team_member(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/team/{member_id}", response_model=TeamMemberOutSchema)
+@limiter.limit("30/minute")
+async def update_team_member(
+    request: Request,
+    product_id: int,
+    member_id: int,
+    payload: TeamMemberUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_team_member(db, product_id=product_id, member_id=member_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/team/{member_id}/status", response_model=TeamMemberOutSchema)
+@limiter.limit("30/minute")
+async def update_team_member_status(
+    request: Request,
+    product_id: int,
+    member_id: int,
+    payload: TeamMemberStatusUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_team_member_status(db, product_id=product_id, member_id=member_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/team/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_team_member(
+    request: Request,
+    product_id: int,
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_team_member(db, product_id=product_id, member_id=member_id, current_user=current_user)
+
+
+# -------------------------
+# Product Backers
+# -------------------------
+
+@router.get("/{product_id}/backers", response_model=list[ProductBackerOutSchema])
+@limiter.limit("60/minute")
+async def list_backers(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_backers(db, product_id=product_id)
+
+
+@router.post("/{product_id}/backers", status_code=status.HTTP_201_CREATED, response_model=ProductBackerOutSchema)
+@limiter.limit("30/minute")
+async def create_backer(
+    request: Request,
+    product_id: int,
+    payload: ProductBackerCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_backer(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/backers/{backer_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_backer(
+    request: Request,
+    product_id: int,
+    backer_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_backer(db, product_id=product_id, backer_id=backer_id, current_user=current_user)
+
+
+# -------------------------
+# Product Voices
+# -------------------------
+
+@router.get("/{product_id}/voices", response_model=list[ProductVoiceOutSchema])
+@limiter.limit("60/minute")
+async def list_voices(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_voices(db, product_id=product_id)
+
+
+@router.post("/{product_id}/voices", status_code=status.HTTP_201_CREATED, response_model=ProductVoiceOutSchema)
+@limiter.limit("30/minute")
+async def create_voice(
+    request: Request,
+    product_id: int,
+    payload: ProductVoiceCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_voice(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/voices/{voice_id}", response_model=ProductVoiceOutSchema)
+@limiter.limit("30/minute")
+async def update_voice(
+    request: Request,
+    product_id: int,
+    voice_id: int,
+    payload: ProductVoiceUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_voice(db, product_id=product_id, voice_id=voice_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/voices/{voice_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_voice(
+    request: Request,
+    product_id: int,
+    voice_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_voice(db, product_id=product_id, voice_id=voice_id, current_user=current_user)
+
+
+# -------------------------
+# Bounties
+# -------------------------
+
+@router.get("/{product_id}/bounties", response_model=list[BountyOutSchema])
+@limiter.limit("60/minute")
+async def list_bounties(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_bounties(db, product_id=product_id)
+
+
+@router.post("/{product_id}/bounties", status_code=status.HTTP_201_CREATED, response_model=BountyOutSchema)
+@limiter.limit("30/minute")
+async def create_bounty(
+    request: Request,
+    product_id: int,
+    payload: BountyCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_bounty(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/bounties/{bounty_id}", response_model=BountyOutSchema)
+@limiter.limit("30/minute")
+async def update_bounty(
+    request: Request,
+    product_id: int,
+    bounty_id: int,
+    payload: BountyUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_bounty(db, product_id=product_id, bounty_id=bounty_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/bounties/{bounty_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_bounty(
+    request: Request,
+    product_id: int,
+    bounty_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_bounty(db, product_id=product_id, bounty_id=bounty_id, current_user=current_user)

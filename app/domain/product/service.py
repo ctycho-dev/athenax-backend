@@ -12,11 +12,16 @@ from app.common.permissions import assert_can_modify, is_admin, is_owner
 from app.common.schema import PaginatedSchema
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
-from app.domain.product.repository import CommentRepository, ProductRepository
+from app.domain.product.repository import (
+    CommentRepository, ProductRepository,
+    ProductLinkRepository, ProductMediaRepository, ProductTeamRepository,
+    ProductBackerRepository, ProductVoiceRepository, BountyRepository,
+)
 from app.domain.paper.schema import PaperSummarySchema
 from app.domain.product.schema import (
     CommentCreateSchema,
     CommentOutSchema,
+    CommentPinSchema,
     CommentUpdateSchema,
     FounderSummarySchema,
     ProductCreateSchema,
@@ -28,9 +33,15 @@ from app.domain.product.schema import (
     ProductUpdateSchema,
     ReleasePeriodSchema,
     ToggleOutSchema,
+    ProductLinkCreateSchema, ProductLinkUpdateSchema, ProductLinkOutSchema,
+    ProductMediaCreateSchema, ProductMediaUpdateSchema, ProductMediaOutSchema,
+    TeamMemberCreateSchema, TeamMemberUpdateSchema, TeamMemberStatusUpdateSchema, TeamMemberOutSchema,
+    ProductBackerCreateSchema, ProductBackerOutSchema,
+    ProductVoiceCreateSchema, ProductVoiceUpdateSchema, ProductVoiceOutSchema,
+    BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStatus
+from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStatus, VerificationStatus
 from app.exceptions.exceptions import NotFoundError
 from app.utils.slug import generate_slug
 
@@ -47,10 +58,27 @@ class _InteractionData:
 
 
 class ProductService:
-    def __init__(self, repo: ProductRepository, category_repo: CategoryRepository, comment_repo: CommentRepository):
+    def __init__(
+        self,
+        repo: ProductRepository,
+        category_repo: CategoryRepository,
+        comment_repo: CommentRepository,
+        link_repo: ProductLinkRepository,
+        media_repo: ProductMediaRepository,
+        team_repo: ProductTeamRepository,
+        backer_repo: ProductBackerRepository,
+        voice_repo: ProductVoiceRepository,
+        bounty_repo: BountyRepository,
+    ):
         self.repo = repo
         self.category_repo = category_repo
         self.comment_repo = comment_repo
+        self.link_repo = link_repo
+        self.media_repo = media_repo
+        self.team_repo = team_repo
+        self.backer_repo = backer_repo
+        self.voice_repo = voice_repo
+        self.bounty_repo = bounty_repo
 
     async def _fetch_interaction_data(
         self,
@@ -334,6 +362,22 @@ class ProductService:
         await self.comment_repo.delete_by_id(db, comment_id)
         await db.commit()
 
+    async def pin_comment(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        comment_id: int,
+        data: CommentPinSchema,
+        current_user: UserOutSchema,
+    ) -> CommentOutSchema:
+        comment = await self.comment_repo.get_by_id(db, comment_id)
+        if comment.product_id != product_id:
+            raise NotFoundError("Comment not found")
+        comment = await self.comment_repo.update_instance(db, comment, {"pinned": data.pinned})
+        await db.commit()
+        await db.refresh(comment)
+        return CommentOutSchema.model_validate(comment, from_attributes=True)
+
     async def update_status(
         self,
         db: AsyncSession,
@@ -345,6 +389,261 @@ class ProductService:
         await db.commit()
         await db.refresh(product)
         return await self._to_schema(db, product)
+
+    # -------------------------
+    # Product Links
+    # -------------------------
+
+    async def list_links(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductLinkOutSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        links = await self.link_repo.get_by_product_id(db, product_id)
+        return [ProductLinkOutSchema.model_validate(l, from_attributes=True) for l in links]
+
+    async def create_link(
+        self, db: AsyncSession, product_id: int, data: ProductLinkCreateSchema, current_user: UserOutSchema
+    ) -> ProductLinkOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        link = await self.link_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(link)
+        return ProductLinkOutSchema.model_validate(link, from_attributes=True)
+
+    async def update_link(
+        self, db: AsyncSession, product_id: int, link_id: int, data: ProductLinkUpdateSchema, current_user: UserOutSchema
+    ) -> ProductLinkOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        link = await self.link_repo.get_by_id(db, link_id)
+        if link.product_id != product_id:
+            raise NotFoundError("Link not found")
+        link = await self.link_repo.update(db, link_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(link)
+        return ProductLinkOutSchema.model_validate(link, from_attributes=True)
+
+    async def delete_link(
+        self, db: AsyncSession, product_id: int, link_id: int, current_user: UserOutSchema
+    ) -> None:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        link = await self.link_repo.get_by_id(db, link_id)
+        if link.product_id != product_id:
+            raise NotFoundError("Link not found")
+        await self.link_repo.delete_by_id(db, link_id)
+        await db.commit()
+
+    # -------------------------
+    # Product Media
+    # -------------------------
+
+    async def list_media(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductMediaOutSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        media = await self.media_repo.get_by_product_id(db, product_id)
+        return [ProductMediaOutSchema.model_validate(m, from_attributes=True) for m in media]
+
+    async def create_media(
+        self, db: AsyncSession, product_id: int, data: ProductMediaCreateSchema, current_user: UserOutSchema
+    ) -> ProductMediaOutSchema:
+        await self.repo.get_by_id(db, product_id)
+        media = await self.media_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(media)
+        return ProductMediaOutSchema.model_validate(media, from_attributes=True)
+
+    async def update_media(
+        self, db: AsyncSession, product_id: int, media_id: int, data: ProductMediaUpdateSchema, current_user: UserOutSchema
+    ) -> ProductMediaOutSchema:
+        media = await self.media_repo.get_by_id(db, media_id)
+        if media.product_id != product_id:
+            raise NotFoundError("Media not found")
+        media = await self.media_repo.update(db, media_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(media)
+        return ProductMediaOutSchema.model_validate(media, from_attributes=True)
+
+    async def delete_media(
+        self, db: AsyncSession, product_id: int, media_id: int, current_user: UserOutSchema
+    ) -> None:
+        media = await self.media_repo.get_by_id(db, media_id)
+        if media.product_id != product_id:
+            raise NotFoundError("Media not found")
+        await self.media_repo.delete_by_id(db, media_id)
+        await db.commit()
+
+    # -------------------------
+    # Product Team
+    # -------------------------
+
+    async def list_team(
+        self, db: AsyncSession, product_id: int, current_user: UserOutSchema | None = None
+    ) -> list[TeamMemberOutSchema]:
+        product = await self.repo.get_by_id(db, product_id)
+        if product.status != ProductStatus.APPROVED:
+            if not current_user or (not is_admin(current_user) and not is_owner(product, current_user)):
+                raise NotFoundError(f"Product with id '{product_id}' not found")
+        status_filter = None if (current_user and (is_admin(current_user) or is_owner(product, current_user))) else VerificationStatus.APPROVED
+        members = await self.team_repo.get_by_product_id(db, product_id, status=status_filter)
+        return [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in members]
+
+    async def create_team_member(
+        self, db: AsyncSession, product_id: int, data: TeamMemberCreateSchema, current_user: UserOutSchema
+    ) -> TeamMemberOutSchema:
+        await self.repo.get_by_id(db, product_id)
+        payload = {**data.model_dump(), "product_id": product_id, "status": VerificationStatus.APPROVED}
+        member = await self.team_repo.create(db, payload, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(member)
+        return TeamMemberOutSchema.model_validate(member, from_attributes=True)
+
+    async def update_team_member(
+        self, db: AsyncSession, product_id: int, member_id: int, data: TeamMemberUpdateSchema, current_user: UserOutSchema
+    ) -> TeamMemberOutSchema:
+        member = await self.team_repo.get_by_id(db, member_id)
+        if member.product_id != product_id:
+            raise NotFoundError("Team member not found")
+        member = await self.team_repo.update(db, member_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(member)
+        return TeamMemberOutSchema.model_validate(member, from_attributes=True)
+
+    async def update_team_member_status(
+        self, db: AsyncSession, product_id: int, member_id: int, data: TeamMemberStatusUpdateSchema, current_user: UserOutSchema
+    ) -> TeamMemberOutSchema:
+        member = await self.team_repo.get_by_id(db, member_id)
+        if member.product_id != product_id:
+            raise NotFoundError("Team member not found")
+        member = await self.team_repo.update(
+            db, member_id, {"status": data.status, "reviewed_by_id": current_user.id}, current_user_id=current_user.id
+        )
+        await db.commit()
+        await db.refresh(member)
+        return TeamMemberOutSchema.model_validate(member, from_attributes=True)
+
+    async def delete_team_member(
+        self, db: AsyncSession, product_id: int, member_id: int, current_user: UserOutSchema
+    ) -> None:
+        member = await self.team_repo.get_by_id(db, member_id)
+        if member.product_id != product_id:
+            raise NotFoundError("Team member not found")
+        await self.team_repo.delete_by_id(db, member_id)
+        await db.commit()
+
+    # -------------------------
+    # Product Backers
+    # -------------------------
+
+    async def list_backers(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductBackerOutSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        backers = await self.backer_repo.get_by_product_id(db, product_id)
+        return [ProductBackerOutSchema.model_validate(b, from_attributes=True) for b in backers]
+
+    async def create_backer(
+        self, db: AsyncSession, product_id: int, data: ProductBackerCreateSchema, current_user: UserOutSchema
+    ) -> ProductBackerOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        backer = await self.backer_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(backer)
+        return ProductBackerOutSchema.model_validate(backer, from_attributes=True)
+
+    async def delete_backer(
+        self, db: AsyncSession, product_id: int, backer_id: int, current_user: UserOutSchema
+    ) -> None:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        backer = await self.backer_repo.get_by_id(db, backer_id)
+        if backer.product_id != product_id:
+            raise NotFoundError("Backer not found")
+        await self.backer_repo.delete_by_id(db, backer_id)
+        await db.commit()
+
+    # -------------------------
+    # Product Voices
+    # -------------------------
+
+    async def list_voices(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductVoiceOutSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        voices = await self.voice_repo.get_by_product_id(db, product_id)
+        return [ProductVoiceOutSchema.model_validate(v, from_attributes=True) for v in voices]
+
+    async def create_voice(
+        self, db: AsyncSession, product_id: int, data: ProductVoiceCreateSchema, current_user: UserOutSchema
+    ) -> ProductVoiceOutSchema:
+        await self.repo.get_by_id(db, product_id)
+        voice = await self.voice_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(voice)
+        return ProductVoiceOutSchema.model_validate(voice, from_attributes=True)
+
+    async def update_voice(
+        self, db: AsyncSession, product_id: int, voice_id: int, data: ProductVoiceUpdateSchema, current_user: UserOutSchema
+    ) -> ProductVoiceOutSchema:
+        voice = await self.voice_repo.get_by_id(db, voice_id)
+        if voice.product_id != product_id:
+            raise NotFoundError("Voice not found")
+        voice = await self.voice_repo.update(db, voice_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(voice)
+        return ProductVoiceOutSchema.model_validate(voice, from_attributes=True)
+
+    async def delete_voice(
+        self, db: AsyncSession, product_id: int, voice_id: int, current_user: UserOutSchema
+    ) -> None:
+        voice = await self.voice_repo.get_by_id(db, voice_id)
+        if voice.product_id != product_id:
+            raise NotFoundError("Voice not found")
+        await self.voice_repo.delete_by_id(db, voice_id)
+        await db.commit()
+
+    # -------------------------
+    # Bounties
+    # -------------------------
+
+    async def list_bounties(
+        self, db: AsyncSession, product_id: int
+    ) -> list[BountyOutSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        bounties = await self.bounty_repo.get_by_product_id(db, product_id)
+        return [BountyOutSchema.model_validate(b, from_attributes=True) for b in bounties]
+
+    async def create_bounty(
+        self, db: AsyncSession, product_id: int, data: BountyCreateSchema, current_user: UserOutSchema
+    ) -> BountyOutSchema:
+        await self.repo.get_by_id(db, product_id)
+        bounty = await self.bounty_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(bounty)
+        return BountyOutSchema.model_validate(bounty, from_attributes=True)
+
+    async def update_bounty(
+        self, db: AsyncSession, product_id: int, bounty_id: int, data: BountyUpdateSchema, current_user: UserOutSchema
+    ) -> BountyOutSchema:
+        bounty = await self.bounty_repo.get_by_id(db, bounty_id)
+        if bounty.product_id != product_id:
+            raise NotFoundError("Bounty not found")
+        bounty = await self.bounty_repo.update(db, bounty_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(bounty)
+        return BountyOutSchema.model_validate(bounty, from_attributes=True)
+
+    async def delete_bounty(
+        self, db: AsyncSession, product_id: int, bounty_id: int, current_user: UserOutSchema
+    ) -> None:
+        bounty = await self.bounty_repo.get_by_id(db, bounty_id)
+        if bounty.product_id != product_id:
+            raise NotFoundError("Bounty not found")
+        await self.bounty_repo.delete_by_id(db, bounty_id)
+        await db.commit()
 
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
