@@ -16,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.connection import db_manager
 from app.domain.category.model import Category
 from app.domain.lab.model import Lab, LabCategory
-from app.domain.product.model import Product, ProductCategory
+from app.domain.product.model import Product, ProductCategory, ProductLink
 from app.domain.university.model import University
 from app.domain.user.model import User  # noqa: F401 — registers 'users' table in metadata
-from app.enums.enums import ProductStage, ProductStatus
+from app.enums.enums import ProductLinkType, ProductStage, ProductStatus
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -287,7 +287,7 @@ async def seed_products(
         (await session.execute(select(Product.slug))).scalars().all()
     )
 
-    new_products: list[tuple[Product, str | None]] = []
+    new_products: list[tuple[Product, str | None, str | None, str | None]] = []
     for row in rows:
         name = row["Project Name"].strip()
         slug = _slug(name)
@@ -296,13 +296,13 @@ async def seed_products(
         existing_slugs.add(slug)
 
         raw_year = row.get("Year", "").strip()
+        website = row.get("Website / github / demo", "").strip() or None
+        github = row.get("GitHub Rep", "").strip() or None
         product = Product(
             created_by_id=None,
             slug=slug,
             name=name,
             description=row.get("One Line Description", "").strip() or None,
-            demo=row.get("Website / github / demo", "").strip() or None,
-            github=row.get("GitHub Rep", "").strip() or None,
             founded=int(raw_year) if raw_year.isdigit() else None,
             stage=_STAGE_MAP.get(row.get("Stage", "").strip().lower()),
             email=row.get("Email", "").strip() or None,
@@ -314,7 +314,7 @@ async def seed_products(
         session.add(product)
         raw_cat = row.get("Main Category", "").strip() or None
         cat = CATEGORY_ALIASES.get(raw_cat, raw_cat) if raw_cat else None
-        new_products.append((product, cat))
+        new_products.append((product, cat, website, github))
 
     if not new_products:
         log.info("  [products] all present, skipping")
@@ -322,9 +322,13 @@ async def seed_products(
 
     await session.flush()
 
-    for product, raw_cat in new_products:
+    for product, raw_cat, website, github in new_products:
         if raw_cat:
             _link_categories(session, product.id, [raw_cat], category_id_by_name, ProductCategory, "product_id", "products")
+        if website:
+            session.add(ProductLink(product_id=product.id, link_type=ProductLinkType.WEBSITE, url=website))
+        if github:
+            session.add(ProductLink(product_id=product.id, link_type=ProductLinkType.GITHUB, url=github))
 
     log.info("  [products] seeded %d products", len(new_products))
 

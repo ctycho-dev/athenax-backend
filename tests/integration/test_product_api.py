@@ -711,3 +711,677 @@ class TestProductAPI:
         data = response.json()
         ids = [p["id"] for p in data["items"]]
         assert product_id in ids
+
+    # ------------------------------------------------------------------
+    # Comment — pin
+    # ------------------------------------------------------------------
+
+    async def test_admin_can_pin_comment(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        create_resp = await client.post(
+            f"/api/v1/product/{product_id}/comments", json={"text": "Pin me"}
+        )
+        comment_id = create_resp.json()["id"]
+        assert create_resp.json()["pinned"] is False
+
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/comments/{comment_id}/pin",
+                json={"pinned": True},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["pinned"] is True
+
+    async def test_non_admin_cannot_pin_comment(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        create_resp = await client.post(
+            f"/api/v1/product/{product_id}/comments", json={"text": "Pin me"}
+        )
+        comment_id = create_resp.json()["id"]
+
+        response = await client.patch(
+            f"/api/v1/product/{product_id}/comments/{comment_id}/pin",
+            json={"pinned": True},
+        )
+        assert response.status_code == 403
+
+    # ------------------------------------------------------------------
+    # Links
+    # ------------------------------------------------------------------
+
+    async def test_list_links_is_public(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/links")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_owner_can_create_link(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "github", "url": "https://github.com/test"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["linkType"] == "github"
+        assert data["url"] == "https://github.com/test"
+        assert data["productId"] == product_id
+
+    async def test_non_owner_cannot_create_link(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_other():
+            return build_mock_user(UserRole.FOUNDER, user_id=2)
+
+        app.dependency_overrides[get_current_user] = override_other
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "github", "url": "https://github.com/test"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 400
+
+    async def test_duplicate_link_type_returns_error(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "github", "url": "https://github.com/first"},
+            )
+            response = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "github", "url": "https://github.com/second"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code in (400, 409, 500)
+
+    async def test_owner_can_update_link(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "website", "url": "https://old.com"},
+            )
+            link_id = create_resp.json()["id"]
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/links/{link_id}",
+                json={"url": "https://new.com"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["url"] == "https://new.com"
+
+    async def test_owner_can_delete_link(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "docs", "url": "https://docs.com"},
+            )
+            link_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/links/{link_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    async def test_link_not_found_returns_404(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/links/999999",
+                json={"url": "https://x.com"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 404
+
+    # ------------------------------------------------------------------
+    # Media
+    # ------------------------------------------------------------------
+
+    async def test_list_media_is_public(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/media")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_admin_can_create_media(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/media",
+                json={"mediaType": "image", "storageKey": "uploads/hero.png", "sortOrder": 0},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["mediaType"] == "image"
+        assert data["storageKey"] == "uploads/hero.png"
+
+    async def test_non_admin_cannot_create_media(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/media",
+                json={"mediaType": "image", "storageKey": "uploads/other.png", "sortOrder": 0},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
+
+    async def test_admin_can_update_media_sort_order(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/media",
+                json={"mediaType": "image", "storageKey": "uploads/img.png", "sortOrder": 0},
+            )
+            media_id = create_resp.json()["id"]
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/media/{media_id}",
+                json={"sortOrder": 5},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["sortOrder"] == 5
+
+    async def test_admin_can_delete_media(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/media",
+                json={"mediaType": "image", "storageKey": "uploads/del.png", "sortOrder": 0},
+            )
+            media_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/media/{media_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    # ------------------------------------------------------------------
+    # Team
+    # ------------------------------------------------------------------
+
+    async def test_list_team_is_public_for_approved_product(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/team")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_admin_can_create_team_member(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/team",
+                json={"name": "Alice", "roleLabel": "Lead Engineer"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Alice"
+        assert data["status"] == "approved"
+
+    async def test_non_admin_cannot_create_team_member(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/team",
+                json={"name": "Bob", "roleLabel": "Designer"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
+
+    async def test_admin_can_update_team_member(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/team",
+                json={"name": "Carol"},
+            )
+            member_id = create_resp.json()["id"]
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/team/{member_id}",
+                json={"roleLabel": "CTO"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["roleLabel"] == "CTO"
+
+    async def test_admin_can_delete_team_member(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/team",
+                json={"name": "Dave"},
+            )
+            member_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/team/{member_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    # ------------------------------------------------------------------
+    # Backers
+    # ------------------------------------------------------------------
+
+    async def test_list_backers_is_public(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/backers")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_owner_can_create_backer(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/backers",
+                json={"name": "Y Combinator"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        assert response.json()["name"] == "Y Combinator"
+
+    async def test_non_owner_cannot_create_backer(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_other():
+            return build_mock_user(UserRole.FOUNDER, user_id=2)
+
+        app.dependency_overrides[get_current_user] = override_other
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/backers",
+                json={"name": "Sneaky VC"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 400
+
+    async def test_owner_can_delete_backer(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/backers",
+                json={"name": "Sequoia"},
+            )
+            backer_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/backers/{backer_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    async def test_backers_list_after_create_and_delete(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            await client.post(f"/api/v1/product/{product_id}/backers", json={"name": "A16Z"})
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/backers", json={"name": "Stripe"}
+            )
+            backer_id = create_resp.json()["id"]
+            list_resp = await client.get(f"/api/v1/product/{product_id}/backers")
+            assert len(list_resp.json()) == 2
+
+            await client.delete(f"/api/v1/product/{product_id}/backers/{backer_id}")
+            list_resp = await client.get(f"/api/v1/product/{product_id}/backers")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert len(list_resp.json()) == 1
+
+    # ------------------------------------------------------------------
+    # Voices
+    # ------------------------------------------------------------------
+
+    async def test_list_voices_is_public(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/voices")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_admin_can_create_voice(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/voices",
+                json={"quote": "Amazing product!", "authorHandle": "@user123"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["quote"] == "Amazing product!"
+        assert data["authorHandle"] == "@user123"
+
+    async def test_non_admin_cannot_create_voice(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/voices",
+                json={"quote": "Sneaky testimonial", "authorHandle": "@sneaky"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
+
+    async def test_admin_can_update_voice(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/voices",
+                json={"quote": "Old quote", "authorHandle": "@author"},
+            )
+            voice_id = create_resp.json()["id"]
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/voices/{voice_id}",
+                json={"quote": "New quote"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["quote"] == "New quote"
+
+    async def test_admin_can_delete_voice(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/voices",
+                json={"quote": "Delete me", "authorHandle": "@gone"},
+            )
+            voice_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/voices/{voice_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    # ------------------------------------------------------------------
+    # Bounties
+    # ------------------------------------------------------------------
+
+    async def test_list_bounties_is_public(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/bounties")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_admin_can_create_bounty(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/bounties",
+                json={
+                    "title": "Fix auth bug",
+                    "rewardAmount": "500.00",
+                    "externalUrl": "https://github.com/issues/1",
+                },
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["title"] == "Fix auth bug"
+        assert data["status"] == "open"
+        assert data["rewardAmount"] == "500.00"
+
+    async def test_non_admin_cannot_create_bounty(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/bounties",
+                json={
+                    "title": "Sneaky bounty",
+                    "rewardAmount": "100.00",
+                    "externalUrl": "https://example.com",
+                },
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
+
+    async def test_admin_can_update_bounty(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/bounties",
+                json={
+                    "title": "Initial bounty",
+                    "rewardAmount": "250.00",
+                    "externalUrl": "https://github.com/issues/2",
+                },
+            )
+            bounty_id = create_resp.json()["id"]
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/bounties/{bounty_id}",
+                json={"status": "completed"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
+
+    async def test_admin_can_delete_bounty(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/bounties",
+                json={
+                    "title": "Delete me",
+                    "rewardAmount": "100.00",
+                    "externalUrl": "https://github.com/issues/3",
+                },
+            )
+            bounty_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/bounties/{bounty_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    async def test_bounty_not_found_returns_404(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/bounties/999999",
+                json={"status": "completed"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 404

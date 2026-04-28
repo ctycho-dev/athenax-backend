@@ -71,3 +71,27 @@ class ProductDateFilter(str, Enum):
     THIS_WEEK = "this_week"
     THIS_MONTH = "this_month"
     THIS_YEAR = "this_year"
+
+
+class ProductLinkType(str, Enum):
+    WEBSITE = "website"
+    GITHUB  = "github"
+    TWITTER = "twitter"
+    DOCS    = "docs"
+    DEMO    = "demo"
+    DISCORD = "discord"
+
+
+class ProductMediaType(str, Enum):
+    IMAGE         = "image"
+    VIDEO_HOSTED  = "video_hosted"
+    VIDEO_YOUTUBE = "video_youtube"
+
+
+class BountyStatus(str, Enum):
+    OPEN      = "open"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+TeamMemberStatus = VerificationStatus
