@@ -108,6 +108,12 @@ class ProductOutSchema(ProductBaseSchema):
     voted: bool | None = None
     bookmarked: bool | None = None
     interested: bool | None = None
+    links: list["ProductLinkOutSchema"] = Field(default_factory=list)
+    media: list["ProductMediaOutSchema"] = Field(default_factory=list)
+    team: list["TeamMemberOutSchema"] = Field(default_factory=list)
+    backers: list["ProductBackerOutSchema"] = Field(default_factory=list)
+    voices: list["ProductVoiceOutSchema"] = Field(default_factory=list)
+    bounties: list["BountyOutSchema"] = Field(default_factory=list)
 
 
 class ProductStatusUpdateSchema(CamelModel):

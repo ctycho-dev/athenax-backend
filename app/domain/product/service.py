@@ -648,10 +648,16 @@ class ProductService:
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
-        ix, papers, founder_data = await asyncio.gather(
+        ix, papers, founder_data, links, media, team, backers, voices, bounties = await asyncio.gather(
             self._fetch_interaction_data(db, [product.id], current_user),
             self.repo.get_papers_for_product(db, product.id),
             self.repo.get_founder_summary(db, product.created_by_id),
+            self.link_repo.get_by_product_id(db, product.id),
+            self.media_repo.get_by_product_id(db, product.id),
+            self.team_repo.get_by_product_id(db, product.id, status=VerificationStatus.APPROVED),
+            self.backer_repo.get_by_product_id(db, product.id),
+            self.voice_repo.get_by_product_id(db, product.id),
+            self.bounty_repo.get_by_product_id(db, product.id),
         )
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
@@ -661,6 +667,12 @@ class ProductService:
         result.investor_interest_count = ix.investor_interest_counts[product.id]
         result.papers = [PaperSummarySchema.model_validate(p, from_attributes=True) for p in papers]
         result.founder = FounderSummarySchema(**founder_data) if founder_data else None
+        result.links = [ProductLinkOutSchema.model_validate(l, from_attributes=True) for l in links]
+        result.media = [ProductMediaOutSchema.model_validate(m, from_attributes=True) for m in media]
+        result.team = [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in team]
+        result.backers = [ProductBackerOutSchema.model_validate(b, from_attributes=True) for b in backers]
+        result.voices = [ProductVoiceOutSchema.model_validate(v, from_attributes=True) for v in voices]
+        result.bounties = [BountyOutSchema.model_validate(b, from_attributes=True) for b in bounties]
         if current_user:
             result.voted = product.id in ix.user_votes
             result.bookmarked = product.id in ix.user_bookmarks
