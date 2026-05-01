@@ -4,7 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_db, require_admin_user
 from app.api.dependencies.services import get_category_service
 from app.core.config import settings
-from app.domain.category.schema import CategoryCreateSchema, CategoryOutSchema, CategoryUpdateSchema
+from app.domain.category.schema import (
+    CategoryCreateSchema,
+    CategoryOutSchema,
+    CategoryUpdateSchema,
+)
 from app.domain.category.service import CategoryService
 from app.domain.user.schema import UserOutSchema
 from app.middleware.rate_limiter import limiter
@@ -30,10 +34,11 @@ async def list_categories(
     request: Request,
     limit: int = 50,
     offset: int = 0,
+    parent_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     service: CategoryService = Depends(get_category_service),
 ):
-    return await service.list(db, limit=limit, offset=offset)
+    return await service.list(db, limit=limit, offset=offset, parent_id=parent_id)
 
 
 @router.get("/{category_id}", response_model=CategoryOutSchema)

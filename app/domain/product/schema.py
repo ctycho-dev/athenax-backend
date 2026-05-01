@@ -1,8 +1,7 @@
-import json
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from app.common.schema import CamelModel
 from app.domain.paper.schema import PaperSummarySchema
@@ -14,6 +13,7 @@ from app.enums.enums import (
 
 class ProductCreateSchema(CamelModel):
     name: str = Field(max_length=150)
+    url: str | None = Field(default=None, max_length=500)
     short_desc: str | None = Field(default=None, max_length=150)
     description: str | None = None
     stage: ProductStage | None = None
@@ -23,9 +23,9 @@ class ProductCreateSchema(CamelModel):
     imported: bool = False
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
-    twitter: str | None = Field(default=None, max_length=200)
-    founders: list[str] = Field(default_factory=list)
+    backers: list[str] = Field(default_factory=list)
     category_ids: list[int] = Field(default_factory=list)
+    sub_category_ids: list[int] = Field(default_factory=list)
 
 
 class ProductUpdateSchema(CamelModel):
@@ -39,9 +39,8 @@ class ProductUpdateSchema(CamelModel):
     imported: bool | None = None
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
-    twitter: str | None = Field(default=None, max_length=200)
-    founders: list[str] | None = None
     category_ids: list[int] | None = None
+    sub_category_ids: list[int] | None = None
 
 
 class ProductBaseSchema(CamelModel):
@@ -57,27 +56,15 @@ class ProductBaseSchema(CamelModel):
     imported: bool
     logo: str | None
     email: str | None
-    twitter: str | None
-    founders: list[str] = Field(default_factory=list)
     status: ProductStatus
     vote_count: int = 0
     bookmark_count: int = 0
     investor_interest_count: int = 0
     category_ids: list[int] = Field(default_factory=list)
+    sub_category_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     created_by_id: int | None
-
-    @field_validator("founders", mode="before")
-    @classmethod
-    def parse_founders(cls, v):
-        if isinstance(v, str):
-            try:
-                parsed = json.loads(v)
-                return parsed if isinstance(parsed, list) else []
-            except (json.JSONDecodeError, ValueError):
-                return []
-        return v or []
 
 
 class ProductSummarySchema(CamelModel):
