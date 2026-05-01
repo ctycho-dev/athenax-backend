@@ -12,3 +12,4 @@ class CategoryUpdateSchema(CamelModel):
 class CategoryOutSchema(CamelModel):
     id: int
     name: str
+    parent_id: int | None = None

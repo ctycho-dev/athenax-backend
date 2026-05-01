@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.category.model import Category
@@ -20,8 +23,18 @@ class CategoryService:
         await db.commit()
         return result
 
-    async def list(self, db: AsyncSession, limit: int, offset: int) -> list[Category]:
-        return await self.repo.get_all(db, limit=limit, offset=offset)
+    async def list(self, db: AsyncSession, limit: int, offset: int, parent_id: int | None = None) -> list[Category]:
+        if parent_id is not None:
+            await self.repo.get_by_id(db, parent_id)
+            return await self.repo.get_children(db, parent_id)
+        result = await db.execute(
+            select(Category)
+            .where(Category.parent_id.is_(None))
+            .order_by(Category.name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
 
     async def get_by_id(self, db: AsyncSession, category_id: int) -> Category:
         return await self.repo.get_by_id(db, category_id)
@@ -45,3 +58,4 @@ class CategoryService:
     ) -> None:
         await self.repo.delete_by_id(db, category_id)
         await db.commit()
+

@@ -35,15 +35,15 @@ start-build:
 dev:
 	$(COMPOSE) up -d postgres redis
 	"$(PYTHON)" -m venv .venv
-	.venv/bin/python -m pip install --upgrade pip setuptools wheel
-	.venv/bin/pip install -e .
+	".venv/bin/python" -m pip install --upgrade pip setuptools wheel
+	".venv/bin/python" -m pip install -e .
 	@_port=$${PORT:-8000}; \
 	if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:$$_port -sTCP:LISTEN >/dev/null 2>&1; then \
 		echo "Port $$_port is already in use. Stop the existing local app before running 'make dev'."; \
 		lsof -nP -iTCP:$$_port -sTCP:LISTEN; \
 		exit 1; \
 	fi
-	RUN_MODE=dev PORT=$${PORT:-8000} HOST=0.0.0.0 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload
+	RUN_MODE=dev PORT=$${PORT:-8000} HOST=0.0.0.0 ".venv/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload
 
 recreate:
 	$(COMPOSE) up -d --force-recreate $(APP_SERVICE)
@@ -60,7 +60,7 @@ migrate:
 
 test:
 	$(COMPOSE) --profile test up -d postgres-test
-	.venv/bin/pytest
+	".venv/bin/python" -m pytest
 
 check-head:
 	$(COMPOSE) up -d postgres redis

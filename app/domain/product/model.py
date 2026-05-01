@@ -90,8 +90,6 @@ class Product(Base, TimestampMixin, UserAuditMixin):
     quality_badge: Mapped[str | None] = mapped_column(String(50), nullable=True)
     imported: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     email: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    twitter: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    founders: Mapped[str | None] = mapped_column(Text, nullable=True)
     logo: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[ProductStatus] = mapped_column(
         SQLEnum(ProductStatus, name="product_status", values_callable=lambda x: [e.value for e in x]),

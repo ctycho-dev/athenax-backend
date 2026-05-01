@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -116,16 +115,32 @@ class ProductService:
     ) -> ProductOutSchema:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
-
-        founders = payload.get("founders")
-        payload["founders"] = json.dumps(founders) if founders else None
+        sub_category_ids = payload.pop("sub_category_ids", [])
+        url = payload.pop("url", None)
+        backers = payload.pop("backers", [])
 
         payload["created_by_id"] = current_user.id
         payload["slug"] = generate_slug(data.name, max_length=150)
 
         product = await self.repo.create(db, payload, current_user_id=current_user.id)
 
-        await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product.id, category_ids)
+        if sub_category_ids:
+            await self.category_repo.assert_are_subcategories(db, sub_category_ids)
+        await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product.id, category_ids + sub_category_ids)
+
+        if url:
+            await self.link_repo.create(
+                db,
+                {"product_id": product.id, "link_type": "website", "url": url, "label": None},
+                current_user_id=current_user.id,
+            )
+
+        for name in backers:
+            await self.backer_repo.create(
+                db,
+                {"product_id": product.id, "name": name},
+                current_user_id=current_user.id,
+            )
 
         await db.commit()
         await db.refresh(product)
@@ -168,10 +183,12 @@ class ProductService:
         results = []
         for product in products:
             out = ProductListSchema.model_validate(product, from_attributes=True)
+            all_cats = ix.categories_map[product.id]
             out.vote_count = ix.vote_counts[product.id]
             out.bookmark_count = ix.bookmark_counts[product.id]
             out.investor_interest_count = ix.investor_interest_counts[product.id]
-            out.category_ids = [c.id for c in ix.categories_map[product.id]]
+            out.category_ids = [c.id for c in all_cats if c.parent_id is None]
+            out.sub_category_ids = [c.id for c in all_cats if c.parent_id is not None]
             if current_user:
                 out.bookmarked = product.id in ix.user_bookmarks
             results.append(out)
@@ -209,15 +226,19 @@ class ProductService:
 
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
-
-        if "founders" in payload:
-            founders = payload["founders"]
-            payload["founders"] = json.dumps(founders) if founders else None
+        sub_category_ids = payload.pop("sub_category_ids", None)
 
         product = await self.repo.update(db, product_id, payload, current_user_id=current_user.id)
 
-        if category_ids is not None:
-            await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product_id, category_ids)
+        if category_ids is not None or sub_category_ids is not None:
+            existing_cats = await self.repo.get_categories_for_product(db, product_id)
+            existing_parent_ids = [c.id for c in existing_cats if c.parent_id is None]
+            existing_sub_ids = [c.id for c in existing_cats if c.parent_id is not None]
+            new_parent_ids = category_ids if category_ids is not None else existing_parent_ids
+            new_sub_ids = sub_category_ids if sub_category_ids is not None else existing_sub_ids
+            if new_sub_ids:
+                await self.category_repo.assert_are_subcategories(db, new_sub_ids)
+            await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product_id, new_parent_ids + new_sub_ids)
 
         await db.commit()
         await db.refresh(product)
@@ -506,7 +527,10 @@ class ProductService:
         member = await self.team_repo.get_by_id(db, member_id)
         if member.product_id != product_id:
             raise NotFoundError("Team member not found")
-        member = await self.team_repo.update(db, member_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
+        update_data = data.model_dump(exclude_unset=True)
+        if member.status == VerificationStatus.APPROVED:
+            update_data["status"] = VerificationStatus.PENDING
+        member = await self.team_repo.update(db, member_id, update_data, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(member)
         return TeamMemberOutSchema.model_validate(member, from_attributes=True)
@@ -648,19 +672,34 @@ class ProductService:
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
-        ix, papers, founder_data = await asyncio.gather(
+        team_status = None if (current_user and (is_admin(current_user) or is_owner(product, current_user))) else VerificationStatus.APPROVED
+        ix, papers, founder_data, links, media, team, backers, voices, bounties = await asyncio.gather(
             self._fetch_interaction_data(db, [product.id], current_user),
             self.repo.get_papers_for_product(db, product.id),
             self.repo.get_founder_summary(db, product.created_by_id),
+            self.link_repo.get_by_product_id(db, product.id),
+            self.media_repo.get_by_product_id(db, product.id),
+            self.team_repo.get_by_product_id(db, product.id, status=team_status),
+            self.backer_repo.get_by_product_id(db, product.id),
+            self.voice_repo.get_by_product_id(db, product.id),
+            self.bounty_repo.get_by_product_id(db, product.id),
         )
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
-        result.category_ids = [c.id for c in ix.categories_map[product.id]]
+        all_cats = ix.categories_map[product.id]
+        result.category_ids = [c.id for c in all_cats if c.parent_id is None]
+        result.sub_category_ids = [c.id for c in all_cats if c.parent_id is not None]
         result.vote_count = ix.vote_counts[product.id]
         result.bookmark_count = ix.bookmark_counts[product.id]
         result.investor_interest_count = ix.investor_interest_counts[product.id]
         result.papers = [PaperSummarySchema.model_validate(p, from_attributes=True) for p in papers]
         result.founder = FounderSummarySchema(**founder_data) if founder_data else None
+        result.links = [ProductLinkOutSchema.model_validate(l, from_attributes=True) for l in links]
+        result.media = [ProductMediaOutSchema.model_validate(m, from_attributes=True) for m in media]
+        result.team = [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in team]
+        result.backers = [ProductBackerOutSchema.model_validate(b, from_attributes=True) for b in backers]
+        result.voices = [ProductVoiceOutSchema.model_validate(v, from_attributes=True) for v in voices]
+        result.bounties = [BountyOutSchema.model_validate(b, from_attributes=True) for b in bounties]
         if current_user:
             result.voted = product.id in ix.user_votes
             result.bookmarked = product.id in ix.user_bookmarks
