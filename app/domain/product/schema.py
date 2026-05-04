@@ -192,10 +192,9 @@ class ProductMediaUpdateSchema(CamelModel):
 
 class ProductMediaOutSchema(CamelModel):
     id: int
-    product_id: int
     media_type: ProductMediaType
-    storage_key: str
     sort_order: int
+    url: str | None = None
 
 
 # --- Team Members ---

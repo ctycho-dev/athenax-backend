@@ -58,6 +58,16 @@ class ResendConfig(BaseSettings):
     model_config = _cfg("RESEND_")
 
 
+class R2Config(BaseSettings):
+    access_key: str
+    secret_key: str
+    endpoint: str
+    bucket: str
+    cdn_base_url: str
+
+    model_config = _cfg("R2_")
+
+
 class Settings(BaseSettings):
     model_config = _cfg("")
 
@@ -69,6 +79,7 @@ class Settings(BaseSettings):
     redis: RedisConfig = RedisConfig()  # pyright: ignore[reportCallIssue]
     auth: AuthConfig = AuthConfig()  # pyright: ignore[reportCallIssue]
     resend: ResendConfig = ResendConfig()  # pyright: ignore[reportCallIssue]
+    r2: R2Config = R2Config()  # pyright: ignore[reportCallIssue]
 
     @property
     def email_verify_url(self) -> str:

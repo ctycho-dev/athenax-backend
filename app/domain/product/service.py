@@ -39,9 +39,12 @@ from app.domain.product.schema import (
     ProductVoiceCreateSchema, ProductVoiceUpdateSchema, ProductVoiceOutSchema,
     BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
+from fastapi import UploadFile
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStatus, VerificationStatus
-from app.exceptions.exceptions import NotFoundError
+from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, VerificationStatus
+from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
+from app.core.config import settings
 from app.utils.slug import generate_slug
 
 
@@ -460,12 +463,18 @@ class ProductService:
     # Product Media
     # -------------------------
 
+    @staticmethod
+    def _to_media_schema(media) -> ProductMediaOutSchema:
+        out = ProductMediaOutSchema.model_validate(media, from_attributes=True)
+        out.url = f"{settings.r2.cdn_base_url.rstrip('/')}/{media.storage_key}"
+        return out
+
     async def list_media(
         self, db: AsyncSession, product_id: int
     ) -> list[ProductMediaOutSchema]:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
         media = await self.media_repo.get_by_product_id(db, product_id)
-        return [ProductMediaOutSchema.model_validate(m, from_attributes=True) for m in media]
+        return [self._to_media_schema(m) for m in media]
 
     async def create_media(
         self, db: AsyncSession, product_id: int, data: ProductMediaCreateSchema, current_user: UserOutSchema
@@ -474,7 +483,7 @@ class ProductService:
         media = await self.media_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(media)
-        return ProductMediaOutSchema.model_validate(media, from_attributes=True)
+        return self._to_media_schema(media)
 
     async def update_media(
         self, db: AsyncSession, product_id: int, media_id: int, data: ProductMediaUpdateSchema, current_user: UserOutSchema
@@ -485,7 +494,7 @@ class ProductService:
         media = await self.media_repo.update(db, media_id, data.model_dump(exclude_unset=True), current_user_id=current_user.id)
         await db.commit()
         await db.refresh(media)
-        return ProductMediaOutSchema.model_validate(media, from_attributes=True)
+        return self._to_media_schema(media)
 
     async def delete_media(
         self, db: AsyncSession, product_id: int, media_id: int, current_user: UserOutSchema
@@ -495,6 +504,49 @@ class ProductService:
             raise NotFoundError("Media not found")
         await self.media_repo.delete_by_id(db, media_id)
         await db.commit()
+
+    async def upload_media(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        file: UploadFile,
+        sort_order: int | None,
+        current_user: UserOutSchema,
+        storage: R2StorageService,
+    ) -> ProductMediaOutSchema:
+        await self.repo.get_by_id(db, product_id)
+
+        if file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise ValidationError(
+                f"Unsupported file type '{file.content_type}'. "
+                f"Allowed: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}"
+            )
+
+        data = await file.read()
+        if len(data) > MAX_FILE_SIZE_BYTES:
+            raise ValidationError(f"File too large. Maximum size is {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB.")
+
+        if sort_order is None:
+            sort_order = await self.media_repo.get_max_sort_order(db, product_id) + 10
+
+        key = storage.build_storage_key(product_id, file.filename or "upload")
+
+        # Upload to R2 first — only write to DB if it succeeds
+        await storage.upload_file(key=key, data=data, content_type=file.content_type)
+
+        media = await self.media_repo.create(
+            db,
+            {
+                "product_id": product_id,
+                "media_type": ProductMediaType.IMAGE,
+                "storage_key": key,
+                "sort_order": sort_order,
+            },
+            current_user_id=current_user.id,
+        )
+        await db.commit()
+        await db.refresh(media)
+        return self._to_media_schema(media)
 
     # -------------------------
     # Product Team
@@ -673,16 +725,18 @@ class ProductService:
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
         team_status = None if (current_user and (is_admin(current_user) or is_owner(product, current_user))) else VerificationStatus.APPROVED
-        ix, papers, founder_data, links, media, team, backers, voices, bounties = await asyncio.gather(
+        ix, founder_data, (papers, links, media, team, backers, voices, bounties) = await asyncio.gather(
             self._fetch_interaction_data(db, [product.id], current_user),
-            self.repo.get_papers_for_product(db, product.id),
             self.repo.get_founder_summary(db, product.created_by_id),
-            self.link_repo.get_by_product_id(db, product.id),
-            self.media_repo.get_by_product_id(db, product.id),
-            self.team_repo.get_by_product_id(db, product.id, status=team_status),
-            self.backer_repo.get_by_product_id(db, product.id),
-            self.voice_repo.get_by_product_id(db, product.id),
-            self.bounty_repo.get_by_product_id(db, product.id),
+            asyncio.gather(
+                self.repo.get_papers_for_product(db, product.id),
+                self.link_repo.get_by_product_id(db, product.id),
+                self.media_repo.get_by_product_id(db, product.id),
+                self.team_repo.get_by_product_id(db, product.id, status=team_status),
+                self.backer_repo.get_by_product_id(db, product.id),
+                self.voice_repo.get_by_product_id(db, product.id),
+                self.bounty_repo.get_by_product_id(db, product.id),
+            ),
         )
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
@@ -693,9 +747,9 @@ class ProductService:
         result.bookmark_count = ix.bookmark_counts[product.id]
         result.investor_interest_count = ix.investor_interest_counts[product.id]
         result.papers = [PaperSummarySchema.model_validate(p, from_attributes=True) for p in papers]
-        result.founder = FounderSummarySchema(**founder_data) if founder_data else None
+        result.founder = FounderSummarySchema.model_validate(founder_data) if founder_data else None
         result.links = [ProductLinkOutSchema.model_validate(l, from_attributes=True) for l in links]
-        result.media = [ProductMediaOutSchema.model_validate(m, from_attributes=True) for m in media]
+        result.media = [self._to_media_schema(m) for m in media]
         result.team = [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in team]
         result.backers = [ProductBackerOutSchema.model_validate(b, from_attributes=True) for b in backers]
         result.voices = [ProductVoiceOutSchema.model_validate(v, from_attributes=True) for v in voices]
