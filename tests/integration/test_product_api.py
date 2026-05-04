@@ -9,6 +9,7 @@ from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
+from app.api.dependencies.services import get_storage_service
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
@@ -980,6 +981,156 @@ class TestProductAPI:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 204
+
+    # ------------------------------------------------------------------
+    # Media upload
+    # ------------------------------------------------------------------
+
+    async def test_admin_can_upload_media(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        uploaded: list[dict] = []
+
+        class FakeStorage:
+            def build_storage_key(self, product_id: int, filename: str) -> str:
+                return f"products/{product_id}/abc_{filename}"
+
+            async def upload_file(self, key: str, data: bytes, content_type: str) -> None:
+                uploaded.append({"key": key, "content_type": content_type})
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        app.dependency_overrides[get_storage_service] = lambda: FakeStorage()
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/media/upload",
+                files={"file": ("hero.jpg", b"fake-image-bytes", "image/jpeg")},
+                data={"sort_order": "10"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+            app.dependency_overrides.pop(get_storage_service, None)
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["storageKey"] == f"products/{product_id}/abc_hero.jpg"
+        assert data["sortOrder"] == 10
+        assert data["mediaType"] == "image"
+        assert len(uploaded) == 1
+        assert uploaded[0]["content_type"] == "image/jpeg"
+
+    async def test_non_admin_cannot_upload_media(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/media/upload",
+                files={"file": ("hero.jpg", b"fake-image-bytes", "image/jpeg")},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
+
+    async def test_upload_media_rejects_unsupported_type(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        class FakeStorage:
+            def build_storage_key(self, product_id: int, filename: str) -> str:
+                return f"products/{product_id}/abc_{filename}"
+
+            async def upload_file(self, key: str, data: bytes, content_type: str) -> None:
+                pass
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        app.dependency_overrides[get_storage_service] = lambda: FakeStorage()
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/media/upload",
+                files={"file": ("doc.pdf", b"fake-pdf-bytes", "application/pdf")},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+            app.dependency_overrides.pop(get_storage_service, None)
+
+        assert response.status_code == 400
+
+    async def test_upload_media_auto_increments_sort_order(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        class FakeStorage:
+            def build_storage_key(self, product_id: int, filename: str) -> str:
+                return f"products/{product_id}/abc_{filename}"
+
+            async def upload_file(self, key: str, data: bytes, content_type: str) -> None:
+                pass
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        app.dependency_overrides[get_storage_service] = lambda: FakeStorage()
+        try:
+            r1 = await client.post(
+                f"/api/v1/product/{product_id}/media/upload",
+                files={"file": ("a.jpg", b"img", "image/jpeg")},
+            )
+            r2 = await client.post(
+                f"/api/v1/product/{product_id}/media/upload",
+                files={"file": ("b.jpg", b"img", "image/jpeg")},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+            app.dependency_overrides.pop(get_storage_service, None)
+
+        assert r1.status_code == 201
+        assert r2.status_code == 201
+        assert r1.json()["sortOrder"] == 10
+        assert r2.json()["sortOrder"] == 20
+
+    async def test_non_admin_cannot_update_media_sort_order(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/media",
+                json={"mediaType": "image", "storageKey": "uploads/img.png", "sortOrder": 0},
+            )
+            media_id = create_resp.json()["id"]
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/media/{media_id}",
+                json={"sortOrder": 99},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 403
 
     # ------------------------------------------------------------------
     # Team

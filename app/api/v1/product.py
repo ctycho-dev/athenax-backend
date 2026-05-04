@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -6,7 +6,9 @@ from app.api.dependencies import (
     get_db,
     get_product_service,
 )
-from app.api.dependencies.auth import get_optional_user, require_admin_user, require_founder_or_admin, require_investor_user
+from app.api.dependencies.services import get_storage_service
+from app.common.storage import R2StorageService
+from app.api.dependencies.auth import get_optional_user, require_admin_user, require_investor_user
 from app.common.schema import PaginatedSchema
 from app.core.config import settings
 from app.domain.product.schema import (
@@ -371,6 +373,28 @@ async def create_media(
     service: ProductService = Depends(get_product_service),
 ):
     return await service.create_media(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.post("/{product_id}/media/upload", status_code=status.HTTP_201_CREATED, response_model=ProductMediaOutSchema)
+@limiter.limit("10/minute")
+async def upload_media(
+    request: Request,
+    product_id: int,
+    file: UploadFile = File(...),
+    sort_order: int | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
+):
+    return await service.upload_media(
+        db,
+        product_id=product_id,
+        file=file,
+        sort_order=sort_order,
+        current_user=current_user,
+        storage=storage,
+    )
 
 
 @router.patch("/{product_id}/media/{media_id}", response_model=ProductMediaOutSchema)

@@ -22,6 +22,7 @@ from app.domain.product.repository import (
     ProductBackerRepository, ProductVoiceRepository, BountyRepository,
 )
 from app.domain.product.service import ProductService
+from app.common.storage import R2StorageService
 
 
 # -------------------------
@@ -147,6 +148,10 @@ def get_paper_service(
     category_repo: CategoryRepository = Depends(get_category_repo),
 ) -> PaperService:
     return PaperService(repo=repo, category_repo=category_repo)
+
+
+def get_storage_service() -> R2StorageService:
+    return R2StorageService()
 
 
 def get_product_service(

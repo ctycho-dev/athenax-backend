@@ -76,6 +76,13 @@ class ProductMediaRepository(BaseRepository[ProductMedia]):
         )
         return list(result.scalars().all())
 
+    async def get_max_sort_order(self, db: AsyncSession, product_id: int) -> int:
+        result = await db.execute(
+            select(func.max(ProductMedia.sort_order))
+            .where(ProductMedia.product_id == product_id)
+        )
+        return result.scalar_one_or_none() or 0
+
 
 class ProductTeamRepository(BaseRepository[ProductTeamMember]):
     def __init__(self) -> None:

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Comments
+
+Add a short inline comment when the WHY is non-obvious — e.g. a discarded return value that exists only to trigger a side effect like raising `NotFoundError`. One line max.
+
 ## Commands
 
 ```bash
@@ -98,6 +102,14 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 
 - Wire `limit`/`offset` all the way: `Query` param → service arg → `repo.get_all()`.
 - Defaults (`limit=50`, `offset=0`) belong only in the endpoint — service and repo take plain `int`.
+
+### File Upload / R2 Storage
+
+- `R2StorageService` (`app/common/storage.py`) — inject via `get_storage_service()`, pass as method arg not constructor.
+- Upload order: validate → upload R2 → insert DB row → commit. R2 failure raises 502 before any DB write.
+- Store `storage_key` in DB; compute full URL in service via `settings.r2.cdn_base_url`.
+- `sort_order`: query `get_max_sort_order()` + 10 when not provided (spaced integers: 10, 20, 30…).
+- R2 env vars: `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_CDN_BASE_URL`.
 
 ### Testing Patterns
 
