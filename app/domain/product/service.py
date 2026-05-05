@@ -119,8 +119,19 @@ class ProductService:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
         sub_category_ids = payload.pop("sub_category_ids", [])
+        other_subcategory_name = payload.pop("other_subcategory_name", None)
         url = payload.pop("url", None)
         backers = payload.pop("backers", [])
+
+        if other_subcategory_name:
+            if not category_ids:
+                raise ValidationError("A parent category is required when specifying a custom sub-category")
+            new_sub = await self.category_repo.create(
+                db,
+                {"name": other_subcategory_name, "parent_id": category_ids[0], "status": VerificationStatus.PENDING.value},
+                current_user_id=current_user.id,
+            )
+            sub_category_ids = [new_sub.id]
 
         payload["created_by_id"] = current_user.id
         payload["slug"] = generate_slug(data.name, max_length=150)
@@ -409,6 +420,11 @@ class ProductService:
         data: ProductStatusUpdateSchema,
         current_user: UserOutSchema,
     ) -> ProductOutSchema:
+        if data.status == ProductStatus.APPROVED:
+            all_cats = await self.repo.get_categories_for_product(db, product_id)
+            for cat in all_cats:
+                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value:
+                    await self.category_repo.update_instance(db, cat, {"status": VerificationStatus.APPROVED.value})
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)
@@ -742,7 +758,9 @@ class ProductService:
         result = ProductOutSchema.model_validate(product, from_attributes=True)
         all_cats = ix.categories_map[product.id]
         result.category_ids = [c.id for c in all_cats if c.parent_id is None]
-        result.sub_category_ids = [c.id for c in all_cats if c.parent_id is not None]
+        result.sub_category_ids = [c.id for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.APPROVED.value]
+        pending_subs = [c for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.PENDING.value]
+        result.pending_subcategory_name = pending_subs[0].name if pending_subs else None
         result.vote_count = ix.vote_counts[product.id]
         result.bookmark_count = ix.bookmark_counts[product.id]
         result.investor_interest_count = ix.investor_interest_counts[product.id]

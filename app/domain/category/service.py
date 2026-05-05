@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.category.model import Category
 from app.domain.category.repository import CategoryRepository
-from app.domain.category.schema import CategoryCreateSchema, CategoryUpdateSchema
+from app.domain.category.schema import CategoryCreateSchema, CategoryStatusUpdateSchema, CategoryUpdateSchema
 from app.domain.user.schema import UserOutSchema
+from app.enums.enums import VerificationStatus
 
 
 class CategoryService:
@@ -29,12 +30,25 @@ class CategoryService:
             return await self.repo.get_children(db, parent_id)
         result = await db.execute(
             select(Category)
-            .where(Category.parent_id.is_(None))
+            .where(Category.parent_id.is_(None), Category.status == VerificationStatus.APPROVED.value)
             .order_by(Category.name.asc())
             .limit(limit)
             .offset(offset)
         )
         return list(result.scalars().all())
+
+    async def update_status(
+        self,
+        db: AsyncSession,
+        category_id: int,
+        data: CategoryStatusUpdateSchema,
+        current_user: UserOutSchema,
+    ) -> Category:
+        category = await self.repo.get_by_id(db, category_id)
+        await self.repo.update_instance(db, category, {"status": data.status.value})
+        await db.commit()
+        await db.refresh(category)
+        return category
 
     async def get_by_id(self, db: AsyncSession, category_id: int) -> Category:
         return await self.repo.get_by_id(db, category_id)
