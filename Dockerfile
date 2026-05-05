@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY uv.lock pyproject.toml ./
 
 RUN uv venv /opt/venv && \
-    uv sync --locked --no-dev --active
+    uv sync --no-dev --active
 
 
 FROM python:3.13-slim
