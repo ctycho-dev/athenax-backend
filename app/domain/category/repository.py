@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
 from app.domain.category.model import Category
+from app.enums.enums import VerificationStatus
 from app.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -12,7 +13,9 @@ class CategoryRepository(BaseRepository[Category]):
 
     async def get_children(self, db: AsyncSession, parent_id: int) -> list[Category]:
         result = await db.execute(
-            select(Category).where(Category.parent_id == parent_id).order_by(Category.name.asc())
+            select(Category)
+            .where(Category.parent_id == parent_id, Category.status == VerificationStatus.APPROVED.value)
+            .order_by(Category.name.asc())
         )
         return list(result.scalars().all())
 

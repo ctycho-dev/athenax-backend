@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.audit_mixin import TimestampMixin
 from app.database.connection import Base
+from app.enums.enums import VerificationStatus
 
 
 class Category(Base, TimestampMixin):
@@ -15,3 +16,4 @@ class Category(Base, TimestampMixin):
     parent_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=True
     )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=VerificationStatus.APPROVED.value)

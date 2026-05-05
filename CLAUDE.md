@@ -75,6 +75,16 @@ JWT tokens signed with `SECRET_KEY` and stored in HTTP-only cookies. `get_curren
 - Repositories only `flush()` + `refresh()`, never `commit()`.
 - Multi-step atomic ops (e.g. `signup_user`) must call internal helpers (e.g. `_upsert_profile`) directly, not the public service methods which each commit independently.
 
+### Migrations
+
+After any ORM model change (new column, new table, renamed field, changed type), always run:
+
+```bash
+make revision MSG='describe the change'
+```
+
+Never write migration files by hand — always use Alembic autogenerate. Run `make migrate` afterward to apply.
+
 ### Domain / Model Rules
 
 - `Category` lives in `category/model.py`; `lab_category` association table stays in `lab/model.py`.

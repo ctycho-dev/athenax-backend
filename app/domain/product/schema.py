@@ -26,6 +26,7 @@ class ProductCreateSchema(CamelModel):
     backers: list[str] = Field(default_factory=list)
     category_ids: list[int] = Field(default_factory=list)
     sub_category_ids: list[int] = Field(default_factory=list)
+    other_subcategory_name: str | None = Field(default=None, max_length=100)
 
 
 class ProductUpdateSchema(CamelModel):
@@ -62,6 +63,7 @@ class ProductBaseSchema(CamelModel):
     investor_interest_count: int = 0
     category_ids: list[int] = Field(default_factory=list)
     sub_category_ids: list[int] = Field(default_factory=list)
+    pending_subcategory_name: str | None = None
     created_at: datetime
     updated_at: datetime
     created_by_id: int | None
