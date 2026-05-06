@@ -128,6 +128,7 @@ class ToggleOutSchema(CamelModel):
 
 class CommentCreateSchema(CamelModel):
     text: str
+    parent_id: int | None = None
 
 
 class CommentUpdateSchema(CamelModel):
@@ -137,11 +138,14 @@ class CommentUpdateSchema(CamelModel):
 class CommentOutSchema(CamelModel):
     id: int
     product_id: int
+    parent_id: int | None
+    depth: int = 0
     text: str
     pinned: bool
     created_at: datetime
     updated_at: datetime
     created_by_id: int
+    username: str | None = None
 
 
 class CommentPinSchema(CamelModel):
