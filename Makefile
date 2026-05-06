@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -23,6 +23,7 @@ help:
 	@echo "  make current                Show current migration version"
 	@echo "  make history                Show migration history"
 	@echo "  make seed                   Seed the database with initial data"
+	@echo "  make seed:categories        Seed only parent categories and subcategories from Categories.csv"
 
 start:
 	$(COMPOSE) up -d
@@ -106,3 +107,7 @@ history:
 seed:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed.py
+
+seed\:categories:
+	$(COMPOSE) up -d postgres redis
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed_categories.py

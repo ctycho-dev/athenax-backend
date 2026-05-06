@@ -74,3 +74,4 @@ alembic/versions/*.pyc
 
 # Data files
 *Projects.csv
+*Categories.csv
