@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CSV_PATH = Path(__file__).parent.parent / "Projects.csv"
+CATEGORIES_CSV_PATH = Path(__file__).parent.parent / "Categories.csv"
 
 CATEGORIES: list[str] = [
     "AI & Agents",
@@ -45,6 +46,25 @@ CATEGORIES: list[str] = [
 CATEGORY_ALIASES: dict[str, str] = {
     "Crypto": "Crypto & DeFi",
 }
+
+
+def _load_category_tree() -> dict[str, list[str]]:
+    """
+    Parse Categories.csv and return {parent_name: [sub_name, ...]} ordered dict.
+    Parents with no subcategories are included with an empty list.
+    """
+    tree: dict[str, list[str]] = {}
+    with open(CATEGORIES_CSV_PATH, newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            parent = row.get("Category", "").strip()
+            sub = row.get("Sub-Category", "").strip()
+            if not parent:
+                continue
+            if parent not in tree:
+                tree[parent] = []
+            if sub and sub not in tree[parent]:
+                tree[parent].append(sub)
+    return tree
 
 
 def _load_csv() -> list[dict]:
@@ -184,14 +204,72 @@ async def upsert_simple(
 # ---------------------------------------------------------------------------
 
 async def seed_categories(session: AsyncSession) -> dict[str, int]:
-    return await upsert_simple(
-        session,
-        name_col=Category.name,
-        id_col=Category.id,
-        names=CATEGORIES,
-        build=lambda name: Category(name=name),
-        label="categories",
+    """
+    Seed parent categories then their subcategories from Categories.csv.
+
+    Returns a flat {name: id} map covering parents and all subcategories so
+    downstream product/lab seeding can look up either level by name.
+    """
+    tree = _load_category_tree()
+
+    # Merge CSV parents with the hard-coded list so parents not in the CSV
+    # (e.g. "Climate & Energy") are still created.
+    all_parents = list(dict.fromkeys(list(tree.keys()) + CATEGORIES))
+
+    # --- Pass 1: parents (parent_id IS NULL) ---
+    result = await session.execute(
+        select(Category.id, Category.name).where(Category.parent_id.is_(None))
     )
+    existing_parents: dict[str, int] = {name: row_id for row_id, name in result.all()}
+
+    new_parents = [n for n in all_parents if n not in existing_parents]
+    if new_parents:
+        for name in new_parents:
+            session.add(Category(name=name))
+        await session.flush()
+        rows = await session.execute(
+            select(Category.id, Category.name).where(Category.name.in_(new_parents), Category.parent_id.is_(None))
+        )
+        existing_parents.update({name: row_id for row_id, name in rows.all()})
+        log.info("  [categories] seeded %d parents: %s", len(new_parents), new_parents)
+    else:
+        log.info("  [categories] all parents present, skipping")
+
+    # --- Pass 2: subcategories ---
+    result = await session.execute(
+        select(Category.id, Category.name, Category.parent_id).where(Category.parent_id.is_not(None))
+    )
+    existing_subs: dict[tuple[str, int], int] = {}  # (name, parent_id) → id
+    for row_id, name, parent_id in result.all():
+        existing_subs[(name, parent_id)] = row_id
+
+    new_subs: list[tuple[str, int]] = []  # (sub_name, parent_id)
+    for parent_name, sub_names in tree.items():
+        parent_id = existing_parents.get(parent_name)
+        if parent_id is None:
+            log.warning("  [categories] parent %r not found, skipping its subcategories", parent_name)
+            continue
+        for sub_name in sub_names:
+            if (sub_name, parent_id) not in existing_subs:
+                new_subs.append((sub_name, parent_id))
+
+    if new_subs:
+        for sub_name, parent_id in new_subs:
+            session.add(Category(name=sub_name, parent_id=parent_id))
+        await session.flush()
+        rows = await session.execute(
+            select(Category.id, Category.name, Category.parent_id).where(Category.parent_id.is_not(None))
+        )
+        for row_id, name, parent_id in rows.all():
+            existing_subs[(name, parent_id)] = row_id
+        log.info("  [categories] seeded %d subcategories", len(new_subs))
+    else:
+        log.info("  [categories] all subcategories present, skipping")
+
+    # Build flat name → id map (parents take precedence for name collisions)
+    name_to_id: dict[str, int] = {name: row_id for (name, _), row_id in existing_subs.items()}
+    name_to_id.update(existing_parents)
+    return name_to_id
 
 
 async def seed_universities(session: AsyncSession) -> dict[str, int]:
