@@ -27,10 +27,15 @@ class InvestorType(str, Enum):
 
 class ProductStage(str, Enum):
     """Funding stage for products."""
-    PRE_SEED = "Pre-Seed"
-    SEED = "Seed"
-    SERIES_A = "Series A"
-    SERIES_B = "Series B"
+    PRE_SEED          = "Pre-Seed"
+    SEED              = "Seed"
+    SERIES_A          = "Series A"
+    SERIES_B          = "Series B"
+    LAUNCHED           = "Launched"
+    BETA               = "Beta"
+    ACTIVE             = "Active"
+    ACTIVE_DEVELOPMENT = "Active Development"
+    ACQUIRED           = "Acquired / Operating"
 
 
 class VerificationStatus(str, Enum):
@@ -80,6 +85,7 @@ class ProductLinkType(str, Enum):
     DOCS    = "docs"
     DEMO    = "demo"
     DISCORD = "discord"
+    OTHER    = "other"
 
 
 class ProductMediaType(str, Enum):

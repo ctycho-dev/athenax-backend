@@ -229,8 +229,10 @@ class TeamMemberOutSchema(CamelModel):
     name: str
     role_label: str | None
     bio_note: str | None
+    linkedin_url: str | None
     twitter_url: str | None
     github_url: str | None
+    other_url: str | None
     status: VerificationStatus
 
 

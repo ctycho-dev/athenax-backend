@@ -154,8 +154,10 @@ class ProductTeamMember(Base, TimestampMixin, UserAuditMixin):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     role_label: Mapped[str | None] = mapped_column(String(150), nullable=True)
     bio_note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    linkedin_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     twitter_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     github_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    other_url: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[VerificationStatus] = mapped_column(
         SQLEnum(VerificationStatus, name="team_member_status", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
