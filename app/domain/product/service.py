@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.db_utils import sync_categories
 from app.common.permissions import assert_can_modify, is_admin, is_owner
 from app.common.schema import PaginatedSchema
+from app.domain.product.model import ProductComment
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
 from app.domain.product.repository import (
@@ -40,12 +41,18 @@ from app.domain.product.schema import (
     BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
 from fastapi import UploadFile
+from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, VerificationStatus
 from app.exceptions.exceptions import NotFoundError, ValidationError
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
 from app.core.config import settings
 from app.utils.slug import generate_slug
+
+
+# Helper to determine comment depth based on path (e.g. "1.5.7" -> depth 2)
+def _path_depth(path: str | None) -> int:
+    return len(path.split(".")) - 1 if path else 0
 
 
 @dataclass
@@ -71,6 +78,7 @@ class ProductService:
         backer_repo: ProductBackerRepository,
         voice_repo: ProductVoiceRepository,
         bounty_repo: BountyRepository,
+        user_repo: UserRepository | None = None,
     ):
         self.repo = repo
         self.category_repo = category_repo
@@ -81,6 +89,7 @@ class ProductService:
         self.backer_repo = backer_repo
         self.voice_repo = voice_repo
         self.bounty_repo = bounty_repo
+        self.user_repo = user_repo or UserRepository()
 
     async def _fetch_interaction_data(
         self,
@@ -349,10 +358,22 @@ class ProductService:
 
     async def list_comments(
         self, db: AsyncSession, product_id: int, limit: int, offset: int
-    ) -> list[CommentOutSchema]:
+    ) -> PaginatedSchema[CommentOutSchema]:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        comments = await self.comment_repo.get_by_product(db, product_id, limit, offset)
-        return [CommentOutSchema.model_validate(c, from_attributes=True) for c in comments]
+        comments, total = await asyncio.gather(
+            self.comment_repo.get_by_product(db, product_id, limit, offset),
+            self.comment_repo.count_root_comments(db, product_id),
+        )
+        user_ids = list({c.created_by_id for c in comments if c.created_by_id is not None})
+        users_map = await self.user_repo.get_by_ids(db, user_ids)
+        items = []
+        for c in comments:
+            out = CommentOutSchema.model_validate(c, from_attributes=True)
+            out.depth = _path_depth(c.path)
+            user = users_map.get(c.created_by_id) if c.created_by_id is not None else None
+            out.username = user.name if user else None
+            items.append(out)
+        return PaginatedSchema(items=items, total=total)
 
     async def create_comment(
         self,
@@ -362,9 +383,29 @@ class ProductService:
         current_user: UserOutSchema,
     ) -> CommentOutSchema:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
-        comment = await self.comment_repo.create(db, {"product_id": product_id, "created_by_id": current_user.id, "text": data.text})
+
+        parent = None
+        if data.parent_id is not None:
+            parent = await self.comment_repo.get_by_id(db, data.parent_id)
+            if parent.product_id != product_id:
+                raise NotFoundError("Comment not found")
+            if parent.pinned:
+                raise ValidationError("Cannot reply to a pinned comment")
+
+        # Two-step: repo.create() flushes to get the auto-incremented ID, then
+        # we build the path and let commit() persist it in the same transaction.
+        comment = await self.comment_repo.create(
+            db,
+            {"product_id": product_id, "text": data.text, "parent_id": data.parent_id},
+            current_user_id=current_user.id,
+        )
+        comment.path = f"{parent.path}.{comment.id}" if parent else str(comment.id)
         await db.commit()
-        return CommentOutSchema.model_validate(comment, from_attributes=True)
+        await db.refresh(comment)
+
+        out = CommentOutSchema.model_validate(comment, from_attributes=True)
+        out.depth = _path_depth(comment.path)
+        return out
 
     async def update_comment(
         self,
@@ -408,10 +449,14 @@ class ProductService:
         comment = await self.comment_repo.get_by_id(db, comment_id)
         if comment.product_id != product_id:
             raise NotFoundError("Comment not found")
+        if data.pinned and await self.comment_repo.has_descendants(db, comment_id):
+            raise ValidationError("Cannot pin a comment that has replies")
         comment = await self.comment_repo.update_instance(db, comment, {"pinned": data.pinned})
         await db.commit()
         await db.refresh(comment)
-        return CommentOutSchema.model_validate(comment, from_attributes=True)
+        out = CommentOutSchema.model_validate(comment, from_attributes=True)
+        out.depth = _path_depth(comment.path)
+        return out
 
     async def update_status(
         self,

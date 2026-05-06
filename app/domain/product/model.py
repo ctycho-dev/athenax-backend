@@ -1,11 +1,40 @@
 from decimal import Decimal
 
-from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint
+from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint, cast
+from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
 from app.common.audit_mixin import TimestampMixin, UserAuditMixin
 from app.enums.enums import ProductStage, ProductStatus, ProductLinkType, ProductMediaType, VerificationStatus, BountyStatus
+
+
+class LtreeType(UserDefinedType):
+    """PostgreSQL ltree extension type. Stored as ltree in DB, returned as str in Python."""
+    cache_ok = True
+
+    def get_col_spec(self, **kw):
+        return "ltree"
+
+    def bind_expression(self, bindvalue):
+        # Explicitly cast bound params to ltree so asyncpg sends them as text
+        return cast(bindvalue, self)
+
+    def column_expression(self, colexpr):
+        return cast(colexpr, String)
+
+    def bind_processor(self, dialect):
+        def process(value):
+            return str(value) if value is not None else None
+        return process
+
+    def result_processor(self, dialect, coltype):
+        def process(value):
+            return value
+        return process
+
+    def coerce_compared_value(self, op, value):
+        return self
 
 
 class ProductCategory(Base, TimestampMixin):
@@ -61,12 +90,17 @@ class ProductComment(Base, TimestampMixin, UserAuditMixin):
     __table_args__ = (
         Index("ix_product_comments_product_id", "product_id"),
         Index("ix_product_comments_product_created", "product_id", "created_at"),
+        Index("ix_product_comments_path_gist", "path", postgresql_using="gist"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     product_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("product_comments.id", ondelete="CASCADE", name="fk_product_comments_parent"), nullable=True
+    )
+    path: Mapped[str | None] = mapped_column(LtreeType, nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 

@@ -225,12 +225,12 @@ async def toggle_investor_interest(
     return await service.toggle_investor_interest(db, product_id=product_id, toggled=payload.interested, current_user=current_user)
 
 
-@router.get("/{product_id}/comments", response_model=list[CommentOutSchema])
+@router.get("/{product_id}/comments", response_model=PaginatedSchema[CommentOutSchema])
 @limiter.limit("60/minute")
 async def list_comments(
     request: Request,
     product_id: int,
-    limit: int = 50,
+    limit: int = 10,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
     service: ProductService = Depends(get_product_service),

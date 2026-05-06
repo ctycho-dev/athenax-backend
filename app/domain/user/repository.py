@@ -85,6 +85,15 @@ class UserRepository(BaseRepository[User]):
         result = await db.execute(stmt)
         return bool(result.scalar())
 
+    async def get_by_ids(self, db: AsyncSession, ids: list[int]) -> dict[int, User]:
+        if not ids:
+            return {}
+        try:
+            result = await db.execute(select(User).where(User.id.in_(ids)))
+            return {u.id: u for u in result.scalars().all()}
+        except Exception as e:  # pragma: no cover
+            raise DatabaseError(f"Failed to fetch users by ids: {e}") from e
+
     async def get_by_token_hash(
         self, db: AsyncSession, token_hash: str, token_type: TokenType
     ) -> User | None:

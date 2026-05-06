@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,14 +36,65 @@ class CommentRepository(BaseRepository[ProductComment]):
     async def get_by_product(
         self, db: AsyncSession, product_id: int, limit: int, offset: int
     ) -> list[ProductComment]:
-        result = await db.execute(
-            select(ProductComment)
-            .where(ProductComment.product_id == product_id)
+        # Step 1: paginate root comments to determine which threads to load
+        root_result = await db.execute(
+            select(ProductComment.id, ProductComment.path)
+            .where(
+                ProductComment.product_id == product_id,
+                ProductComment.parent_id.is_(None),
+            )
             .order_by(ProductComment.created_at.asc())
             .limit(limit)
             .offset(offset)
         )
+        roots = root_result.all()
+        if not roots:
+            return []
+
+        root_paths = [row.path for row in roots if row.path is not None]
+        if not root_paths:
+            # Paths not yet backfilled — fall back to root-only fetch
+            root_ids = [row.id for row in roots]
+            result = await db.execute(
+                select(ProductComment)
+                .where(
+                    ProductComment.product_id == product_id,
+                    ProductComment.id.in_(root_ids),
+                )
+                .order_by(ProductComment.created_at.asc())
+            )
+            return list(result.scalars().all())
+
+        # Step 2: fetch each root thread (root + all descendants) using ltree <@.
+        # root_paths come from our own DB so interpolation is safe.
+        path_array = "ARRAY[" + ", ".join(f"'{p}'::ltree" for p in root_paths) + "]"
+        result = await db.execute(
+            select(ProductComment)
+            .where(
+                ProductComment.product_id == product_id,
+                text(f"path <@ ANY({path_array})"),
+            )
+            .order_by(ProductComment.created_at.asc())
+        )
         return list(result.scalars().all())
+
+    async def count_root_comments(self, db: AsyncSession, product_id: int) -> int:
+        result = await db.execute(
+            select(func.count())
+            .where(
+                ProductComment.product_id == product_id,
+                ProductComment.parent_id.is_(None),
+            )
+        )
+        return result.scalar_one()
+
+    async def has_descendants(self, db: AsyncSession, comment_id: int) -> bool:
+        result = await db.execute(
+            select(ProductComment.id)
+            .where(ProductComment.parent_id == comment_id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
 
 
