@@ -211,7 +211,7 @@ class ProductService:
             out.bookmark_count = ix.bookmark_counts[product.id]
             out.investor_interest_count = ix.investor_interest_counts[product.id]
             out.category_ids = [c.id for c in all_cats if c.parent_id is None]
-            out.sub_category_ids = [c.id for c in all_cats if c.parent_id is not None]
+            out.sub_categories = [c.name for c in all_cats if c.parent_id is not None]
             if current_user:
                 out.bookmarked = product.id in ix.user_bookmarks
             results.append(out)
@@ -803,7 +803,7 @@ class ProductService:
         result = ProductOutSchema.model_validate(product, from_attributes=True)
         all_cats = ix.categories_map[product.id]
         result.category_ids = [c.id for c in all_cats if c.parent_id is None]
-        result.sub_category_ids = [c.id for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.APPROVED.value]
+        result.sub_categories = [c.name for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.APPROVED.value]
         pending_subs = [c for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.PENDING.value]
         result.pending_subcategory_name = pending_subs[0].name if pending_subs else None
         result.vote_count = ix.vote_counts[product.id]
