@@ -180,6 +180,7 @@ class ProductService:
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
+        search: str | None = None,
     ) -> PaginatedSchema[ProductListSchema]:
         user_id: int | None = None
         if owner_only and current_user is not None:
@@ -191,10 +192,12 @@ class ProductService:
         products = await self.repo.get_all_by_status(
             db, status, limit=limit, offset=offset, user_id=user_id,
             category_id=category_id, date_filter=date_filter, sort_by=sort_by,
+            search=search,
         )
         total = await self.repo.count_by_status(
             db, status, user_id=user_id,
             category_id=category_id, date_filter=date_filter,
+            search=search,
         )
 
         if not products:
