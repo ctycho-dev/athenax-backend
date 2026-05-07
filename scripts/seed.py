@@ -48,7 +48,6 @@ CATEGORIES_CSV_PATH = Path(__file__).parent.parent / "Categories.csv"
 CATEGORIES: list[str] = [
     "AI & Agents",
     "Biotech",
-    "Climate & Energy",
     "Crypto & DeFi",
     "Developer Tools",
     "Infrastructure",
