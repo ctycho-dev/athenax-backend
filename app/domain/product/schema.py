@@ -62,7 +62,7 @@ class ProductBaseSchema(CamelModel):
     bookmark_count: int = 0
     investor_interest_count: int = 0
     category_ids: list[int] = Field(default_factory=list)
-    sub_category_ids: list[int] = Field(default_factory=list)
+    sub_categories: list[str] = Field(default_factory=list)
     pending_subcategory_name: str | None = None
     created_at: datetime
     updated_at: datetime

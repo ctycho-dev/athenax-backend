@@ -472,6 +472,31 @@ async def seed_products(
     - Existing  → update scalar fields (keep name/slug/logo), then delete and
                   re-insert all child rows (links, team, backers, categories).
     """
+    # --- Pass 0: create any subcategories from the CSV not yet in the DB ---
+    new_subs: dict[tuple[str, int], None] = {}
+    for row in rows:
+        raw_cat = row.get("category", "").strip()
+        raw_cat = CATEGORY_ALIASES.get(raw_cat, raw_cat)
+        parent_id = category_id_by_name.get(raw_cat)
+        if parent_id is None:
+            continue
+        for sub_name in _split(row.get("subcategory", ""), ";"):
+            if sub_name and sub_name not in category_id_by_name:
+                new_subs[(sub_name, parent_id)] = None
+
+    if new_subs:
+        for sub_name, parent_id in new_subs:
+            session.add(Category(name=sub_name, parent_id=parent_id))
+        await session.flush()
+        sub_result = await session.execute(
+            select(Category.id, Category.name).where(
+                Category.name.in_([k[0] for k in new_subs])
+            )
+        )
+        for rid, name in sub_result.all():
+            category_id_by_name[name] = rid
+        log.info("  [products] seeded %d new subcategories from Projects.csv", len(new_subs))
+
     # Fetch existing products keyed by slug
     result = await session.execute(select(Product.id, Product.slug, Product.logo))
     existing_by_slug: dict[str, tuple[int, str | None]] = {
@@ -638,9 +663,6 @@ def _insert_child_rows(
     cat_names_to_link: list[str] = []
     if parsed["category"]:
         cat_names_to_link.append(parsed["category"])
-    # Subcategories are competitors/related products in the CSV — skip linking them
-    # as categories since they are project names, not category names.
-    # Only link them if they resolve to a known category.
     for sub in parsed["subcategories"]:
         if sub in category_id_by_name:
             cat_names_to_link.append(sub)
