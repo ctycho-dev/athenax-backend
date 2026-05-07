@@ -48,7 +48,6 @@ CATEGORIES_CSV_PATH = Path(__file__).parent.parent / "Categories.csv"
 CATEGORIES: list[str] = [
     "AI & Agents",
     "Biotech",
-    "Climate & Energy",
     "Crypto & DeFi",
     "Developer Tools",
     "Infrastructure",
@@ -544,6 +543,34 @@ async def seed_products(
         log.info("  [products] inserted %d new products", len(new_products))
     else:
         log.info("  [products] no new products to insert")
+
+    # --- Delete the products that are in the DB but not in the CSV (only if they were previously imported) ---
+    stale_ids = [
+        pid
+        for slug, (pid, _) in existing_by_slug.items()
+        if slug not in seen_slugs
+    ]
+    if stale_ids:
+        for table, fk in [
+            (ProductLink.__table__, "product_id"),
+            (ProductTeamMember.__table__, "product_id"),
+            (ProductBacker.__table__, "product_id"),
+            (ProductCategory.__table__, "product_id"),
+            (ProductVoice.__table__, "product_id"),
+        ]:
+            await session.execute(
+                delete(table).where(table.c[fk].in_(stale_ids))
+            )
+        await session.execute(
+            delete(Product.__table__).where(
+                Product.__table__.c.id.in_(stale_ids),
+                Product.__table__.c.imported.is_(True),
+            )
+        )
+        await session.flush()
+        log.info("  [products] deleted %d stale imported products", len(stale_ids))
+    else:
+        log.info("  [products] no stale products to delete")
 
     # --- Backfill existing products ---
     if update_products:
