@@ -237,6 +237,7 @@ class ProductRepository(BaseRepository[Product]):
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
+        search: str | None = None,
     ):
         vote_subq = None
         if sort_by == ProductSortBy.TOP:
@@ -267,6 +268,8 @@ class ProductRepository(BaseRepository[Product]):
         if date_filter is not None:
             cutoff = datetime.now(tz=timezone.utc) - self._DATE_FILTER_DELTAS[date_filter]
             q = q.where(Product.created_at >= cutoff)
+        if search and (search_text := search.strip()):
+            q = q.where(Product.name.ilike(f"%{search_text}%"))
 
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
@@ -285,8 +288,9 @@ class ProductRepository(BaseRepository[Product]):
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
+        search: str | None = None,
     ) -> list[Product]:
-        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by)
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by, search)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
@@ -298,8 +302,9 @@ class ProductRepository(BaseRepository[Product]):
         user_id: int | None = None,
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
+        search: str | None = None,
     ) -> int:
-        q, _ = self._build_status_query(status, user_id, category_id, date_filter)
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, search=search)
         q = select(func.count()).select_from(q.subquery())
         result = await db.execute(q)
         return result.scalar() or 0
