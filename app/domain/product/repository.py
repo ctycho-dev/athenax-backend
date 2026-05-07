@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -269,14 +269,7 @@ class ProductRepository(BaseRepository[Product]):
             cutoff = datetime.now(tz=timezone.utc) - self._DATE_FILTER_DELTAS[date_filter]
             q = q.where(Product.created_at >= cutoff)
         if search and (search_text := search.strip()):
-            pattern = f"%{search_text}%"
-            q = q.where(
-                or_(
-                    Product.name.ilike(pattern),
-                    Product.short_desc.ilike(pattern),
-                    Product.description.ilike(pattern),
-                )
-            )
+            q = q.where(Product.name.ilike(f"%{search_text}%"))
 
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
