@@ -272,9 +272,13 @@ class ProductRepository(BaseRepository[Product]):
             q = q.where(Product.name.ilike(f"%{search_text}%"))
 
         if vote_subq is not None:
-            q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
+            q = q.order_by(
+                func.coalesce(vote_subq.c.vote_count, 0).desc(),
+                Product.created_at.desc(),
+                Product.id.desc(),
+            )
         else:
-            q = q.order_by(Product.created_at.desc())
+            q = q.order_by(Product.created_at.desc(), Product.id.desc())
 
         return q, vote_subq
 
