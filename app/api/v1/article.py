@@ -1,0 +1,90 @@
+from fastapi import APIRouter, Depends, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_db, get_article_service, require_admin_user
+from app.api.dependencies.auth import get_optional_user
+from app.core.config import settings
+from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleUpdateSchema
+from app.domain.article.service import ArticleService
+from app.domain.user.schema import UserOutSchema
+from app.enums.enums import ArticleStatus, ArticleType
+from app.middleware.rate_limiter import limiter
+
+router = APIRouter(prefix=settings.api.v1.article, tags=["Article"])
+
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ArticleOutSchema)
+@limiter.limit("30/minute")
+async def create_article(
+    request: Request,
+    payload: ArticleCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ArticleService = Depends(get_article_service),
+):
+    return await service.create(db, payload, current_user=current_user)
+
+
+@router.get("", response_model=list[ArticleOutSchema])
+@limiter.limit("60/minute")
+async def list_articles(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    status: ArticleStatus | None = None,
+    article_type: ArticleType | None = Query(default=None, alias="articleType"),
+    category_id: int | None = Query(default=None, alias="categoryId"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
+    service: ArticleService = Depends(get_article_service),
+):
+    return await service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, category_id=category_id, current_user=current_user)
+
+
+@router.get("/slug/{slug}", response_model=ArticleOutSchema)
+@limiter.limit("60/minute")
+async def get_article_by_slug(
+    request: Request,
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
+    service: ArticleService = Depends(get_article_service),
+):
+    return await service.get_by_slug(db, slug=slug, current_user=current_user)
+
+
+@router.get("/{article_id}", response_model=ArticleOutSchema)
+@limiter.limit("60/minute")
+async def get_article(
+    request: Request,
+    article_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema | None = Depends(get_optional_user),
+    service: ArticleService = Depends(get_article_service),
+):
+    return await service.get_by_id(db, article_id=article_id, current_user=current_user)
+
+
+@router.patch("/{article_id}", response_model=ArticleOutSchema)
+@limiter.limit("30/minute")
+async def update_article(
+    request: Request,
+    article_id: int,
+    payload: ArticleUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ArticleService = Depends(get_article_service),
+):
+    return await service.update(db, article_id=article_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_article(
+    request: Request,
+    article_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: UserOutSchema = Depends(require_admin_user),
+    service: ArticleService = Depends(get_article_service),
+):
+    await service.delete_by_id(db, article_id=article_id)
