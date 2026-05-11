@@ -7,6 +7,7 @@ from .services import (
     get_lab_service,
     get_paper_service,
     get_product_service,
+    get_article_service,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "get_lab_service",
     "get_paper_service",
     "get_product_service",
+    "get_article_service",
 ]

@@ -42,3 +42,15 @@ class CategoryRepository(BaseRepository[Category]):
         not_sub = [cid for cid in unique_ids if cid not in found_sub_ids]
         if not_sub:
             raise ValidationError(f"Category IDs are not subcategories: {not_sub}")
+
+    async def assert_are_parent_categories(self, db: AsyncSession, category_ids: list[int]) -> None:
+        """Raise ValidationError if any given IDs are subcategories (parent_id IS NOT NULL)."""
+        if not category_ids:
+            return
+        unique_ids = list(dict.fromkeys(category_ids))
+        result = await db.execute(
+            select(Category.id).where(Category.id.in_(unique_ids), Category.parent_id.is_not(None))
+        )
+        sub_ids = [row[0] for row in result.all()]
+        if sub_ids:
+            raise ValidationError(f"Only parent categories are allowed. These are subcategories: {sub_ids}")

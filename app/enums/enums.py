@@ -101,3 +101,15 @@ class BountyStatus(str, Enum):
 
 
 TeamMemberStatus = VerificationStatus
+
+
+class ArticleStatus(str, Enum):
+    DRAFT     = "draft"
+    PUBLISHED = "published"
+    ARCHIVED  = "archived"
+
+
+class ArticleType(str, Enum):
+    ARTICLE     = "article"
+    WHITE_PAPER = "white_paper"
+    RECAP       = "recap"
