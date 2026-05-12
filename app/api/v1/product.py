@@ -22,6 +22,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductReleaseStatsSchema,
+    ProductSimilarSchema,
     ProductStatusUpdateSchema,
     ProductSummarySchema,
     ProductUpdateSchema,
@@ -148,6 +149,18 @@ async def get_product(
     service: ProductService = Depends(get_product_service),
 ):
     return await service.get_by_id(db, product_id=product_id, current_user=current_user)
+
+
+@router.get("/{product_id}/similar", response_model=list[ProductSimilarSchema])
+@limiter.limit("60/minute")
+async def list_similar_products(
+    request: Request,
+    product_id: int,
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_similar(db, product_id=product_id, limit=limit)
 
 
 @router.patch("/{product_id}", response_model=ProductOutSchema)

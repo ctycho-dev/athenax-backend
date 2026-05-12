@@ -350,6 +350,23 @@ class ProductRepository(BaseRepository[Product]):
     ) -> list[Category]:
         return (await self.get_categories_for_products(db, [product_id]))[product_id]
 
+    async def get_product_ids_by_category_ids(
+        self, db: AsyncSession, category_ids: list[int], exclude_id: int, limit: int
+    ) -> list[int]:
+        result = await db.execute(
+            select(ProductCategory.product_id)
+            .join(Product, Product.id == ProductCategory.product_id)
+            .where(
+                ProductCategory.category_id.in_(category_ids),
+                ProductCategory.product_id != exclude_id,
+                Product.status == ProductStatus.APPROVED,
+            )
+            .group_by(ProductCategory.product_id, Product.created_at, Product.id)
+            .order_by(Product.created_at.desc(), Product.id.desc())
+            .limit(limit)
+        )
+        return [row.product_id for row in result]
+
     async def get_papers_for_product(self, db: AsyncSession, product_id: int) -> list[Paper]:
         result = await db.execute(
             select(Paper)
