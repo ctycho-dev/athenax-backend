@@ -28,6 +28,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductReleaseStatsSchema,
+    ProductSimilarSchema,
     ProductStatusUpdateSchema,
     ProductSummarySchema,
     ProductUpdateSchema,
@@ -784,6 +785,35 @@ class ProductService:
             raise NotFoundError("Bounty not found")
         await self.bounty_repo.delete_by_id(db, bounty_id)
         await db.commit()
+
+    async def list_similar(
+        self, db: AsyncSession, product_id: int, limit: int = 5
+    ) -> list[ProductSimilarSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+
+        all_cats = await self.repo.get_categories_for_product(db, product_id)
+        sub_ids = [c.id for c in all_cats if c.parent_id is not None]
+        parent_ids = [c.id for c in all_cats if c.parent_id is None]
+
+        similar_ids: list[int] = []
+        if sub_ids:
+            similar_ids = await self.repo.get_product_ids_by_category_ids(db, sub_ids, product_id, limit)
+        if not similar_ids and parent_ids:
+            similar_ids = await self.repo.get_product_ids_by_category_ids(db, parent_ids, product_id, limit)
+        if not similar_ids:
+            return []
+
+        products, categories_map = await asyncio.gather(
+            self.repo.get_by_ids(db, similar_ids),
+            self.repo.get_categories_for_products(db, similar_ids),
+        )
+
+        results = []
+        for product in products:
+            out = ProductSimilarSchema.model_validate(product, from_attributes=True)
+            out.categories = [c.name for c in categories_map[product.id] if c.parent_id is None]
+            results.append(out)
+        return results
 
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None

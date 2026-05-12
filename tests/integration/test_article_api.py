@@ -48,7 +48,7 @@ def build_mock_user(role: UserRole, user_id: int = 10) -> UserOutSchema:
 
 ARTICLE_PAYLOAD = {
     "title": "Test Article Title",
-    "articleType": "article",
+    "articleType": "whitepaper",
     "content": "# Hello\n\nThis is the body.",
     "status": "draft",
     "categoryIds": [],
@@ -125,24 +125,24 @@ class TestArticleAPI:
         assert draft["id"] in ids
 
     async def test_list_articles_filter_by_type(self, client: ClientWithEmail):
-        recap_payload = {**ARTICLE_PAYLOAD, "articleType": "recap", "title": "Recap Article", "status": "published"}
+        roundtable_payload = {**ARTICLE_PAYLOAD, "articleType": "roundtable", "title": "Roundtable Article", "status": "published"}
         with _override_admin():
-            resp = await client.post("/api/v1/article", json=recap_payload)
+            resp = await client.post("/api/v1/article", json=roundtable_payload)
         assert resp.status_code == 201
 
-        response = await client.get("/api/v1/article?articleType=recap")
+        response = await client.get("/api/v1/article?articleType=roundtable")
         assert response.status_code == 200
-        assert all(a["articleType"] == "recap" for a in response.json())
+        assert all(a["articleType"] == "roundtable" for a in response.json())
 
-    async def test_list_articles_filter_by_type_white_paper(self, client: ClientWithEmail):
-        payload = {**ARTICLE_PAYLOAD, "articleType": "white_paper", "title": "White Paper One", "status": "published"}
+    async def test_list_articles_filter_by_type_livestream(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "articleType": "livestream", "title": "Livestream One", "status": "published"}
         with _override_admin():
             resp = await client.post("/api/v1/article", json=payload)
         assert resp.status_code == 201
 
-        response = await client.get("/api/v1/article?articleType=white_paper")
+        response = await client.get("/api/v1/article?articleType=livestream")
         assert response.status_code == 200
-        assert all(a["articleType"] == "white_paper" for a in response.json())
+        assert all(a["articleType"] == "livestream" for a in response.json())
 
     async def test_list_articles_non_admin_status_draft_param_ignored(self, client: ClientWithEmail):
         # Non-admin passing ?status=draft should still only get published
@@ -212,19 +212,19 @@ class TestArticleAPI:
         category_id = result.scalar_one()
         await db_session.commit()
 
-        # white_paper in category
-        wp_payload = {**ARTICLE_PAYLOAD, "articleType": "white_paper", "title": "WP in Category", "status": "published", "categoryIds": [category_id]}
+        # whitepaper in category
+        wp_payload = {**ARTICLE_PAYLOAD, "articleType": "whitepaper", "title": "WP in Category", "status": "published", "categoryIds": [category_id]}
         match = await self._create_article_as_admin(client, wp_payload)
 
-        # article in same category — should NOT appear in white_paper filter
-        other_payload = {**ARTICLE_PAYLOAD, "title": "Article in Category", "status": "published", "categoryIds": [category_id]}
+        # roundtable in same category — should NOT appear in whitepaper filter
+        other_payload = {**ARTICLE_PAYLOAD, "articleType": "roundtable", "title": "Roundtable in Category", "status": "published", "categoryIds": [category_id]}
         await self._create_article_as_admin(client, other_payload)
 
-        response = await client.get(f"/api/v1/article?articleType=white_paper&categoryId={category_id}")
+        response = await client.get(f"/api/v1/article?articleType=whitepaper&categoryId={category_id}")
         assert response.status_code == 200
         ids = [a["id"] for a in response.json()]
         assert match["id"] in ids
-        assert all(a["articleType"] == "white_paper" for a in response.json())
+        assert all(a["articleType"] == "whitepaper" for a in response.json())
 
     # ------------------------------------------------------------------
     # Get by ID
@@ -312,7 +312,7 @@ class TestArticleAPI:
         data = response.json()
         assert data["title"] == ARTICLE_PAYLOAD["title"]
         assert data["slug"] != ""
-        assert data["articleType"] == "article"
+        assert data["articleType"] == "whitepaper"
         assert data["status"] == "draft"
         assert data["createdById"] == 10
         assert data["creatorName"] == "Admin User"
@@ -536,10 +536,10 @@ class TestArticleAPI:
                       "creatorName", "categories", "createdAt", "updatedAt", "createdById"):
             assert field in data, f"Missing field: {field}"
 
-    async def test_article_type_white_paper(self, client: ClientWithEmail):
-        payload = {**ARTICLE_PAYLOAD, "articleType": "white_paper", "title": "White Paper Article"}
+    async def test_article_type_livestream(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "articleType": "livestream", "title": "Livestream Article"}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 
         assert response.status_code == 201
-        assert response.json()["articleType"] == "white_paper"
+        assert response.json()["articleType"] == "livestream"

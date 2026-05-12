@@ -80,6 +80,16 @@ class ProductSummarySchema(CamelModel):
     created_at: datetime
 
 
+class ProductSimilarSchema(CamelModel):
+    id: int
+    slug: str
+    name: str
+    short_desc: str | None
+    logo: str | None
+    stage: ProductStage | None
+    categories: list[str] = Field(default_factory=list)
+
+
 class ProductListSchema(ProductBaseSchema):
     bookmarked: bool | None = None
 

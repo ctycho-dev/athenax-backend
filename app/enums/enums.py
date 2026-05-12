@@ -110,6 +110,6 @@ class ArticleStatus(str, Enum):
 
 
 class ArticleType(str, Enum):
-    ARTICLE     = "article"
-    WHITE_PAPER = "white_paper"
-    RECAP       = "recap"
+    WHITEPAPER  = "whitepaper"
+    LIVESTREAM  = "livestream"
+    ROUNDTABLE  = "roundtable"
