@@ -562,13 +562,16 @@ class ProductService:
         return self._to_media_schema(media)
 
     async def delete_media(
-        self, db: AsyncSession, product_id: int, media_id: int, current_user: UserOutSchema
+        self, db: AsyncSession, product_id: int, media_id: int, current_user: UserOutSchema,
+        storage: R2StorageService,
     ) -> None:
         media = await self.media_repo.get_by_id(db, media_id)
         if media.product_id != product_id:
             raise NotFoundError("Media not found")
+        storage_key = media.storage_key
         await self.media_repo.delete_by_id(db, media_id)
         await db.commit()
+        await storage.delete_file(storage_key)
 
     async def upload_media(
         self,
@@ -579,7 +582,7 @@ class ProductService:
         current_user: UserOutSchema,
         storage: R2StorageService,
     ) -> ProductMediaOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        product = await self.repo.get_by_id(db, product_id)
 
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise ValidationError(
@@ -594,7 +597,7 @@ class ProductService:
         if sort_order is None:
             sort_order = await self.media_repo.get_max_sort_order(db, product_id) + 10
 
-        key = storage.build_storage_key(product_id, file.filename or "upload")
+        key = storage.build_storage_key(product.slug, file.filename or "upload")
 
         # Upload to R2 first — only write to DB if it succeeds
         await storage.upload_file(key=key, data=data, content_type=file.content_type)

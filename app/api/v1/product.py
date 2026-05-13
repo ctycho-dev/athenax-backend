@@ -435,8 +435,9 @@ async def delete_media(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema = Depends(require_admin_user),
     service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
 ):
-    await service.delete_media(db, product_id=product_id, media_id=media_id, current_user=current_user)
+    await service.delete_media(db, product_id=product_id, media_id=media_id, current_user=current_user, storage=storage)
 
 
 # -------------------------
