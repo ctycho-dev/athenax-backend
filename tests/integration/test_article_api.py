@@ -2,14 +2,12 @@ from datetime import datetime
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
-from app.domain.category.model import Category
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
@@ -51,7 +49,7 @@ ARTICLE_PAYLOAD = {
     "articleType": "whitepaper",
     "content": "# Hello\n\nThis is the body.",
     "status": "draft",
-    "categoryIds": [],
+    "tags": [],
 }
 
 
@@ -172,55 +170,35 @@ class TestArticleAPI:
         assert response.status_code == 200
         assert all(a["status"] == "published" for a in response.json())
 
-    async def test_list_articles_filter_by_category_id(self, client: ClientWithEmail, db_session):
-        result = await db_session.execute(
-            insert(Category).values(name="Filter Category", parent_id=None).returning(Category.id)
-        )
-        category_id = result.scalar_one()
-        await db_session.commit()
-
-        # Article with the category
-        payload = {**ARTICLE_PAYLOAD, "title": "Categorised Article", "status": "published", "categoryIds": [category_id]}
+    async def test_list_articles_filter_by_tag(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Tagged Article", "status": "published", "tags": ["machine-learning"]}
         tagged = await self._create_article_as_admin(client, payload)
 
-        # Article without the category
         untagged = await self._create_article_as_admin(
-            client, {**ARTICLE_PAYLOAD, "title": "Uncategorised Article", "status": "published"}
+            client, {**ARTICLE_PAYLOAD, "title": "Untagged Article", "status": "published"}
         )
 
-        response = await client.get(f"/api/v1/article?categoryId={category_id}")
+        response = await client.get("/api/v1/article?tag=machine-learning")
         assert response.status_code == 200
         ids = [a["id"] for a in response.json()]
         assert tagged["id"] in ids
         assert untagged["id"] not in ids
 
-    async def test_list_articles_filter_by_category_id_no_matches(self, client: ClientWithEmail, db_session):
-        result = await db_session.execute(
-            insert(Category).values(name="Empty Category", parent_id=None).returning(Category.id)
-        )
-        category_id = result.scalar_one()
-        await db_session.commit()
-
-        response = await client.get(f"/api/v1/article?categoryId={category_id}")
+    async def test_list_articles_filter_by_tag_no_matches(self, client: ClientWithEmail):
+        response = await client.get("/api/v1/article?tag=nonexistent-tag-xyz")
         assert response.status_code == 200
         assert response.json() == []
 
-    async def test_list_articles_filter_combined_type_and_category(self, client: ClientWithEmail, db_session):
-        result = await db_session.execute(
-            insert(Category).values(name="Combined Filter Cat", parent_id=None).returning(Category.id)
-        )
-        category_id = result.scalar_one()
-        await db_session.commit()
+    async def test_list_articles_filter_combined_type_and_tag(self, client: ClientWithEmail):
+        tag = "combined-filter-tag"
 
-        # whitepaper in category
-        wp_payload = {**ARTICLE_PAYLOAD, "articleType": "whitepaper", "title": "WP in Category", "status": "published", "categoryIds": [category_id]}
+        wp_payload = {**ARTICLE_PAYLOAD, "articleType": "whitepaper", "title": "WP with Tag", "status": "published", "tags": [tag]}
         match = await self._create_article_as_admin(client, wp_payload)
 
-        # roundtable in same category — should NOT appear in whitepaper filter
-        other_payload = {**ARTICLE_PAYLOAD, "articleType": "roundtable", "title": "Roundtable in Category", "status": "published", "categoryIds": [category_id]}
+        other_payload = {**ARTICLE_PAYLOAD, "articleType": "roundtable", "title": "Roundtable with Tag", "status": "published", "tags": [tag]}
         await self._create_article_as_admin(client, other_payload)
 
-        response = await client.get(f"/api/v1/article?articleType=whitepaper&categoryId={category_id}")
+        response = await client.get(f"/api/v1/article?articleType=whitepaper&tag={tag}")
         assert response.status_code == 200
         ids = [a["id"] for a in response.json()]
         assert match["id"] in ids
@@ -352,50 +330,40 @@ class TestArticleAPI:
 
         assert response.status_code == 201
         assert response.json()["publishedAt"] is not None
-        # The date in the response should correspond to the custom date
         assert "2025-01-15" in response.json()["publishedAt"]
 
     # ------------------------------------------------------------------
-    # Create — categories
+    # Create — tags
     # ------------------------------------------------------------------
 
-    async def test_create_article_with_parent_category(self, client: ClientWithEmail, db_session):
-        result = await db_session.execute(
-            insert(Category).values(name="Tech", parent_id=None).returning(Category.id)
-        )
-        category_id = result.scalar_one()
-        await db_session.commit()
-
-        payload = {**ARTICLE_PAYLOAD, "categoryIds": [category_id]}
+    async def test_create_article_with_tags(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "tags": ["biotech", "ai"]}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 
         assert response.status_code == 201
-        assert "Tech" in response.json()["categories"]
+        tags = response.json()["tags"]
+        assert "biotech" in tags
+        assert "ai" in tags
 
-    async def test_create_article_with_invalid_category_returns_404(self, client: ClientWithEmail):
-        payload = {**ARTICLE_PAYLOAD, "categoryIds": [999999]}
+    async def test_create_article_tags_normalised_to_lowercase(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Tag Case Test", "tags": ["MachineLearning", "  BioTech  "]}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 
-        assert response.status_code == 404
+        assert response.status_code == 201
+        tags = response.json()["tags"]
+        assert "machinelearning" in tags
+        assert "biotech" in tags
 
-    async def test_create_article_with_subcategory_returns_400(self, client: ClientWithEmail, db_session):
-        parent_result = await db_session.execute(
-            insert(Category).values(name="Science", parent_id=None).returning(Category.id)
-        )
-        parent_id = parent_result.scalar_one()
-        child_result = await db_session.execute(
-            insert(Category).values(name="Physics", parent_id=parent_id).returning(Category.id)
-        )
-        child_id = child_result.scalar_one()
-        await db_session.commit()
-
-        payload = {**ARTICLE_PAYLOAD, "categoryIds": [child_id]}
+    async def test_create_article_duplicate_tags_deduplicated(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Dedup Tags Test", "tags": ["science", "science", "Science"]}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 
-        assert response.status_code == 400
+        assert response.status_code == 201
+        tags = response.json()["tags"]
+        assert tags.count("science") == 1
 
     # ------------------------------------------------------------------
     # Update
@@ -456,22 +424,30 @@ class TestArticleAPI:
         assert response.status_code == 200
         assert response.json()["publishedAt"] is None
 
-    async def test_update_categories_syncs_correctly(self, client: ClientWithEmail, db_session):
-        cat_result = await db_session.execute(
-            insert(Category).values(name="Finance", parent_id=None).returning(Category.id)
-        )
-        cat_id = cat_result.scalar_one()
-        await db_session.commit()
-
+    async def test_update_tags_syncs_correctly(self, client: ClientWithEmail):
         article = await self._create_article_as_admin(client)
 
         with _override_admin():
             response = await client.patch(
-                f"/api/v1/article/{article['id']}", json={"categoryIds": [cat_id]}
+                f"/api/v1/article/{article['id']}", json={"tags": ["finance"]}
             )
 
         assert response.status_code == 200
-        assert "Finance" in response.json()["categories"]
+        assert "finance" in response.json()["tags"]
+
+    async def test_update_tags_replaces_previous_tags(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Tag Replace Test", "tags": ["old-tag"]}
+        article = await self._create_article_as_admin(client, payload)
+
+        with _override_admin():
+            response = await client.patch(
+                f"/api/v1/article/{article['id']}", json={"tags": ["new-tag"]}
+            )
+
+        assert response.status_code == 200
+        tags = response.json()["tags"]
+        assert "new-tag" in tags
+        assert "old-tag" not in tags
 
     async def test_update_nonexistent_article_returns_404(self, client: ClientWithEmail):
         with _override_admin():
@@ -533,7 +509,7 @@ class TestArticleAPI:
 
         data = response.json()
         for field in ("id", "title", "slug", "articleType", "content", "status", "publishedAt",
-                      "creatorName", "categories", "createdAt", "updatedAt", "createdById"):
+                      "creatorName", "tags", "createdAt", "updatedAt", "createdById"):
             assert field in data, f"Missing field: {field}"
 
     async def test_article_type_livestream(self, client: ClientWithEmail):

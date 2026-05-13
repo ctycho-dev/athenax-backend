@@ -33,12 +33,12 @@ async def list_articles(
     offset: int = 0,
     status: ArticleStatus | None = None,
     article_type: ArticleType | None = Query(default=None, alias="articleType"),
-    category_id: int | None = Query(default=None, alias="categoryId"),
+    tag: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ArticleService = Depends(get_article_service),
 ):
-    return await service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, category_id=category_id, current_user=current_user)
+    return await service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, tag=tag, current_user=current_user)
 
 
 @router.get("/slug/{slug}", response_model=ArticleOutSchema)

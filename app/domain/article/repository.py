@@ -2,8 +2,8 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
-from app.domain.article.model import Article, ArticleCategory
-from app.domain.category.model import Category
+from app.domain.article.model import Article, ArticleTag
+from app.domain.tag.model import Tag
 from app.enums.enums import ArticleStatus, ArticleType
 from app.exceptions.exceptions import NotFoundError
 
@@ -24,7 +24,7 @@ class ArticleRepository(BaseRepository[Article]):
         db: AsyncSession,
         status: ArticleStatus | None,
         article_type: ArticleType | None,
-        category_id: int | None,
+        tag: str | None,
         limit: int,
         offset: int,
     ) -> list[Article]:
@@ -33,12 +33,14 @@ class ArticleRepository(BaseRepository[Article]):
             q = q.where(Article.status == status)
         if article_type is not None:
             q = q.where(Article.article_type == article_type)
-        if category_id is not None:
+        if tag is not None:
             q = q.where(
                 exists(
-                    select(ArticleCategory.article_id).where(
-                        ArticleCategory.article_id == Article.id,
-                        ArticleCategory.category_id == category_id,
+                    select(ArticleTag.article_id)
+                    .join(Tag, Tag.id == ArticleTag.tag_id)
+                    .where(
+                        ArticleTag.article_id == Article.id,
+                        Tag.name == tag.lower().strip(),
                     )
                 )
             )
@@ -46,20 +48,20 @@ class ArticleRepository(BaseRepository[Article]):
         result = await db.execute(q)
         return list(result.scalars().all())
 
-    async def get_categories_for_articles(
+    async def get_tags_for_articles(
         self, db: AsyncSession, article_ids: list[int]
-    ) -> dict[int, list[Category]]:
+    ) -> dict[int, list[Tag]]:
         result = await db.execute(
-            select(ArticleCategory.article_id, Category)
-            .join(Category, Category.id == ArticleCategory.category_id)
-            .where(ArticleCategory.article_id.in_(article_ids))
+            select(ArticleTag.article_id, Tag)
+            .join(Tag, Tag.id == ArticleTag.tag_id)
+            .where(ArticleTag.article_id.in_(article_ids))
         )
-        groups: dict[int, list[Category]] = {aid: [] for aid in article_ids}
+        groups: dict[int, list[Tag]] = {aid: [] for aid in article_ids}
         for row in result:
-            groups[row.article_id].append(row.Category)
+            groups[row.article_id].append(row.Tag)
         return groups
 
-    async def get_categories_for_article(
+    async def get_tags_for_article(
         self, db: AsyncSession, article_id: int
-    ) -> list[Category]:
-        return (await self.get_categories_for_articles(db, [article_id]))[article_id]
+    ) -> list[Tag]:
+        return (await self.get_tags_for_articles(db, [article_id]))[article_id]
