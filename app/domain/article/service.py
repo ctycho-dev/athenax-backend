@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
-from app.domain.article.model import ArticleCategory
+from app.domain.article.model import ArticleTag
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleUpdateSchema
-from app.domain.category.repository import CategoryRepository
+from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ArticleStatus
@@ -19,11 +19,11 @@ class ArticleService:
     def __init__(
         self,
         repo: ArticleRepository,
-        category_repo: CategoryRepository,
+        tag_repo: TagRepository,
         user_repo: UserRepository,
     ):
         self.repo = repo
-        self.category_repo = category_repo
+        self.tag_repo = tag_repo
         self.user_repo = user_repo
 
     async def create(
@@ -33,17 +33,13 @@ class ArticleService:
         current_user: UserOutSchema,
     ) -> ArticleOutSchema:
         payload = data.model_dump()
-        category_ids = payload.pop("category_ids", [])
+        tag_names = payload.pop("tags", [])
 
         payload["slug"] = generate_slug(data.title)
         payload = self._apply_published_at(payload)
 
         article = await self.repo.create(db, payload, current_user_id=current_user.id)
-
-        if category_ids:
-            await self.category_repo.assert_exist(db, category_ids)
-            await self.category_repo.assert_are_parent_categories(db, category_ids)
-        await sync_association(db, ArticleCategory.__table__, "article_id", article.id, "category_id", set(category_ids))
+        await self._sync_tags(db, article.id, tag_names)
 
         await db.commit()
         await db.refresh(article)
@@ -56,29 +52,29 @@ class ArticleService:
         offset: int,
         status: ArticleStatus | None,
         article_type,
-        category_id: int | None,
+        tag: str | None,
         current_user: UserOutSchema | None,
     ) -> list[ArticleOutSchema]:
         # Non-admins may only see published articles
         if current_user is None or not is_admin(current_user):
             status = ArticleStatus.PUBLISHED
 
-        articles = await self.repo.get_all_filtered(db, status=status, article_type=article_type, category_id=category_id, limit=limit, offset=offset)
+        articles = await self.repo.get_all_filtered(db, status=status, article_type=article_type, tag=tag, limit=limit, offset=offset)
         if not articles:
             return []
 
         article_ids = [a.id for a in articles]
         creator_ids = list({a.created_by_id for a in articles if a.created_by_id})
 
-        categories_map, users_map = await _gather(
-            self.repo.get_categories_for_articles(db, article_ids),
+        tags_map, users_map = await _gather(
+            self.repo.get_tags_for_articles(db, article_ids),
             self.user_repo.get_by_ids(db, creator_ids),
         )
 
         results = []
         for article in articles:
             out = ArticleOutSchema.model_validate(article, from_attributes=True)
-            out.categories = [c.name for c in categories_map[article.id]]
+            out.tags = [t.name for t in tags_map[article.id]]
             out.creator_name = users_map[article.created_by_id].name if article.created_by_id in users_map else None
             results.append(out)
         return results
@@ -112,7 +108,7 @@ class ArticleService:
     ) -> ArticleOutSchema:
         article = await self.repo.get_by_id(db, article_id)
         payload = data.model_dump(exclude_unset=True)
-        category_ids = payload.pop("category_ids", None)
+        tag_names = payload.pop("tags", None)
 
         if "title" in payload:
             payload["slug"] = generate_slug(payload["title"])
@@ -122,10 +118,8 @@ class ArticleService:
 
         article = await self.repo.update(db, article_id, payload, current_user_id=current_user.id)
 
-        if category_ids is not None:
-            await self.category_repo.assert_exist(db, category_ids)
-            await self.category_repo.assert_are_parent_categories(db, category_ids)
-            await sync_association(db, ArticleCategory.__table__, "article_id", article_id, "category_id", set(category_ids))
+        if tag_names is not None:
+            await self._sync_tags(db, article_id, tag_names)
 
         await db.commit()
         await db.refresh(article)
@@ -139,6 +133,18 @@ class ArticleService:
     # -------------------------
     # Helpers
     # -------------------------
+
+    async def _sync_tags(self, db: AsyncSession, article_id: int, tag_names: list[str]) -> None:
+        names = list({n.lower().strip() for n in tag_names if n.strip()})
+        existing = await self.tag_repo.get_by_names(db, names)
+        existing_names = {t.name for t in existing}
+        new_tags = [
+            await self.tag_repo.create(db, {"name": name})
+            for name in names
+            if name not in existing_names
+        ]
+        all_ids = {t.id for t in existing} | {t.id for t in new_tags}
+        await sync_association(db, ArticleTag.__table__, "article_id", article_id, "tag_id", all_ids)
 
     def _assert_visible(self, article, current_user: UserOutSchema | None) -> None:
         if article.status != ArticleStatus.PUBLISHED:
@@ -159,12 +165,12 @@ class ArticleService:
         return payload
 
     async def _to_schema(self, db: AsyncSession, article) -> ArticleOutSchema:
-        categories, users_map = await _gather(
-            self.repo.get_categories_for_article(db, article.id),
+        tags, users_map = await _gather(
+            self.repo.get_tags_for_article(db, article.id),
             self.user_repo.get_by_ids(db, [article.created_by_id] if article.created_by_id else []),
         )
         out = ArticleOutSchema.model_validate(article, from_attributes=True)
-        out.categories = [c.name for c in categories]
+        out.tags = [t.name for t in tags]
         out.creator_name = users_map[article.created_by_id].name if article.created_by_id in users_map else None
         return out
 

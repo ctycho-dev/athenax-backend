@@ -11,7 +11,8 @@ from app.domain.product.model import Product, ProductCategory, ProductVote, Prod
 from app.domain.university.model import University  # noqa: F401
 from app.domain.lab.model import Lab, LabCategory  # noqa: F401
 from app.domain.paper.model import Paper, PaperCategory, PaperVote  # noqa: F401
-from app.domain.article.model import Article, ArticleCategory  # noqa: F401
+from app.domain.article.model import Article, ArticleTag  # noqa: F401
+from app.domain.tag.model import Tag  # noqa: F401
 from app.exceptions.exceptions import add_exception_handlers
 from app.core.logger import (
     get_logger,

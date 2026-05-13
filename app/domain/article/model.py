@@ -11,15 +11,15 @@ from app.database.connection import Base
 from app.enums.enums import ArticleStatus, ArticleType
 
 
-class ArticleCategory(Base, TimestampMixin):
-    __tablename__ = "article_category"
-    __table_args__ = (PrimaryKeyConstraint("article_id", "category_id"),)
+class ArticleTag(Base, TimestampMixin):
+    __tablename__ = "article_tag"
+    __table_args__ = (PrimaryKeyConstraint("article_id", "tag_id"),)
 
     article_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("articles.id", ondelete="CASCADE"), nullable=False
     )
-    category_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
+    tag_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tags.id", ondelete="CASCADE"), nullable=False
     )
 
 

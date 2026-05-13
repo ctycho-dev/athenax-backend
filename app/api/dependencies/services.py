@@ -24,6 +24,7 @@ from app.domain.product.repository import (
 from app.domain.product.service import ProductService
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.service import ArticleService
+from app.domain.tag.repository import TagRepository
 from app.common.storage import R2StorageService
 
 
@@ -106,6 +107,10 @@ def get_article_repo() -> ArticleRepository:
     return ArticleRepository()
 
 
+def get_tag_repo() -> TagRepository:
+    return TagRepository()
+
+
 # -------------------------
 # Services
 # -------------------------
@@ -162,10 +167,10 @@ def get_storage_service() -> R2StorageService:
 
 def get_article_service(
     repo: ArticleRepository = Depends(get_article_repo),
-    category_repo: CategoryRepository = Depends(get_category_repo),
+    tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
 ) -> ArticleService:
-    return ArticleService(repo=repo, category_repo=category_repo, user_repo=user_repo)
+    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
 
 
 def get_product_service(

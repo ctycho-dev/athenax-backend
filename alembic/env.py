@@ -18,7 +18,8 @@ from app.domain.university.model import University
 from app.domain.lab.model import Lab, LabCategory
 from app.domain.category.model import Category
 from app.domain.paper.model import Paper, PaperCategory, PaperVote
-from app.domain.article.model import Article, ArticleCategory
+from app.domain.article.model import Article, ArticleTag
+from app.domain.tag.model import Tag
 from app.database.connection import Base
 
 # this is the Alembic Config object, which provides

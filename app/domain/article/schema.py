@@ -12,7 +12,7 @@ class ArticleCreateSchema(CamelModel):
     content: str | None = None
     status: ArticleStatus = ArticleStatus.DRAFT
     published_at: datetime | None = None
-    category_ids: list[int] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 class ArticleUpdateSchema(CamelModel):
@@ -21,7 +21,7 @@ class ArticleUpdateSchema(CamelModel):
     content: str | None = None
     status: ArticleStatus | None = None
     published_at: datetime | None = None
-    category_ids: list[int] | None = None
+    tags: list[str] | None = None
 
 
 class ArticleOutSchema(CamelModel):
@@ -33,7 +33,7 @@ class ArticleOutSchema(CamelModel):
     status: ArticleStatus
     published_at: datetime | None
     creator_name: str | None = None
-    categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -46,5 +46,5 @@ class ArticleSummarySchema(CamelModel):
     status: ArticleStatus
     published_at: datetime | None
     creator_name: str | None = None
-    categories: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime
