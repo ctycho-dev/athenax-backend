@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -111,3 +111,7 @@ seed:
 seed\:categories:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed_categories.py
+
+seed\:w2:
+	$(COMPOSE) up -d postgres redis
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed.py w2

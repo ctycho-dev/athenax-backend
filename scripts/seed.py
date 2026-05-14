@@ -9,6 +9,7 @@ import asyncio
 import csv
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import delete, select
@@ -38,6 +39,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CSV_PATH = Path(__file__).parent.parent / "Projects.csv"
+W2_CSV_PATH = Path(__file__).parent.parent / "W2_Projects.csv"
 CATEGORIES_CSV_PATH = Path(__file__).parent.parent / "Categories.csv"
 
 
@@ -173,6 +175,12 @@ def _load_category_tree() -> dict[str, list[str]]:
 def _load_csv() -> list[dict]:
     """Read Projects.csv, drop rows with no name."""
     with open(CSV_PATH, newline="", encoding="utf-8") as fh:
+        return [row for row in csv.DictReader(fh) if row.get("name", "").strip()]
+
+
+def _load_w2_csv() -> list[dict]:
+    """Read Projects_W2.csv, drop rows with no name."""
+    with open(W2_CSV_PATH, newline="", encoding="utf-8") as fh:
         return [row for row in csv.DictReader(fh) if row.get("name", "").strip()]
 
 
@@ -711,6 +719,92 @@ def _add_link(
 
 
 # ---------------------------------------------------------------------------
+# Seed: products (W2 — insert-only, never update or delete)
+# ---------------------------------------------------------------------------
+
+async def seed_products_w2(
+    session: AsyncSession,
+    rows: list[dict],
+    category_id_by_name: dict[str, int],
+) -> None:
+    """
+    Insert products from Projects_W2.csv.
+
+    Rules:
+    - Skip any product whose slug already exists in the DB (no update).
+    - Create missing subcategories first, then add product relations.
+    - Never delete any existing data.
+    """
+    # Pass 0: create any subcategories from the CSV not yet in the DB
+    new_subs: dict[tuple[str, int], None] = {}
+    for row in rows:
+        raw_cat = row.get("category", "").strip()
+        raw_cat = CATEGORY_ALIASES.get(raw_cat, raw_cat)
+        parent_id = category_id_by_name.get(raw_cat)
+        if parent_id is None:
+            continue
+        for sub_name in _split(row.get("subcategory", ""), ";"):
+            if sub_name and sub_name not in category_id_by_name:
+                new_subs[(sub_name, parent_id)] = None
+
+    if new_subs:
+        for sub_name, parent_id in new_subs:
+            session.add(Category(name=sub_name, parent_id=parent_id))
+        await session.flush()
+        sub_result = await session.execute(
+            select(Category.id, Category.name).where(
+                Category.name.in_([k[0] for k in new_subs])
+            )
+        )
+        for rid, name in sub_result.all():
+            category_id_by_name[name] = rid
+        log.info("  [w2] seeded %d new subcategories from Projects_W2.csv", len(new_subs))
+
+    # Load existing slugs — skip any product already in the DB
+    existing_slugs: set[str] = set(
+        (await session.execute(select(Product.slug))).scalars().all()
+    )
+
+    new_products: list[tuple[Product, dict]] = []
+    seen_slugs: set[str] = set()
+    base_time = datetime.now(timezone.utc)
+    insert_index = 0
+    for row in rows:
+        name = row["name"].strip()
+        slug = _slug(name)
+        if slug in seen_slugs or slug in existing_slugs:
+            continue
+        seen_slugs.add(slug)
+
+        parsed = _parse_row(row)
+        product = Product(
+            created_by_id=None,
+            slug=slug,
+            name=name,
+            short_desc=parsed["short_desc"],
+            description=parsed["description"],
+            stage=parsed["stage"],
+            founded=parsed["founded"],
+            quality_badge=parsed["quality_badge"],
+            email=parsed["email"],
+            imported=True,
+            status=ProductStatus.APPROVED,
+            created_at=base_time + timedelta(seconds=insert_index),
+        )
+        insert_index += 1
+        session.add(product)
+        new_products.append((product, parsed))
+
+    if new_products:
+        await session.flush()
+        for product, parsed in new_products:
+            _insert_child_rows(session, product.id, parsed, category_id_by_name)
+        log.info("  [w2] inserted %d new products", len(new_products))
+    else:
+        log.info("  [w2] no new products to insert")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -731,5 +825,24 @@ async def main() -> None:
     log.info("Seed complete.")
 
 
+async def main_w2() -> None:
+    log.info("Starting W2 seed…")
+    db_manager.init_engine()
+
+    rows = _load_w2_csv()
+
+    async with db_manager.session_scope() as session:
+        category_id_by_name = await seed_categories(session)
+        await seed_products_w2(session, rows, category_id_by_name)
+        await session.commit()
+
+    await db_manager.close()
+    log.info("W2 seed complete.")
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "w2":
+        asyncio.run(main_w2())
+    else:
+        asyncio.run(main())
