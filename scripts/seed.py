@@ -483,7 +483,7 @@ async def seed_products(
     new_subs: dict[tuple[str, int], None] = {}
     for row in rows:
         raw_cat = row.get("category", "").strip()
-        raw_cat = CATEGORY_ALIASES.get(raw_cat, raw_cat)
+        raw_cat = CATEGORY_ALIASES.get(raw_cat) or raw_cat
         parent_id = category_id_by_name.get(raw_cat)
         if parent_id is None:
             continue
@@ -511,7 +511,7 @@ async def seed_products(
     }
 
     new_products: list[tuple[Product, dict]] = []
-    update_products: list[tuple[int, dict]] = []  # (product_id, row)
+    update_products: list[tuple[int, dict, str | None]] = []  # (product_id, parsed, existing_logo)
 
     seen_slugs: set[str] = set()
     for row in rows:
@@ -610,6 +610,7 @@ async def seed_products(
                     founded=parsed["founded"],
                     quality_badge=parsed["quality_badge"],
                     email=parsed["email"],
+                    logo=parsed["logo"],
                 )
             )
             _insert_child_rows(session, product_id, parsed, category_id_by_name)
@@ -648,6 +649,8 @@ def _parse_row(row: dict) -> dict:
         # Categories
         "category":      raw_cat,
         "subcategories": _split(row.get("subcategory", ""), ";"),
+        # Logo
+        "logo":          row.get("logo", "").strip() or None,
     }
 
 
@@ -719,7 +722,7 @@ def _add_link(
 
 
 # ---------------------------------------------------------------------------
-# Seed: products (W2 — insert-only, never update or delete)
+# Seed: products (W2 — upsert: insert new, update existing)
 # ---------------------------------------------------------------------------
 
 async def seed_products_w2(
@@ -728,18 +731,18 @@ async def seed_products_w2(
     category_id_by_name: dict[str, int],
 ) -> None:
     """
-    Insert products from Projects_W2.csv.
+    Upsert products from W2_Projects.csv.
 
     Rules:
-    - Skip any product whose slug already exists in the DB (no update).
-    - Create missing subcategories first, then add product relations.
-    - Never delete any existing data.
+    - New slugs are inserted with all child rows.
+    - Existing slugs have scalar fields updated and child rows refreshed.
+    - Create missing subcategories first.
     """
     # Pass 0: create any subcategories from the CSV not yet in the DB
     new_subs: dict[tuple[str, int], None] = {}
     for row in rows:
         raw_cat = row.get("category", "").strip()
-        raw_cat = CATEGORY_ALIASES.get(raw_cat, raw_cat)
+        raw_cat = CATEGORY_ALIASES.get(raw_cat) or raw_cat
         parent_id = category_id_by_name.get(raw_cat)
         if parent_id is None:
             continue
@@ -760,40 +763,49 @@ async def seed_products_w2(
             category_id_by_name[name] = rid
         log.info("  [w2] seeded %d new subcategories from Projects_W2.csv", len(new_subs))
 
-    # Load existing slugs — skip any product already in the DB
-    existing_slugs: set[str] = set(
-        (await session.execute(select(Product.slug))).scalars().all()
-    )
+    # Fetch existing products keyed by slug
+    result = await session.execute(select(Product.id, Product.slug, Product.logo))
+    existing_by_slug: dict[str, tuple[int, str | None]] = {
+        slug: (pid, logo) for pid, slug, logo in result.all()
+    }
 
     new_products: list[tuple[Product, dict]] = []
+    update_products: list[tuple[int, dict]] = []
     seen_slugs: set[str] = set()
     base_time = datetime.now(timezone.utc)
     insert_index = 0
+
     for row in rows:
         name = row["name"].strip()
         slug = _slug(name)
-        if slug in seen_slugs or slug in existing_slugs:
+        if slug in seen_slugs:
             continue
         seen_slugs.add(slug)
 
         parsed = _parse_row(row)
-        product = Product(
-            created_by_id=None,
-            slug=slug,
-            name=name,
-            short_desc=parsed["short_desc"],
-            description=parsed["description"],
-            stage=parsed["stage"],
-            founded=parsed["founded"],
-            quality_badge=parsed["quality_badge"],
-            email=parsed["email"],
-            imported=True,
-            status=ProductStatus.APPROVED,
-            created_at=base_time + timedelta(seconds=insert_index),
-        )
-        insert_index += 1
-        session.add(product)
-        new_products.append((product, parsed))
+
+        if slug in existing_by_slug:
+            product_id, _ = existing_by_slug[slug]
+            update_products.append((product_id, parsed))
+        else:
+            product = Product(
+                created_by_id=None,
+                slug=slug,
+                name=name,
+                short_desc=parsed["short_desc"],
+                description=parsed["description"],
+                stage=parsed["stage"],
+                founded=parsed["founded"],
+                quality_badge=parsed["quality_badge"],
+                email=parsed["email"],
+                logo=parsed["logo"],
+                imported=True,
+                status=ProductStatus.APPROVED,
+                created_at=base_time + timedelta(seconds=insert_index),
+            )
+            insert_index += 1
+            session.add(product)
+            new_products.append((product, parsed))
 
     if new_products:
         await session.flush()
@@ -802,6 +814,38 @@ async def seed_products_w2(
         log.info("  [w2] inserted %d new products", len(new_products))
     else:
         log.info("  [w2] no new products to insert")
+
+    if update_products:
+        product_ids = [pid for pid, _ in update_products]
+        for table, fk in [
+            (ProductLink.__table__, "product_id"),
+            (ProductTeamMember.__table__, "product_id"),
+            (ProductBacker.__table__, "product_id"),
+            (ProductCategory.__table__, "product_id"),
+            (ProductVoice.__table__, "product_id"),
+        ]:
+            await session.execute(
+                delete(table).where(table.c[fk].in_(product_ids))
+            )
+        await session.flush()
+        for product_id, parsed in update_products:
+            await session.execute(
+                Product.__table__.update()
+                .where(Product.__table__.c.id == product_id)
+                .values(
+                    short_desc=parsed["short_desc"],
+                    desc=parsed["description"],
+                    stage=parsed["stage"].value if parsed["stage"] else None,
+                    founded=parsed["founded"],
+                    quality_badge=parsed["quality_badge"],
+                    email=parsed["email"],
+                    logo=parsed["logo"],
+                )
+            )
+            _insert_child_rows(session, product_id, parsed, category_id_by_name)
+        log.info("  [w2] updated %d existing products", len(update_products))
+    else:
+        log.info("  [w2] no existing products to update")
 
 
 # ---------------------------------------------------------------------------
