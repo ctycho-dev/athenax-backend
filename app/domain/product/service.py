@@ -664,7 +664,7 @@ class ProductService:
 
         key = storage.build_storage_key(product.slug, file.filename or "logo", subfolder="logo")
         await storage.upload_file(key=key, data=data, content_type=file.content_type)
-        await self.repo.update_instance(product, {"logo": key})
+        await self.repo.update_instance(db, product, {"logo": key})
         await db.commit()
         return ProductLogoOutSchema(logo=self._logo_url(key))  # type: ignore[arg-type]
 
@@ -684,7 +684,7 @@ class ProductService:
                 await storage.delete_file(old_key)
             except Exception:
                 pass  # best-effort
-        await self.repo.update_instance(product, {"logo": None})
+        await self.repo.update_instance(db, product, {"logo": None})
         await db.commit()
 
     # -------------------------
