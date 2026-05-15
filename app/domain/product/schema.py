@@ -213,6 +213,10 @@ class ProductMediaOutSchema(CamelModel):
     url: str | None = None
 
 
+class ProductLogoOutSchema(CamelModel):
+    logo: str
+
+
 # --- Team Members ---
 
 class TeamMemberCreateSchema(CamelModel):
