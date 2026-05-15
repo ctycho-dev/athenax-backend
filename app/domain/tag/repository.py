@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
@@ -12,5 +12,6 @@ class TagRepository(BaseRepository[Tag]):
     async def get_by_names(self, db: AsyncSession, names: list[str]) -> list[Tag]:
         if not names:
             return []
-        result = await db.execute(select(Tag).where(Tag.name.in_(names)))
+        lower_names = [n.lower() for n in names]
+        result = await db.execute(select(Tag).where(func.lower(Tag.name).in_(lower_names)))
         return list(result.scalars().all())
