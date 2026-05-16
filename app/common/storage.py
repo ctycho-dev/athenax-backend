@@ -13,8 +13,10 @@ class R2StorageService:
     def __init__(self) -> None:
         self._session = aioboto3.Session()
 
-    def build_storage_key(self, slug: str, filename: str) -> str:
+    def build_storage_key(self, slug: str, filename: str, subfolder: str | None = None) -> str:
         safe_name = filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        if subfolder:
+            return f"products/{slug}/{subfolder}/{uuid.uuid4().hex}_{safe_name}"
         return f"products/{slug}/{uuid.uuid4().hex}_{safe_name}"
 
     def build_url(self, key: str) -> str:

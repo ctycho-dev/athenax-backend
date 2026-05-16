@@ -1,4 +1,4 @@
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
@@ -40,7 +40,7 @@ class ArticleRepository(BaseRepository[Article]):
                     .join(Tag, Tag.id == ArticleTag.tag_id)
                     .where(
                         ArticleTag.article_id == Article.id,
-                        Tag.name == tag.lower().strip(),
+                        func.lower(Tag.name) == tag.lower().strip(),
                     )
                 )
             )

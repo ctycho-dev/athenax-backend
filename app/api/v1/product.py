@@ -29,6 +29,7 @@ from app.domain.product.schema import (
     ToggleOutSchema,
     VoteSchema,
     ProductLinkCreateSchema, ProductLinkUpdateSchema, ProductLinkOutSchema,
+    ProductLogoOutSchema,
     ProductMediaCreateSchema, ProductMediaUpdateSchema, ProductMediaOutSchema,
     TeamMemberCreateSchema, TeamMemberUpdateSchema, TeamMemberStatusUpdateSchema, TeamMemberOutSchema,
     ProductBackerCreateSchema, ProductBackerOutSchema,
@@ -438,6 +439,33 @@ async def delete_media(
     storage: R2StorageService = Depends(get_storage_service),
 ):
     await service.delete_media(db, product_id=product_id, media_id=media_id, current_user=current_user, storage=storage)
+
+
+@router.post("/{product_id}/logo/upload", response_model=ProductLogoOutSchema)
+@limiter.limit("10/minute")
+async def upload_logo(
+    request: Request,
+    product_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
+):
+    return await service.upload_logo(db, product_id=product_id, file=file, current_user=current_user, storage=storage)
+
+
+@router.delete("/{product_id}/logo", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def delete_logo(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
+):
+    await service.delete_logo(db, product_id=product_id, current_user=current_user, storage=storage)
 
 
 # -------------------------

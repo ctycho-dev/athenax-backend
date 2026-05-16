@@ -35,6 +35,7 @@ from app.domain.product.schema import (
     ReleasePeriodSchema,
     ToggleOutSchema,
     ProductLinkCreateSchema, ProductLinkUpdateSchema, ProductLinkOutSchema,
+    ProductLogoOutSchema,
     ProductMediaCreateSchema, ProductMediaUpdateSchema, ProductMediaOutSchema,
     TeamMemberCreateSchema, TeamMemberUpdateSchema, TeamMemberStatusUpdateSchema, TeamMemberOutSchema,
     ProductBackerCreateSchema, ProductBackerOutSchema,
@@ -115,6 +116,23 @@ class ProductService:
         if current_user:
             data.user_votes, data.user_bookmarks, data.user_interests = gathered[4], gathered[5], gathered[6]
         return data
+
+    def _logo_url(self, logo: str | None) -> str | None:
+        if not logo:
+            return None
+        if logo.startswith("http"):
+            return logo
+        return f"{settings.r2.cdn_base_url.rstrip('/')}/{logo}"
+
+    def _logo_storage_key(self, logo: str | None) -> str | None:
+        if not logo:
+            return None
+        cdn = settings.r2.cdn_base_url.rstrip('/')
+        if logo.startswith(cdn):
+            return logo[len(cdn):].lstrip('/')
+        if logo.startswith("http"):
+            return None  # external URL, not R2
+        return logo
 
     async def get_release_stats(self, db: AsyncSession) -> ProductReleaseStatsSchema:
         stats = await self.repo.get_release_stats(db)
@@ -210,6 +228,7 @@ class ProductService:
         results = []
         for product in products:
             out = ProductListSchema.model_validate(product, from_attributes=True)
+            out.logo = self._logo_url(product.logo)
             all_cats = ix.categories_map[product.id]
             out.vote_count = ix.vote_counts[product.id]
             out.bookmark_count = ix.bookmark_counts[product.id]
@@ -616,6 +635,58 @@ class ProductService:
         await db.refresh(media)
         return self._to_media_schema(media)
 
+    async def upload_logo(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        file: UploadFile,
+        current_user: UserOutSchema,
+        storage: R2StorageService,
+    ) -> ProductLogoOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+
+        if file.content_type not in ALLOWED_CONTENT_TYPES - {"image/gif"}:
+            raise ValidationError(
+                f"Unsupported file type '{file.content_type}'. "
+                f"Allowed: {', '.join(sorted(ALLOWED_CONTENT_TYPES - {'image/gif'}))}"
+            )
+
+        data = await file.read()
+        if len(data) > MAX_FILE_SIZE_BYTES:
+            raise ValidationError(f"File too large. Maximum size is {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB.")
+
+        old_key = self._logo_storage_key(product.logo)
+        if old_key:
+            try:
+                await storage.delete_file(old_key)
+            except Exception:
+                pass  # best-effort: log but don't block the upload
+
+        key = storage.build_storage_key(product.slug, file.filename or "logo", subfolder="logo")
+        await storage.upload_file(key=key, data=data, content_type=file.content_type)
+        await self.repo.update_instance(db, product, {"logo": key})
+        await db.commit()
+        return ProductLogoOutSchema(logo=self._logo_url(key))  # type: ignore[arg-type]
+
+    async def delete_logo(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        current_user: UserOutSchema,
+        storage: R2StorageService,
+    ) -> None:
+        product = await self.repo.get_by_id(db, product_id)
+        if not product.logo:
+            raise NotFoundError("No logo to delete")
+        old_key = self._logo_storage_key(product.logo)
+        if old_key:
+            try:
+                await storage.delete_file(old_key)
+            except Exception:
+                pass  # best-effort
+        await self.repo.update_instance(db, product, {"logo": None})
+        await db.commit()
+
     # -------------------------
     # Product Team
     # -------------------------
@@ -814,6 +885,7 @@ class ProductService:
         results = []
         for product in products:
             out = ProductSimilarSchema.model_validate(product, from_attributes=True)
+            out.logo = self._logo_url(product.logo)
             out.categories = [c.name for c in categories_map[product.id] if c.parent_id is None]
             results.append(out)
         return results
@@ -837,6 +909,7 @@ class ProductService:
         )
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
+        result.logo = self._logo_url(product.logo)
         all_cats = ix.categories_map[product.id]
         result.category_ids = [c.id for c in all_cats if c.parent_id is None]
         result.sub_categories = [c.name for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.APPROVED.value]

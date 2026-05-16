@@ -213,6 +213,10 @@ class ProductMediaOutSchema(CamelModel):
     url: str | None = None
 
 
+class ProductLogoOutSchema(CamelModel):
+    logo: str
+
+
 # --- Team Members ---
 
 class TeamMemberCreateSchema(CamelModel):
@@ -220,16 +224,20 @@ class TeamMemberCreateSchema(CamelModel):
     name: str = Field(max_length=100)
     role_label: str | None = Field(default=None, max_length=150)
     bio_note: str | None = Field(default=None, max_length=300)
+    linkedin_url: str | None = Field(default=None, max_length=200)
     twitter_url: str | None = Field(default=None, max_length=200)
     github_url: str | None = Field(default=None, max_length=200)
+    other_url: str | None = Field(default=None, max_length=200)
 
 
 class TeamMemberUpdateSchema(CamelModel):
     name: str | None = Field(default=None, max_length=100)
     role_label: str | None = Field(default=None, max_length=150)
     bio_note: str | None = Field(default=None, max_length=300)
+    linkedin_url: str | None = Field(default=None, max_length=200)
     twitter_url: str | None = Field(default=None, max_length=200)
     github_url: str | None = Field(default=None, max_length=200)
+    other_url: str | None = Field(default=None, max_length=200)
 
 
 class TeamMemberStatusUpdateSchema(CamelModel):

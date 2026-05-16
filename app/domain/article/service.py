@@ -135,13 +135,19 @@ class ArticleService:
     # -------------------------
 
     async def _sync_tags(self, db: AsyncSession, article_id: int, tag_names: list[str]) -> None:
-        names = list({n.lower().strip() for n in tag_names if n.strip()})
+        # Dedup by lowercase key, preserving original casing of the first occurrence
+        seen: dict[str, str] = {}
+        for n in tag_names:
+            stripped = n.strip()
+            if stripped and stripped.lower() not in seen:
+                seen[stripped.lower()] = stripped
+        names = list(seen.values())
         existing = await self.tag_repo.get_by_names(db, names)
-        existing_names = {t.name for t in existing}
+        existing_lower = {t.name.lower() for t in existing}
         new_tags = [
             await self.tag_repo.create(db, {"name": name})
             for name in names
-            if name not in existing_names
+            if name.lower() not in existing_lower
         ]
         all_ids = {t.id for t in existing} | {t.id for t in new_tags}
         await sync_association(db, ArticleTag.__table__, "article_id", article_id, "tag_id", all_ids)
