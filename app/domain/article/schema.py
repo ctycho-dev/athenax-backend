@@ -17,6 +17,7 @@ class ArticleCreateSchema(CamelModel):
 
 class ArticleUpdateSchema(CamelModel):
     title: str | None = Field(default=None, max_length=255)
+    slug: str | None = Field(default=None, max_length=255)
     article_type: ArticleType | None = None
     content: str | None = None
     status: ArticleStatus | None = None

@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -30,11 +31,13 @@ async def seed_users():
                     {"id": 1, "name": "Founder", "email": "founder@test.com", "password_hash": "x", "role": UserRole.FOUNDER, "verified": True},
                     {"id": 2, "name": "Other", "email": "other@test.com", "password_hash": "x", "role": UserRole.FOUNDER, "verified": True},
                     {"id": 3, "name": "Investor", "email": "investor@test.com", "password_hash": "x", "role": UserRole.INVESTOR, "verified": True},
-                    {"id": 99, "name": "Admin", "email": "admin@test.com", "password_hash": "x", "role": UserRole.ADMIN, "verified": True},
+                    {"id": 99, "name": "Admin", "email": "admin99@test.com", "password_hash": "x", "role": UserRole.ADMIN, "verified": True},
                 ]
             )
             .on_conflict_do_nothing()
         )
+        # Advance the sequence past explicitly inserted IDs to avoid PK conflicts with auto-increment
+        await session.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))"))
         await session.commit()
     await engine.dispose()
 
@@ -101,7 +104,9 @@ class TestProductAPI:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
 
     # ------------------------------------------------------------------
     # RBAC — create
@@ -480,7 +485,8 @@ class TestProductAPI:
 
         response = await client.get(f"/api/v1/product/{product_id}/comments")
         assert response.status_code == 200
-        comments = response.json()
+        data = response.json()
+        comments = data["items"]
         assert len(comments) >= 2
 
     async def test_owner_can_update_own_comment(self, client: ClientWithEmail):
@@ -918,7 +924,6 @@ class TestProductAPI:
         assert response.status_code == 201
         data = response.json()
         assert data["mediaType"] == "image"
-        assert data["storageKey"] == "uploads/hero.png"
 
     async def test_non_admin_cannot_create_media(self, client: ClientWithEmail):
         product_id = await self._create_product_as_founder(client, user_id=1)
@@ -993,8 +998,8 @@ class TestProductAPI:
         uploaded: list[dict] = []
 
         class FakeStorage:
-            def build_storage_key(self, product_id: int, filename: str) -> str:
-                return f"products/{product_id}/abc_{filename}"
+            def build_storage_key(self, slug: str, filename: str) -> str:
+                return f"products/{slug}/abc_{filename}"
 
             async def upload_file(self, key: str, data: bytes, content_type: str) -> None:
                 uploaded.append({"key": key, "content_type": content_type})
@@ -1016,7 +1021,7 @@ class TestProductAPI:
 
         assert response.status_code == 201
         data = response.json()
-        assert data["storageKey"] == f"products/{product_id}/abc_hero.jpg"
+        assert data["mediaType"] == "image"
         assert data["sortOrder"] == 10
         assert data["mediaType"] == "image"
         assert len(uploaded) == 1

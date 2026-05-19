@@ -73,7 +73,8 @@ class Settings(BaseSettings):
     model_config = _cfg("")
 
     cors_origin: str = ''
-    frontend_url: str = 'http://localhost:3000'
+    cors_origin_regex: str = ''
+    frontend_url: str = ''
 
     api: ApiPrefix = ApiPrefix()
     db: DbConfig = DbConfig()  # pyright: ignore[reportCallIssue]
