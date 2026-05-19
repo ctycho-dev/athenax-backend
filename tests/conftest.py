@@ -3,6 +3,7 @@ import pytest
 import pytest_asyncio
 from typing import AsyncGenerator, cast
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
@@ -68,6 +69,8 @@ async def test_engine():
     )
     
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS ltree"))
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     
     yield engine

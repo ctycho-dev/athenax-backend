@@ -11,8 +11,8 @@ from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ArticleStatus
-from app.exceptions.exceptions import NotFoundError
-from app.utils.slug import generate_slug
+from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.utils.slug import slugify
 
 
 class ArticleService:
@@ -35,7 +35,9 @@ class ArticleService:
         payload = data.model_dump()
         tag_names = payload.pop("tags", [])
 
-        payload["slug"] = generate_slug(data.title)
+        slug = slugify(data.title)
+        await self._assert_slug_available(db, slug)
+        payload["slug"] = slug
         payload = self._apply_published_at(payload)
 
         article = await self.repo.create(db, payload, current_user_id=current_user.id)
@@ -110,8 +112,14 @@ class ArticleService:
         payload = data.model_dump(exclude_unset=True)
         tag_names = payload.pop("tags", None)
 
-        if "title" in payload:
-            payload["slug"] = generate_slug(payload["title"])
+        if "slug" in payload:
+            slug = slugify(payload["slug"])
+            await self._assert_slug_available(db, slug, exclude_id=article_id)
+            payload["slug"] = slug
+        elif "title" in payload:
+            slug = slugify(payload["title"])
+            await self._assert_slug_available(db, slug, exclude_id=article_id)
+            payload["slug"] = slug
 
         if "status" in payload:
             payload = self._apply_published_at(payload, current_published_at=article.published_at)
@@ -151,6 +159,14 @@ class ArticleService:
         ]
         all_ids = {t.id for t in existing} | {t.id for t in new_tags}
         await sync_association(db, ArticleTag.__table__, "article_id", article_id, "tag_id", all_ids)
+
+    async def _assert_slug_available(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> None:
+        try:
+            existing = await self.repo.get_by_slug(db, slug)
+            if existing.id != exclude_id:
+                raise ValidationError(f"Slug '{slug}' is already in use")
+        except NotFoundError:
+            pass
 
     def _assert_visible(self, article, current_user: UserOutSchema | None) -> None:
         if article.status != ArticleStatus.PUBLISHED:
