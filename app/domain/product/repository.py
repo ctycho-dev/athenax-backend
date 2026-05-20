@@ -238,6 +238,7 @@ class ProductRepository(BaseRepository[Product]):
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
         search: str | None = None,
+        upvoted_by_user_id: int | None = None,
     ):
         vote_subq = None
         if sort_by == ProductSortBy.TOP:
@@ -270,6 +271,12 @@ class ProductRepository(BaseRepository[Product]):
             q = q.where(Product.created_at >= cutoff)
         if search and (search_text := search.strip()):
             q = q.where(Product.name.ilike(f"%{search_text}%"))
+        if upvoted_by_user_id is not None:
+            q = q.where(
+                Product.id.in_(
+                    select(ProductVote.product_id).where(ProductVote.user_id == upvoted_by_user_id)
+                )
+            )
 
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
@@ -289,8 +296,9 @@ class ProductRepository(BaseRepository[Product]):
         date_filter: ProductDateFilter | None = None,
         sort_by: ProductSortBy | None = None,
         search: str | None = None,
+        upvoted_by_user_id: int | None = None,
     ) -> list[Product]:
-        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by, search)
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by, search, upvoted_by_user_id)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
@@ -303,8 +311,9 @@ class ProductRepository(BaseRepository[Product]):
         category_id: int | None = None,
         date_filter: ProductDateFilter | None = None,
         search: str | None = None,
+        upvoted_by_user_id: int | None = None,
     ) -> int:
-        q, _ = self._build_status_query(status, user_id, category_id, date_filter, search=search)
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, search=search, upvoted_by_user_id=upvoted_by_user_id)
         q = select(func.count()).select_from(q.subquery())
         result = await db.execute(q)
         return result.scalar() or 0
