@@ -150,6 +150,7 @@ class ProductService:
         other_subcategory_name = payload.pop("other_subcategory_name", None)
         url = payload.pop("url", None)
         backers = payload.pop("backers", [])
+        links = payload.pop("links", [])
 
         if other_subcategory_name:
             if not category_ids:
@@ -174,6 +175,13 @@ class ProductService:
             await self.link_repo.create(
                 db,
                 {"product_id": product.id, "link_type": "website", "url": url, "label": None},
+                current_user_id=current_user.id,
+            )
+
+        for link in links:
+            await self.link_repo.create(
+                db,
+                {"product_id": product.id, **link},
                 current_user_id=current_user.id,
             )
 
@@ -275,8 +283,31 @@ class ProductService:
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
         sub_category_ids = payload.pop("sub_category_ids", None)
+        links = payload.pop("links", None)
+        backers = payload.pop("backers", None)
 
         product = await self.repo.update(db, product_id, payload, current_user_id=current_user.id)
+
+        if links is not None:
+            existing = await self.link_repo.get_by_product_id(db, product_id)
+            existing_by_type = {l.link_type: l for l in existing}
+            new_types = {l["link_type"] for l in links}
+            for link_type, existing_link in existing_by_type.items():
+                if link_type not in new_types:
+                    await self.link_repo.delete_by_id(db, existing_link.id)
+            for link in links:
+                link_type = link["link_type"]
+                if link_type in existing_by_type:
+                    await self.link_repo.update_instance(db, existing_by_type[link_type], {"url": link["url"], "label": link.get("label")})
+                else:
+                    await self.link_repo.create(db, {"product_id": product_id, **link}, current_user_id=current_user.id)
+
+        if backers is not None:
+            existing_backers = await self.backer_repo.get_by_product_id(db, product_id)
+            for b in existing_backers:
+                await self.backer_repo.delete_by_id(db, b.id)
+            for name in backers:
+                await self.backer_repo.create(db, {"product_id": product_id, "name": name}, current_user_id=current_user.id)
 
         if category_ids is not None or sub_category_ids is not None:
             existing_cats = await self.repo.get_categories_for_product(db, product_id)

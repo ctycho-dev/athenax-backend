@@ -129,6 +129,11 @@ async def list_bookmarked_products(
     return await service.list_bookmarked(db, limit=limit, offset=offset, current_user=current_user)
 
 
+@router.get("/stages", response_model=list[str])
+async def list_stages():
+    return [s.value for s in ProductStage]
+
+
 @router.get("/slug/{slug}", response_model=ProductOutSchema)
 @limiter.limit("60/minute")
 async def get_product_by_slug(
