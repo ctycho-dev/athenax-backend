@@ -1541,3 +1541,148 @@ class TestProductAPI:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 404
+
+    # ------------------------------------------------------------------
+    # Inline links on create / update
+    # ------------------------------------------------------------------
+
+    async def test_create_product_with_links(self, client: ClientWithEmail):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            payload = {
+                **PRODUCT_PAYLOAD,
+                "name": "Product With Inline Links",
+                "links": [
+                    {"linkType": "github", "url": "https://github.com/org/repo"},
+                    {"linkType": "docs", "url": "https://docs.example.com"},
+                ],
+            }
+            response = await client.post("/api/v1/product", json=payload)
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        data = response.json()
+        links_by_type = {l["linkType"]: l["url"] for l in data["links"]}
+        assert links_by_type["github"] == "https://github.com/org/repo"
+        assert links_by_type["docs"] == "https://docs.example.com"
+
+    async def test_create_product_without_links_defaults_empty(self, client: ClientWithEmail):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            response = await client.post(
+                "/api/v1/product", json={**PRODUCT_PAYLOAD, "name": "No Links Product"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        assert response.json()["links"] == []
+
+    async def test_update_product_adds_links(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"links": [{"linkType": "github", "url": "https://github.com/org/repo"}]},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        links_by_type = {l["linkType"]: l["url"] for l in response.json()["links"]}
+        assert links_by_type["github"] == "https://github.com/org/repo"
+
+    async def test_update_product_updates_existing_link(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"links": [{"linkType": "github", "url": "https://github.com/org/old"}]},
+            )
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"links": [{"linkType": "github", "url": "https://github.com/org/new"}]},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        links_by_type = {l["linkType"]: l["url"] for l in response.json()["links"]}
+        assert links_by_type["github"] == "https://github.com/org/new"
+
+    async def test_update_product_removes_omitted_link_types(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"links": [
+                    {"linkType": "github", "url": "https://github.com/org/repo"},
+                    {"linkType": "docs", "url": "https://docs.example.com"},
+                ]},
+            )
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"links": [{"linkType": "github", "url": "https://github.com/org/repo"}]},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        link_types = [l["linkType"] for l in response.json()["links"]]
+        assert "github" in link_types
+        assert "docs" not in link_types
+
+    async def test_update_product_omitting_links_preserves_existing(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"links": [{"linkType": "github", "url": "https://github.com/org/repo"}]},
+            )
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"name": "Renamed Product"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Renamed Product"
+        link_types = [l["linkType"] for l in data["links"]]
+        assert "github" in link_types

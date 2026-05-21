@@ -67,6 +67,7 @@ async def list_products(
     date_filter: ProductDateFilter | None = None,
     sort_by: ProductSortBy | None = None,
     q: str | None = None,
+    upvoted: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
@@ -74,7 +75,7 @@ async def list_products(
     return await service.list(
         db, limit=limit, offset=offset, status=status, current_user=current_user,
         category_id=category_id, date_filter=date_filter, sort_by=sort_by,
-        search=q,
+        search=q, upvoted=upvoted,
     )
 
 
@@ -102,7 +103,7 @@ async def list_my_products(
     return await service.list(db, limit=limit, offset=offset, status=status, current_user=current_user, owner_only=True)
 
 
-@router.get("/me/voted", response_model=list[ProductSummarySchema])
+@router.get("/me/voted", response_model=PaginatedSchema[ProductListSchema])
 @limiter.limit("60/minute")
 async def list_voted_products(
     request: Request,
@@ -126,6 +127,11 @@ async def list_bookmarked_products(
     service: ProductService = Depends(get_product_service),
 ):
     return await service.list_bookmarked(db, limit=limit, offset=offset, current_user=current_user)
+
+
+@router.get("/stages", response_model=list[str])
+async def list_stages():
+    return [s.value for s in ProductStage]
 
 
 @router.get("/slug/{slug}", response_model=ProductOutSchema)
