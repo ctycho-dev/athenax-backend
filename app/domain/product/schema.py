@@ -24,6 +24,7 @@ class ProductCreateSchema(CamelModel):
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
     backers: list[str] = Field(default_factory=list)
+    links: list["ProductLinkCreateSchema"] = Field(default_factory=list)
     category_ids: list[int] = Field(default_factory=list)
     sub_category_ids: list[int] = Field(default_factory=list)
     other_subcategory_name: str | None = Field(default=None, max_length=100)
@@ -40,6 +41,7 @@ class ProductUpdateSchema(CamelModel):
     imported: bool | None = None
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
+    links: list["ProductLinkCreateSchema"] | None = None
     category_ids: list[int] | None = None
     sub_category_ids: list[int] | None = None
 
@@ -179,6 +181,10 @@ class ProductLinkCreateSchema(CamelModel):
     link_type: ProductLinkType
     url: str = Field(max_length=500)
     label: str | None = Field(default=None, max_length=100)
+
+
+ProductCreateSchema.model_rebuild()
+ProductUpdateSchema.model_rebuild()
 
 
 class ProductLinkUpdateSchema(CamelModel):
