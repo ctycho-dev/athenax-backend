@@ -284,6 +284,7 @@ class ProductService:
         category_ids = payload.pop("category_ids", None)
         sub_category_ids = payload.pop("sub_category_ids", None)
         links = payload.pop("links", None)
+        backers = payload.pop("backers", None)
 
         product = await self.repo.update(db, product_id, payload, current_user_id=current_user.id)
 
@@ -300,6 +301,13 @@ class ProductService:
                     await self.link_repo.update_instance(db, existing_by_type[link_type], {"url": link["url"], "label": link.get("label")})
                 else:
                     await self.link_repo.create(db, {"product_id": product_id, **link}, current_user_id=current_user.id)
+
+        if backers is not None:
+            existing_backers = await self.backer_repo.get_by_product_id(db, product_id)
+            for b in existing_backers:
+                await self.backer_repo.delete_by_id(db, b.id)
+            for name in backers:
+                await self.backer_repo.create(db, {"product_id": product_id, "name": name}, current_user_id=current_user.id)
 
         if category_ids is not None or sub_category_ids is not None:
             existing_cats = await self.repo.get_categories_for_product(db, product_id)

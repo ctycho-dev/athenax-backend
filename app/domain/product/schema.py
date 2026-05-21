@@ -41,6 +41,7 @@ class ProductUpdateSchema(CamelModel):
     imported: bool | None = None
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
+    backers: list[str] | None = None
     links: list["ProductLinkCreateSchema"] | None = None
     category_ids: list[int] | None = None
     sub_category_ids: list[int] | None = None
