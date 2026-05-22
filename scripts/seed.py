@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 CSV_PATH = Path(__file__).parent.parent / "Projects.csv"
 W2_CSV_PATH = Path(__file__).parent.parent / "W2_Projects.csv"
 CATEGORIES_CSV_PATH = Path(__file__).parent.parent / "Categories.csv"
+XLSX_PATH = Path(__file__).parent.parent / "Projects.xlsx"
 
 
 # ---------------------------------------------------------------------------
@@ -176,6 +177,32 @@ def _load_csv() -> list[dict]:
     """Read Projects.csv, drop rows with no name."""
     with open(CSV_PATH, newline="", encoding="utf-8") as fh:
         return [row for row in csv.DictReader(fh) if row.get("name", "").strip()]
+
+
+def _load_xlsx(path: "Path | None" = None) -> list[dict]:
+    """Read an xlsx file, return rows as list[dict] keyed by header row. Drop blank-name rows."""
+    import openpyxl  # optional dep — only required when using xlsx workflow
+    target = path or XLSX_PATH
+    wb = openpyxl.load_workbook(target, read_only=True, data_only=True)
+    ws = wb.active
+    all_rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    if not all_rows:
+        return []
+    headers = [str(h).strip() if h is not None else "" for h in all_rows[0]]
+    def _cell(v) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, float) and v == int(v):
+            return str(int(v))
+        return str(v).strip()
+
+    result = []
+    for raw in all_rows[1:]:
+        row = {headers[i]: _cell(v) for i, v in enumerate(raw) if i < len(headers)}
+        if row.get("name", "").strip():
+            result.append(row)
+    return result
 
 
 def _load_w2_csv() -> list[dict]:

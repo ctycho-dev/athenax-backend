@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 validate upload-pending
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -24,6 +24,8 @@ help:
 	@echo "  make history                Show migration history"
 	@echo "  make seed                   Seed the database with initial data"
 	@echo "  make seed:categories        Seed only parent categories and subcategories from Categories.csv"
+	@echo "  make validate               Validate Projects.xlsx against Data Specs rules"
+	@echo "  make upload-pending         Import Projects.xlsx as pending (awaiting admin approval)"
 
 start:
 	$(COMPOSE) up -d
@@ -115,3 +117,10 @@ seed\:categories:
 seed\:w2:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed.py w2
+
+validate:
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/validate_xlsx.py
+
+upload-pending:
+	$(COMPOSE) up -d postgres redis
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/upload_pending.py
