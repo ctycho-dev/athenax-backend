@@ -239,6 +239,7 @@ class ProductRepository(BaseRepository[Product]):
         sort_by: ProductSortBy | None = None,
         search: str | None = None,
         upvoted_by_user_id: int | None = None,
+        listed: bool | None = None,
     ):
         vote_subq = None
         if sort_by == ProductSortBy.TOP:
@@ -277,6 +278,16 @@ class ProductRepository(BaseRepository[Product]):
                     select(ProductVote.product_id).where(ProductVote.user_id == upvoted_by_user_id)
                 )
             )
+        if listed is not None:
+            hidden_product_ids = (
+                select(ProductCategory.product_id)
+                .join(Category, ProductCategory.category_id == Category.id)
+                .where(Category.is_hidden_from_all == True)
+            )
+            if listed:
+                q = q.where(~Product.id.in_(hidden_product_ids))
+            else:
+                q = q.where(Product.id.in_(hidden_product_ids))
 
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
@@ -297,8 +308,9 @@ class ProductRepository(BaseRepository[Product]):
         sort_by: ProductSortBy | None = None,
         search: str | None = None,
         upvoted_by_user_id: int | None = None,
+        listed: bool | None = None,
     ) -> list[Product]:
-        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by, search, upvoted_by_user_id)
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by, search, upvoted_by_user_id, listed)
         q = q.limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
@@ -312,8 +324,9 @@ class ProductRepository(BaseRepository[Product]):
         date_filter: ProductDateFilter | None = None,
         search: str | None = None,
         upvoted_by_user_id: int | None = None,
+        listed: bool | None = None,
     ) -> int:
-        q, _ = self._build_status_query(status, user_id, category_id, date_filter, search=search, upvoted_by_user_id=upvoted_by_user_id)
+        q, _ = self._build_status_query(status, user_id, category_id, date_filter, search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed)
         q = select(func.count()).select_from(q.subquery())
         result = await db.execute(q)
         return result.scalar() or 0
