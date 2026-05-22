@@ -25,7 +25,7 @@ CATEGORIES_CSV_PATH = Path(__file__).parent.parent / "Categories.csv"
 BASELINE_PARENTS: list[str] = [
     "AI & Agents",
     "Biotech",
-    "Crypto & DeFi",
+    "Crypto",
     "Developer Tools",
     "Infrastructure",
     "Robotics",
