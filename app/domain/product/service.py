@@ -169,7 +169,8 @@ class ProductService:
 
         if sub_category_ids:
             await self.category_repo.assert_are_subcategories(db, sub_category_ids)
-        await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product.id, category_ids + sub_category_ids)
+        all_cat_ids = category_ids + sub_category_ids
+        await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product.id, all_cat_ids)
 
         if url:
             await self.link_repo.create(
@@ -209,6 +210,7 @@ class ProductService:
         sort_by: ProductSortBy | None = None,
         search: str | None = None,
         upvoted: bool | None = None,
+        listed: bool | None = None,
     ) -> PaginatedSchema[ProductListSchema]:
         user_id: int | None = None
         if owner_only and current_user is not None:
@@ -218,15 +220,18 @@ class ProductService:
             # Non-admins can only see approved products
             status = ProductStatus.APPROVED
         upvoted_by_user_id: int | None = current_user.id if upvoted and current_user else None
+        # Default to excluding hidden-category products only when no specific category is requested
+        if listed is None and category_id is None:
+            listed = True
         products = await self.repo.get_all_by_status(
             db, status, limit=limit, offset=offset, user_id=user_id,
             category_id=category_id, date_filter=date_filter, sort_by=sort_by,
-            search=search, upvoted_by_user_id=upvoted_by_user_id,
+            search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
         )
         total = await self.repo.count_by_status(
             db, status, user_id=user_id,
             category_id=category_id, date_filter=date_filter,
-            search=search, upvoted_by_user_id=upvoted_by_user_id,
+            search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
         )
 
         if not products:
@@ -317,7 +322,8 @@ class ProductService:
             new_sub_ids = sub_category_ids if sub_category_ids is not None else existing_sub_ids
             if new_sub_ids:
                 await self.category_repo.assert_are_subcategories(db, new_sub_ids)
-            await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product_id, new_parent_ids + new_sub_ids)
+            synced_ids = new_parent_ids + new_sub_ids
+            await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product_id, synced_ids)
 
         await db.commit()
         await db.refresh(product)
