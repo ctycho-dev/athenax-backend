@@ -51,14 +51,14 @@ XLSX_PATH = Path(__file__).parent.parent / "Projects.xlsx"
 CATEGORIES: list[str] = [
     "AI & Agents",
     "Biotech",
-    "Crypto & DeFi",
+    "Crypto",
     "Developer Tools",
     "Infrastructure",
     "Robotics",
 ]
 
 CATEGORY_ALIASES: dict[str, str] = {
-    "Crypto":       "Crypto & DeFi",
+    "Crypto":       "Crypto",
     "Robotics / AI": "Robotics",
     "Biotech / AI": "Biotech",
 }
@@ -86,7 +86,7 @@ LABS: list[dict] = [
             "proofs, Layer 2 scaling, and DeFi protocol design."
         ),
         "active":     True,
-        "categories": ["Infrastructure", "Crypto & DeFi"],
+        "categories": ["Infrastructure", "Crypto"],
     },
     {
         "name":           "MIT DCI",
@@ -97,7 +97,7 @@ LABS: list[dict] = [
             "practical implementation of digital currencies and decentralised systems."
         ),
         "active":     True,
-        "categories": ["Crypto & DeFi"],
+        "categories": ["Crypto"],
     },
     {
         "name":           "Stanford Blockchain",
@@ -130,7 +130,7 @@ LABS: list[dict] = [
             "protocol — consensus, data availability, execution, and beyond."
         ),
         "active":     True,
-        "categories": ["Infrastructure", "Crypto & DeFi"],
+        "categories": ["Infrastructure", "Crypto"],
     },
     {
         "name":           "Consensys R&D",
