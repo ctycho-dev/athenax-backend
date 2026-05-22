@@ -13,6 +13,7 @@ Usage:
 import asyncio
 import logging
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import select
@@ -92,6 +93,8 @@ async def upload_pending(path: Path) -> None:
 
         inserted = 0
         skipped = 0
+        base_time = datetime.now(timezone.utc)
+        insert_index = 0
 
         for row in rows:
             name = row["name"].strip()
@@ -118,12 +121,14 @@ async def upload_pending(path: Path) -> None:
                 logo=parsed["logo"],
                 imported=True,
                 status=ProductStatus.PENDING,
+                created_at=base_time + timedelta(seconds=insert_index),
             )
             session.add(product)
             await session.flush()
             _insert_child_rows(session, product.id, parsed, category_id_by_name)
             log.info("  INSERT  %s", name)
             inserted += 1
+            insert_index += 1
 
         await session.commit()
 
