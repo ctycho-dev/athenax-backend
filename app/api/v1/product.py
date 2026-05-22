@@ -68,6 +68,7 @@ async def list_products(
     sort_by: ProductSortBy | None = None,
     q: str | None = None,
     upvoted: bool | None = None,
+    listed: bool | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
@@ -75,7 +76,7 @@ async def list_products(
     return await service.list(
         db, limit=limit, offset=offset, status=status, current_user=current_user,
         category_id=category_id, date_filter=date_filter, sort_by=sort_by,
-        search=q, upvoted=upvoted,
+        search=q, upvoted=upvoted, listed=listed,
     )
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, ForeignKey
+from sqlalchemy import Boolean, Integer, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.audit_mixin import TimestampMixin
@@ -17,3 +17,4 @@ class Category(Base, TimestampMixin):
         Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=VerificationStatus.APPROVED.value)
+    is_hidden_from_all: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
