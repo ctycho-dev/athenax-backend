@@ -76,3 +76,6 @@ alembic/versions/*.pyc
 *Projects.csv
 *Projects.xlsx
 *Categories.csv
+
+
+/scripts/seed_ghost_votes.py
