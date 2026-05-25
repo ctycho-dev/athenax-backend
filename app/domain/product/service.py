@@ -220,8 +220,9 @@ class ProductService:
             # Non-admins can only see approved products
             status = ProductStatus.APPROVED
         upvoted_by_user_id: int | None = current_user.id if upvoted and current_user else None
-        # Default to excluding hidden-category products only when no specific category is requested
-        if listed is None and category_id is None:
+        # Admins viewing pending products see all regardless of category visibility
+        admin_viewing_pending = (current_user and is_admin(current_user) and status == ProductStatus.PENDING)
+        if listed is None and category_id is None and not admin_viewing_pending:
             listed = True
         products = await self.repo.get_all_by_status(
             db, status, limit=limit, offset=offset, user_id=user_id,
