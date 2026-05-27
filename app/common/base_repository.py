@@ -11,6 +11,7 @@ class AudiProtocol(Protocol):
     created_by_id: Optional[int]
     updated_by_id: Optional[int]
     deleted_at: Any
+    deleted_by_id: Optional[int]
 
 T = TypeVar("T", bound=AudiProtocol)
 
@@ -19,9 +20,18 @@ class BaseRepository(Generic[T]):
     def __init__(self, model: Type[T]):
         self.model = model
 
+    def _active_filter(self):
+        """Returns a deleted_at IS NULL filter if the model supports soft delete, else None."""
+        if hasattr(self.model, "deleted_at"):
+            return self.model.deleted_at.is_(None)
+        return None
+
     async def get_by_id(self, session: AsyncSession, _id: int) -> T:
         try:
-            result = await session.execute(select(self.model).where(self.model.id == _id))
+            q = select(self.model).where(self.model.id == _id)
+            if (f := self._active_filter()) is not None:
+                q = q.where(f)
+            result = await session.execute(q)
             instance = result.scalar_one_or_none()
             if not instance:
                 raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
@@ -38,7 +48,10 @@ class BaseRepository(Generic[T]):
         offset: int = 0,
     ) -> list[T]:
         try:
-            result = await session.execute(select(self.model).limit(limit).offset(offset))
+            q = select(self.model)
+            if (f := self._active_filter()) is not None:
+                q = q.where(f)
+            result = await session.execute(q.limit(limit).offset(offset))
             return list(result.scalars().all())
         except Exception as e:
             raise DatabaseError(f"Failed to retrieve {self.model.__name__} list: {e}") from e
@@ -71,7 +84,10 @@ class BaseRepository(Generic[T]):
         current_user_id: int | None = None,
     ) -> T:
         try:
-            result = await session.execute(select(self.model).where(self.model.id == _id))
+            q = select(self.model).where(self.model.id == _id)
+            if (f := self._active_filter()) is not None:
+                q = q.where(f)
+            result = await session.execute(q)
             instance = result.scalar_one_or_none()
             if not instance:
                 raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
@@ -130,7 +146,7 @@ class BaseRepository(Generic[T]):
         except Exception as e:
             raise DatabaseError(f"Failed to delete {self.model.__name__}: {e}") from e
 
-    async def soft_delete(self, session: AsyncSession, _id: int) -> None:
+    async def soft_delete(self, session: AsyncSession, _id: int, deleted_by_id: int | None = None) -> None:
         from datetime import datetime, timezone
         try:
             result = await session.execute(
@@ -143,6 +159,8 @@ class BaseRepository(Generic[T]):
                 raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
             if hasattr(instance, "deleted_at"):
                 instance.deleted_at = datetime.now(timezone.utc)
+            if deleted_by_id and hasattr(instance, "deleted_by_id"):
+                instance.deleted_by_id = deleted_by_id
             await session.flush()
         except NotFoundError:
             raise

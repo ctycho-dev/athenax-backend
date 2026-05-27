@@ -13,7 +13,9 @@ class ArticleRepository(BaseRepository[Article]):
         super().__init__(Article)
 
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Article:
-        result = await db.execute(select(Article).where(Article.slug == slug))
+        result = await db.execute(
+            select(Article).where(Article.slug == slug, Article.deleted_at.is_(None))
+        )
         article = result.scalar_one_or_none()
         if article is None:
             raise NotFoundError(f"Article with slug '{slug}' not found")
@@ -28,7 +30,7 @@ class ArticleRepository(BaseRepository[Article]):
         limit: int,
         offset: int,
     ) -> list[Article]:
-        q = select(Article)
+        q = select(Article).where(Article.deleted_at.is_(None))
         if status is not None:
             q = q.where(Article.status == status)
         if article_type is not None:

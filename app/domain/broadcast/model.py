@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, PrimaryKeyConstraint, Stri
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.common.audit_mixin import TimestampMixin, UserAuditMixin
+from app.common.audit_mixin import TimestampMixin, UserAuditMixin, SoftDeleteMixin
 from app.database.connection import Base
 from app.enums.enums import BroadcastStatus, BroadcastType
 
@@ -23,7 +23,7 @@ class BroadcastTag(Base, TimestampMixin):
     )
 
 
-class Broadcast(Base, TimestampMixin, UserAuditMixin):
+class Broadcast(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     __tablename__ = "broadcasts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
