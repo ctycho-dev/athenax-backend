@@ -84,7 +84,7 @@ async def delete_article(
     request: Request,
     article_id: int,
     db: AsyncSession = Depends(get_db),
-    _: UserOutSchema = Depends(require_admin_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: ArticleService = Depends(get_article_service),
 ):
-    await service.delete_by_id(db, article_id=article_id)
+    await service.delete_by_id(db, article_id=article_id, current_user=current_user)

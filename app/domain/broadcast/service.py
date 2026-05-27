@@ -133,9 +133,9 @@ class BroadcastService:
         await db.refresh(broadcast)
         return await self._to_schema(db, broadcast)
 
-    async def delete_by_id(self, db: AsyncSession, broadcast_id: int) -> None:
+    async def delete_by_id(self, db: AsyncSession, broadcast_id: int, current_user: UserOutSchema) -> None:
         await self.repo.get_by_id(db, broadcast_id)
-        await self.repo.delete_by_id(db, broadcast_id)
+        await self.repo.soft_delete(db, broadcast_id, deleted_by_id=current_user.id)
         await db.commit()
 
     # -------------------------

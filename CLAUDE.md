@@ -102,6 +102,11 @@ Never write migration files by hand — always use Alembic autogenerate. Run `ma
 - Categories are a managed resource (admin CRUD API). Clients pass `category_ids` only — never create categories as a side effect of another domain's create/update.
 - In ORM queries, use mapped model attributes; use `__table__.c` only for explicit SQLAlchemy Core table-level access.
 
+
+### Soft Delete
+
+Only main domain tables use soft delete (e.g. `Product`, `Article`, `Broadcast`) — not sub-tables. Add `SoftDeleteMixin` to the model . `BaseRepository.get_by_id`, `get_all`, and `update` automatically exclude soft-deleted rows for any model that has `deleted_at`. All other custom repo queries must add `.where(Model.deleted_at.is_(None))` manually. Services call `repo.soft_delete()` instead of `repo.delete_by_id()`.
+
 ### Avoiding N+1 Queries
 
 - Never call per-row queries inside a loop. Use batch repo methods for list paths.

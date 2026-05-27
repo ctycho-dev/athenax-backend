@@ -5,7 +5,7 @@ from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
-from app.common.audit_mixin import TimestampMixin, UserAuditMixin
+from app.common.audit_mixin import TimestampMixin, UserAuditMixin, SoftDeleteMixin
 from app.enums.enums import ProductStage, ProductStatus, ProductLinkType, ProductMediaType, VerificationStatus, BountyStatus
 
 
@@ -105,7 +105,7 @@ class ProductComment(Base, TimestampMixin, UserAuditMixin):
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
 
-class Product(Base, TimestampMixin, UserAuditMixin):
+class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(

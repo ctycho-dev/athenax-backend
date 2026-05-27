@@ -88,7 +88,7 @@ async def delete_broadcast(
     request: Request,
     broadcast_id: int,
     db: AsyncSession = Depends(get_db),
-    _: UserOutSchema = Depends(require_admin_user),
+    current_user: UserOutSchema = Depends(require_admin_user),
     service: BroadcastService = Depends(get_broadcast_service),
 ):
-    await service.delete_by_id(db, broadcast_id=broadcast_id)
+    await service.delete_by_id(db, broadcast_id=broadcast_id, current_user=current_user)

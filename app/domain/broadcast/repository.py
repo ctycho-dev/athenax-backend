@@ -13,7 +13,9 @@ class BroadcastRepository(BaseRepository[Broadcast]):
         super().__init__(Broadcast)
 
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Broadcast:
-        result = await db.execute(select(Broadcast).where(Broadcast.slug == slug))
+        result = await db.execute(
+            select(Broadcast).where(Broadcast.slug == slug, Broadcast.deleted_at.is_(None))
+        )
         broadcast = result.scalar_one_or_none()
         if broadcast is None:
             raise NotFoundError(f"Broadcast with slug '{slug}' not found")
@@ -28,7 +30,7 @@ class BroadcastRepository(BaseRepository[Broadcast]):
         limit: int,
         offset: int,
     ) -> list[Broadcast]:
-        q = select(Broadcast)
+        q = select(Broadcast).where(Broadcast.deleted_at.is_(None))
         if status is not None:
             q = q.where(Broadcast.status == status)
         if broadcast_type is not None:

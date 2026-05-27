@@ -213,7 +213,10 @@ class ProductRepository(BaseRepository[Product]):
         }
         result = {}
         for key, cutoff in cutoffs.items():
-            q = select(func.count()).where(Product.status == ProductStatus.APPROVED)
+            q = select(func.count()).where(
+                Product.status == ProductStatus.APPROVED,
+                Product.deleted_at.is_(None),
+            )
             if cutoff is not None:
                 q = q.where(Product.created_at >= cutoff)
             row = await db.execute(q)
@@ -289,6 +292,8 @@ class ProductRepository(BaseRepository[Product]):
             else:
                 q = q.where(Product.id.in_(hidden_product_ids))
 
+        q = q.where(Product.deleted_at.is_(None))
+
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
         else:
@@ -332,23 +337,29 @@ class ProductRepository(BaseRepository[Product]):
         return result.scalar() or 0
 
     async def get_by_ids(self, db: AsyncSession, product_ids: list[int]) -> list[Product]:
-        result = await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        result = await db.execute(
+            select(Product).where(Product.id.in_(product_ids), Product.deleted_at.is_(None))
+        )
         products_by_id = {p.id: p for p in result.scalars().all()}
         return [products_by_id[pid] for pid in product_ids if pid in products_by_id]
 
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Product | None:
-        result = await db.execute(select(Product).where(Product.slug == slug))
+        result = await db.execute(
+            select(Product).where(Product.slug == slug, Product.deleted_at.is_(None))
+        )
         return result.scalar_one_or_none()
 
     async def get_by_id_with_status_check(
         self, db: AsyncSession, product_id: int, required_status: ProductStatus | None = None
     ) -> Product:
-        result = await db.execute(select(Product).where(Product.id == product_id))
+        result = await db.execute(
+            select(Product).where(Product.id == product_id, Product.deleted_at.is_(None))
+        )
         instance = result.scalar_one_or_none()
         if not instance:
             raise NotFoundError(f"Product with ID {product_id} not found")
         if required_status is not None and instance.status != required_status:
-            raise NotFoundError(f"Product with ID {product_id} not found") # Don't reveal existence of product if status doesn't match 
+            raise NotFoundError(f"Product with ID {product_id} not found")  # Don't reveal existence of product if status doesn't match
         return instance
 
     # -------------------------
@@ -382,6 +393,7 @@ class ProductRepository(BaseRepository[Product]):
                 ProductCategory.category_id.in_(category_ids),
                 ProductCategory.product_id != exclude_id,
                 Product.status == ProductStatus.APPROVED,
+                Product.deleted_at.is_(None),
             )
             .group_by(ProductCategory.product_id, Product.created_at, Product.id)
             .order_by(Product.created_at.desc(), Product.id.desc())
