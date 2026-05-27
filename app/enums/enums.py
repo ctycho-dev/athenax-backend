@@ -46,15 +46,6 @@ class VerificationStatus(str, Enum):
 
 
 ProductStatus = VerificationStatus
-
-
-class PaperStatus(str, Enum):
-    """Publication status of a research paper."""
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    ARCHIVED = "archived"
-
-
 PaperVerificationStatus = VerificationStatus
 
 
@@ -103,13 +94,22 @@ class BountyStatus(str, Enum):
 TeamMemberStatus = VerificationStatus
 
 
-class ArticleStatus(str, Enum):
+class ContentStatus(str, Enum):
     DRAFT     = "draft"
     PUBLISHED = "published"
     ARCHIVED  = "archived"
 
 
-class ArticleType(str, Enum):
+ArticleStatus = ContentStatus
+BroadcastStatus = ContentStatus
+PaperStatus = ContentStatus
+
+
+class ContentType(str, Enum):
     WHITEPAPER  = "whitepaper"
     LIVESTREAM  = "livestream"
     ROUNDTABLE  = "roundtable"
+
+
+ArticleType = ContentType
+BroadcastType = ContentType

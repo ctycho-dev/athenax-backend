@@ -22,6 +22,7 @@ class ApiV1Prefix(BaseModel):
     paper: str = "/paper"
     product: str = "/product"
     article: str = "/article"
+    broadcast: str = "/broadcast"
 
 
 class ApiPrefix(BaseModel):
