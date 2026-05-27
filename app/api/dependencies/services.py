@@ -24,6 +24,8 @@ from app.domain.product.repository import (
 from app.domain.product.service import ProductService
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.service import ArticleService
+from app.domain.broadcast.repository import BroadcastRepository
+from app.domain.broadcast.service import BroadcastService
 from app.domain.tag.repository import TagRepository
 from app.common.storage import R2StorageService
 
@@ -107,6 +109,10 @@ def get_article_repo() -> ArticleRepository:
     return ArticleRepository()
 
 
+def get_broadcast_repo() -> BroadcastRepository:
+    return BroadcastRepository()
+
+
 def get_tag_repo() -> TagRepository:
     return TagRepository()
 
@@ -171,6 +177,14 @@ def get_article_service(
     user_repo: UserRepository = Depends(get_user_repo),
 ) -> ArticleService:
     return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
+
+
+def get_broadcast_service(
+    repo: BroadcastRepository = Depends(get_broadcast_repo),
+    tag_repo: TagRepository = Depends(get_tag_repo),
+    user_repo: UserRepository = Depends(get_user_repo),
+) -> BroadcastService:
+    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
 
 
 def get_product_service(

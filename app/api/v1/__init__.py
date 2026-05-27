@@ -9,6 +9,7 @@ from .category import router as category_router
 from .paper import router as paper_router
 from .product import router as product_router
 from .article import router as article_router
+from .broadcast import router as broadcast_router
 
 router = APIRouter(
     prefix=settings.api.v1.prefix,
@@ -21,5 +22,6 @@ router.include_router(category_router)
 router.include_router(paper_router)
 router.include_router(product_router)
 router.include_router(article_router)
+router.include_router(broadcast_router)
 
 __all__ = ["router"]
