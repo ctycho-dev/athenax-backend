@@ -133,9 +133,9 @@ class ArticleService:
         await db.refresh(article)
         return await self._to_schema(db, article)
 
-    async def delete_by_id(self, db: AsyncSession, article_id: int) -> None:
+    async def delete_by_id(self, db: AsyncSession, article_id: int, current_user: UserOutSchema) -> None:
         await self.repo.get_by_id(db, article_id)
-        await self.repo.delete_by_id(db, article_id)
+        await self.repo.soft_delete(db, article_id, deleted_by_id=current_user.id)
         await db.commit()
 
     # -------------------------

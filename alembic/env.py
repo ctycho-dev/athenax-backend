@@ -19,6 +19,7 @@ from app.domain.lab.model import Lab, LabCategory
 from app.domain.category.model import Category
 from app.domain.paper.model import Paper, PaperCategory, PaperVote
 from app.domain.article.model import Article, ArticleTag
+from app.domain.broadcast.model import Broadcast, BroadcastTag
 from app.domain.tag.model import Tag
 from app.database.connection import Base
 

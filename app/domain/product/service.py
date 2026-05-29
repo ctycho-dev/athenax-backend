@@ -338,7 +338,7 @@ class ProductService:
     ) -> None:
         product = await self.repo.get_by_id(db, product_id)
         assert_can_modify(product, current_user)
-        await self.repo.delete_by_id(db, product_id)
+        await self.repo.soft_delete(db, product_id, deleted_by_id=current_user.id)
         await db.commit()
 
     async def list_voted(
