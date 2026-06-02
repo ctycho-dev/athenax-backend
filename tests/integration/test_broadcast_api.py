@@ -78,9 +78,13 @@ class TestBroadcastAPI:
     # Helpers
     # ------------------------------------------------------------------
 
+    _counter = 0
+
     async def _create_broadcast_as_admin(self, client: ClientWithEmail, payload: dict | None = None) -> dict:
+        TestBroadcastAPI._counter += 1
+        base = {**(payload or BROADCAST_PAYLOAD), "title": f"Test Broadcast {TestBroadcastAPI._counter}"}
         with _override_admin():
-            resp = await client.post("/api/v1/broadcast", json=payload or BROADCAST_PAYLOAD)
+            resp = await client.post("/api/v1/broadcast", json=base)
         assert resp.status_code == 201
         return resp.json()
 
@@ -99,12 +103,13 @@ class TestBroadcastAPI:
         assert response.status_code == 403
 
     async def test_create_broadcast_success_for_admin(self, client: ClientWithEmail):
+        payload = {**BROADCAST_PAYLOAD, "title": "Broadcast Create Success"}
         with _override_admin():
-            response = await client.post("/api/v1/broadcast", json=BROADCAST_PAYLOAD)
+            response = await client.post("/api/v1/broadcast", json=payload)
 
         assert response.status_code == 201
         data = response.json()
-        assert data["title"] == BROADCAST_PAYLOAD["title"]
+        assert data["title"] == "Broadcast Create Success"
         assert data["slug"] != ""
         assert data["broadcastType"] == "livestream"
         assert data["status"] == "draft"
@@ -128,14 +133,15 @@ class TestBroadcastAPI:
     # ------------------------------------------------------------------
 
     async def test_create_draft_has_no_published_at(self, client: ClientWithEmail):
+        payload = {**BROADCAST_PAYLOAD, "title": "Broadcast Draft No Published At"}
         with _override_admin():
-            response = await client.post("/api/v1/broadcast", json=BROADCAST_PAYLOAD)
+            response = await client.post("/api/v1/broadcast", json=payload)
 
         assert response.status_code == 201
         assert response.json()["publishedAt"] is None
 
     async def test_create_published_auto_sets_published_at(self, client: ClientWithEmail):
-        payload = {**BROADCAST_PAYLOAD, "status": "published"}
+        payload = {**BROADCAST_PAYLOAD, "title": "Broadcast Auto Published At", "status": "published"}
         with _override_admin():
             response = await client.post("/api/v1/broadcast", json=payload)
 
@@ -144,7 +150,7 @@ class TestBroadcastAPI:
 
     async def test_create_with_custom_published_at(self, client: ClientWithEmail):
         custom_date = "2025-03-10T12:00:00+00:00"
-        payload = {**BROADCAST_PAYLOAD, "status": "published", "publishedAt": custom_date}
+        payload = {**BROADCAST_PAYLOAD, "title": "Broadcast Custom Published At", "status": "published", "publishedAt": custom_date}
         with _override_admin():
             response = await client.post("/api/v1/broadcast", json=payload)
 
@@ -156,7 +162,7 @@ class TestBroadcastAPI:
     # ------------------------------------------------------------------
 
     async def test_create_broadcast_with_tags(self, client: ClientWithEmail):
-        payload = {**BROADCAST_PAYLOAD, "tags": ["fintech", "ai"]}
+        payload = {**BROADCAST_PAYLOAD, "title": "Broadcast With Tags", "tags": ["fintech", "ai"]}
         with _override_admin():
             response = await client.post("/api/v1/broadcast", json=payload)
 
