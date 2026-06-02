@@ -296,6 +296,8 @@ class ProductRepository(BaseRepository[Product]):
 
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
+        elif sort_by == ProductSortBy.OLDEST:
+            q = q.order_by(Product.created_at.asc())
         else:
             q = q.order_by(Product.created_at.desc())
 
