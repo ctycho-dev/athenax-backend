@@ -205,10 +205,12 @@ class ProductRepository(BaseRepository[Product]):
     # -------------------------
     async def get_release_stats(self, db: AsyncSession) -> dict[str, int]:
         now = datetime.now(tz=timezone.utc)
-        nouns_product_ids = (
+        # Exclude products in hidden categories (e.g. Nouns) so stats match the
+        # default listed feed, which filters the same way via listed=True.
+        hidden_product_ids = (
             select(ProductCategory.product_id)
             .join(Category, ProductCategory.category_id == Category.id)
-            .where(func.lower(Category.name) == "nouns")
+            .where(Category.is_hidden_from_all == True)
         )
         # Cutoffs come from _period_cutoff so these counts match the list filters exactly.
         q = select(
@@ -219,7 +221,7 @@ class ProductRepository(BaseRepository[Product]):
         ).where(
             Product.status == ProductStatus.APPROVED,
             Product.deleted_at.is_(None),
-            ~Product.id.in_(nouns_product_ids),
+            ~Product.id.in_(hidden_product_ids),
         )
         row = (await db.execute(q)).mappings().one()
         return dict(row)
