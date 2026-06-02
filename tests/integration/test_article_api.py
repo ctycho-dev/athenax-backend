@@ -78,9 +78,13 @@ class TestArticleAPI:
     # Helpers
     # ------------------------------------------------------------------
 
+    _counter = 0
+
     async def _create_article_as_admin(self, client: ClientWithEmail, payload: dict | None = None) -> dict:
+        TestArticleAPI._counter += 1
+        base = {**(payload or ARTICLE_PAYLOAD), "title": f"Test Article {TestArticleAPI._counter}"}
         with _override_admin():
-            resp = await client.post("/api/v1/article", json=payload or ARTICLE_PAYLOAD)
+            resp = await client.post("/api/v1/article", json=base)
         assert resp.status_code == 201
         return resp.json()
 
@@ -286,12 +290,13 @@ class TestArticleAPI:
         assert response.status_code == 403
 
     async def test_create_article_success_for_admin(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Article Create Success"}
         with _override_admin():
-            response = await client.post("/api/v1/article", json=ARTICLE_PAYLOAD)
+            response = await client.post("/api/v1/article", json=payload)
 
         assert response.status_code == 201
         data = response.json()
-        assert data["title"] == ARTICLE_PAYLOAD["title"]
+        assert data["title"] == "Article Create Success"
         assert data["slug"] != ""
         assert data["articleType"] == "whitepaper"
         assert data["status"] == "draft"
@@ -310,14 +315,15 @@ class TestArticleAPI:
     # ------------------------------------------------------------------
 
     async def test_create_draft_has_no_published_at(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Article Draft No Published At"}
         with _override_admin():
-            response = await client.post("/api/v1/article", json=ARTICLE_PAYLOAD)
+            response = await client.post("/api/v1/article", json=payload)
 
         assert response.status_code == 201
         assert response.json()["publishedAt"] is None
 
     async def test_create_published_auto_sets_published_at(self, client: ClientWithEmail):
-        payload = {**ARTICLE_PAYLOAD, "status": "published"}
+        payload = {**ARTICLE_PAYLOAD, "title": "Article Auto Published At", "status": "published"}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 
@@ -326,7 +332,7 @@ class TestArticleAPI:
 
     async def test_create_with_custom_published_at(self, client: ClientWithEmail):
         custom_date = "2025-01-15T10:00:00+00:00"
-        payload = {**ARTICLE_PAYLOAD, "status": "published", "publishedAt": custom_date}
+        payload = {**ARTICLE_PAYLOAD, "title": "Article Custom Published At", "status": "published", "publishedAt": custom_date}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 
@@ -339,7 +345,7 @@ class TestArticleAPI:
     # ------------------------------------------------------------------
 
     async def test_create_article_with_tags(self, client: ClientWithEmail):
-        payload = {**ARTICLE_PAYLOAD, "tags": ["biotech", "ai"]}
+        payload = {**ARTICLE_PAYLOAD, "title": "Article With Tags", "tags": ["biotech", "ai"]}
         with _override_admin():
             response = await client.post("/api/v1/article", json=payload)
 

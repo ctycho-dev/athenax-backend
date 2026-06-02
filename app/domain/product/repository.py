@@ -205,33 +205,44 @@ class ProductRepository(BaseRepository[Product]):
     # -------------------------
     async def get_release_stats(self, db: AsyncSession) -> dict[str, int]:
         now = datetime.now(tz=timezone.utc)
-        cutoffs = {
-            "total": None,
-            "today": now - timedelta(hours=24),
-            "this_week": now - timedelta(weeks=1),
-            "this_month": now - timedelta(days=30),
-        }
-        result = {}
-        for key, cutoff in cutoffs.items():
-            q = select(func.count()).where(
-                Product.status == ProductStatus.APPROVED,
-                Product.deleted_at.is_(None),
-            )
-            if cutoff is not None:
-                q = q.where(Product.created_at >= cutoff)
-            row = await db.execute(q)
-            result[key] = row.scalar_one()
-        return result
+        # Exclude products in hidden categories (e.g. Nouns) so stats match the
+        # default listed feed, which filters the same way via listed=True.
+        hidden_product_ids = (
+            select(ProductCategory.product_id)
+            .join(Category, ProductCategory.category_id == Category.id)
+            .where(Category.is_hidden_from_all == True)
+        )
+        # Cutoffs come from _period_cutoff so these counts match the list filters exactly.
+        q = select(
+            func.count().label("total"),
+            func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.TODAY)).label("today"),
+            func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.THIS_WEEK)).label("this_week"),
+            func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.THIS_MONTH)).label("this_month"),
+        ).where(
+            Product.status == ProductStatus.APPROVED,
+            Product.deleted_at.is_(None),
+            ~Product.id.in_(hidden_product_ids),
+        )
+        row = (await db.execute(q)).mappings().one()
+        return dict(row)
 
     # -------------------------
     # Status filtering
     # -------------------------
-    _DATE_FILTER_DELTAS: dict[ProductDateFilter, timedelta] = {
-        ProductDateFilter.TODAY: timedelta(hours=24),
-        ProductDateFilter.THIS_WEEK: timedelta(weeks=1),
-        ProductDateFilter.THIS_MONTH: timedelta(days=30),
-        ProductDateFilter.THIS_YEAR: timedelta(days=365),
-    }
+    @staticmethod
+    def _period_cutoff(now: datetime, period: ProductDateFilter) -> datetime:
+        """Single source of truth for time-window cutoffs, shared by the list
+        filter and the release stats so their counts never diverge."""
+        if period == ProductDateFilter.TODAY:
+            return now - timedelta(hours=24)
+        if period == ProductDateFilter.THIS_WEEK:
+            return now - timedelta(days=10)  # business rule: 10-day window, not 7
+        if period == ProductDateFilter.THIS_MONTH:
+            # Calendar month start in UTC (e.g. May 1 00:00), not a rolling 30 days.
+            return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if period == ProductDateFilter.THIS_YEAR:
+            return now - timedelta(days=365)
+        raise ValueError(f"Unhandled date filter: {period}")
 
     def _build_status_query(
         self,
@@ -271,7 +282,7 @@ class ProductRepository(BaseRepository[Product]):
                 )
             )
         if date_filter is not None:
-            cutoff = datetime.now(tz=timezone.utc) - self._DATE_FILTER_DELTAS[date_filter]
+            cutoff = self._period_cutoff(datetime.now(tz=timezone.utc), date_filter)
             q = q.where(Product.created_at >= cutoff)
         if search and (search_text := search.strip()):
             q = q.where(Product.name.ilike(f"%{search_text}%"))
@@ -296,6 +307,8 @@ class ProductRepository(BaseRepository[Product]):
 
         if vote_subq is not None:
             q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
+        elif sort_by == ProductSortBy.OLDEST:
+            q = q.order_by(Product.created_at.asc())
         else:
             q = q.order_by(Product.created_at.desc())
 

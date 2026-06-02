@@ -58,6 +58,7 @@ class PaperSourceType(str, Enum):
 class ProductSortBy(str, Enum):
     """Sort order for product list endpoints."""
     NEWEST = "newest"
+    OLDEST = "oldest"
     TOP = "top"
 
 
