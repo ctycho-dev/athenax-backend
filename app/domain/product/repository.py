@@ -205,23 +205,24 @@ class ProductRepository(BaseRepository[Product]):
     # -------------------------
     async def get_release_stats(self, db: AsyncSession) -> dict[str, int]:
         now = datetime.now(tz=timezone.utc)
-        cutoffs = {
-            "total": None,
-            "today": now - timedelta(hours=24),
-            "this_week": now - timedelta(weeks=1),
-            "this_month": now - timedelta(days=30),
-        }
-        result = {}
-        for key, cutoff in cutoffs.items():
-            q = select(func.count()).where(
-                Product.status == ProductStatus.APPROVED,
-                Product.deleted_at.is_(None),
-            )
-            if cutoff is not None:
-                q = q.where(Product.created_at >= cutoff)
-            row = await db.execute(q)
-            result[key] = row.scalar_one()
-        return result
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        nouns_product_ids = (
+            select(ProductCategory.product_id)
+            .join(Category, ProductCategory.category_id == Category.id)
+            .where(func.lower(Category.name) == "nouns")
+        )
+        q = select(
+            func.count().label("total"),
+            func.count().filter(Product.created_at >= now - timedelta(hours=24)).label("today"),
+            func.count().filter(Product.created_at >= now - timedelta(days=10)).label("this_week"),
+            func.count().filter(Product.created_at >= month_start).label("this_month"),
+        ).where(
+            Product.status == ProductStatus.APPROVED,
+            Product.deleted_at.is_(None),
+            ~Product.id.in_(nouns_product_ids),
+        )
+        row = (await db.execute(q)).mappings().one()
+        return dict(row)
 
     # -------------------------
     # Status filtering
