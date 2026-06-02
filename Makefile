@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 validate upload-pending
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 validate upload-pending load-test-ui
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -26,6 +26,7 @@ help:
 	@echo "  make seed:categories        Seed only parent categories and subcategories from Categories.csv"
 	@echo "  make validate               Validate Projects.xlsx against Data Specs rules"
 	@echo "  make upload-pending         Import Projects.xlsx as pending (awaiting admin approval)"
+	@echo "  make load-test-ui           Start the locust web UI at http://localhost:8089 (HOST overridable)"
 
 start:
 	$(COMPOSE) up -d
@@ -124,3 +125,11 @@ validate:
 upload-pending:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/upload_pending.py
+
+# Load test (locust) — override HOST on the command line, e.g.
+#   make load-test-ui HOST=https://staging.example.com
+LOCUSTFILE ?= tests/load/locustfile.py
+HOST ?= http://localhost:8000
+
+load-test-ui:
+	".venv/bin/python" -m locust -f $(LOCUSTFILE) --host $(HOST)
