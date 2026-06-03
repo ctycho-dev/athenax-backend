@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 validate upload-pending load-test-ui
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 seed\:load validate upload-pending load-test-ui load-test load-test-smoke load-test-ratelimit
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -24,9 +24,13 @@ help:
 	@echo "  make history                Show migration history"
 	@echo "  make seed                   Seed the database with initial data"
 	@echo "  make seed:categories        Seed only parent categories and subcategories from Categories.csv"
+	@echo "  make seed:load              Seed 1000 products/200 articles/200 broadcasts for load testing"
 	@echo "  make validate               Validate Projects.xlsx against Data Specs rules"
 	@echo "  make upload-pending         Import Projects.xlsx as pending (awaiting admin approval)"
 	@echo "  make load-test-ui           Start the locust web UI at http://localhost:8089 (HOST overridable)"
+	@echo "  make load-test              Headless capacity run: 200 users, 5 min, exports CSV+HTML (HOST overridable)"
+	@echo "  make load-test-smoke        Read-only smoke test: 50 users, 2 min (HOST overridable)"
+	@echo "  make load-test-ratelimit    Rate-limit check: spoof off, 100 users, 2 min (HOST overridable)"
 
 start:
 	$(COMPOSE) up -d
@@ -119,6 +123,10 @@ seed\:w2:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed.py w2
 
+seed\:load:
+	$(COMPOSE) up -d postgres redis
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed_load_data.py $(ARGS)
+
 validate:
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/validate_xlsx.py
 
@@ -126,10 +134,27 @@ upload-pending:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/upload_pending.py
 
-# Load test (locust) — override HOST on the command line, e.g.
-#   make load-test-ui HOST=https://staging.example.com
+# Load test (locust) — override HOST and USERS on the command line, e.g.
+#   make load-test HOST=http://dev.example.com
+#   make load-test USERS=100 DURATION=3m
 LOCUSTFILE ?= tests/load/locustfile.py
-HOST ?= http://localhost:8000
+HOST       ?= http://localhost:8000
+USERS      ?= 200
+SPAWN_RATE ?= 20
+DURATION   ?= 5m
 
 load-test-ui:
 	".venv/bin/python" -m locust -f $(LOCUSTFILE) --host $(HOST)
+
+load-test:
+	".venv/bin/python" -m locust -f $(LOCUSTFILE) --host $(HOST) \
+		--headless -u $(USERS) -r $(SPAWN_RATE) -t $(DURATION) \
+		--csv=load-test-results --html=load-test-results.html
+
+load-test-smoke:
+	".venv/bin/python" -m locust -f $(LOCUSTFILE) --host $(HOST) \
+		--tags read --headless -u 50 -r 10 -t 2m
+
+load-test-ratelimit:
+	LOCUST_SPOOF_IP=0 ".venv/bin/python" -m locust -f $(LOCUSTFILE) --host $(HOST) \
+		--headless -u 100 -r 20 -t 2m
