@@ -48,9 +48,10 @@ from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, VerificationStatus
 from app.exceptions.exceptions import NotFoundError, ValidationError
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
+from app.infrastructure.redis.client import RedisClient
 from app.core.config import settings
 from app.utils.slug import generate_slug
-
+from app.common.cache_keys import PRODUCT_STATS
 
 # Helper to determine comment depth based on path (e.g. "1.5.7" -> depth 2)
 def _path_depth(path: str | None) -> int:
@@ -81,6 +82,7 @@ class ProductService:
         voice_repo: ProductVoiceRepository,
         bounty_repo: BountyRepository,
         user_repo: UserRepository | None = None,
+        redis: RedisClient | None = None,
     ):
         self.repo = repo
         self.category_repo = category_repo
@@ -92,6 +94,11 @@ class ProductService:
         self.voice_repo = voice_repo
         self.bounty_repo = bounty_repo
         self.user_repo = user_repo or UserRepository()
+        self.redis = redis
+
+    async def _invalidate_stats_cache(self) -> None:
+        if self.redis:
+            await self.redis.delete(PRODUCT_STATS)
 
     async def _fetch_interaction_data(
         self,
@@ -340,6 +347,7 @@ class ProductService:
         assert_can_modify(product, current_user)
         await self.repo.soft_delete(db, product_id, deleted_by_id=current_user.id)
         await db.commit()
+        await self._invalidate_stats_cache()
 
     async def list_voted(
         self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
@@ -535,6 +543,7 @@ class ProductService:
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)
+        await self._invalidate_stats_cache()
         return await self._to_schema(db, product)
 
     # -------------------------
