@@ -236,10 +236,9 @@ class ProductRepository(BaseRepository[Product]):
         if period == ProductDateFilter.TODAY:
             return now - timedelta(hours=24)
         if period == ProductDateFilter.THIS_WEEK:
-            return now - timedelta(days=10)  # business rule: 10-day window, not 7
+            return now - timedelta(days=14)
         if period == ProductDateFilter.THIS_MONTH:
-            # Calendar month start in UTC (e.g. May 1 00:00), not a rolling 30 days.
-            return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            return now - timedelta(days=30)
         if period == ProductDateFilter.THIS_YEAR:
             return now - timedelta(days=365)
         raise ValueError(f"Unhandled date filter: {period}")

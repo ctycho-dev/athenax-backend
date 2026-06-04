@@ -38,7 +38,10 @@ from app.domain.product.schema import (
 )
 from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStage, ProductStatus
 from app.domain.product.service import ProductService
+from app.common.cache_keys import PRODUCT_STATS, PRODUCT_STATS_TTL
 from app.domain.user.schema import UserOutSchema
+from app.api.dependencies.integrations import get_redis_client
+from app.infrastructure.redis.client import RedisClient
 from app.middleware.rate_limiter import limiter
 
 router = APIRouter(prefix=settings.api.v1.product, tags=["Product"])
@@ -86,8 +89,15 @@ async def get_product_stats(
     request: Request,
     db: AsyncSession = Depends(get_db),
     service: ProductService = Depends(get_product_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
-    return await service.get_release_stats(db)
+    cached = await redis.get(PRODUCT_STATS)
+    if cached:
+        return ProductReleaseStatsSchema.model_validate_json(cached)
+
+    stats = await service.get_release_stats(db)
+    await redis.set(PRODUCT_STATS, stats.model_dump_json(), ttl_seconds=PRODUCT_STATS_TTL)
+    return stats
 
 
 @router.get("/me", response_model=PaginatedSchema[ProductListSchema])

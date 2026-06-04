@@ -1,0 +1,4 @@
+TTL_12_HOURS = 12 * 60 * 60
+
+PRODUCT_STATS = "product:release_stats"
+PRODUCT_STATS_TTL = TTL_12_HOURS
