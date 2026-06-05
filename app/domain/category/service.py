@@ -8,11 +8,19 @@ from app.domain.category.repository import CategoryRepository
 from app.domain.category.schema import CategoryCreateSchema, CategoryStatusUpdateSchema, CategoryUpdateSchema
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import VerificationStatus
+from app.exceptions.exceptions import NotFoundError
 
 
 class CategoryService:
     def __init__(self, repo: CategoryRepository):
         self.repo = repo
+
+    async def get_by_name(self, db: AsyncSession, name: str, *, is_subcategory: bool) -> Category:
+        category = await self.repo.get_by_name(db, name, is_subcategory=is_subcategory)
+        if category is None:
+            label = "Subcategory" if is_subcategory else "Category"
+            raise NotFoundError(f"{label} '{name}' not found")
+        return category
 
     async def create(
         self,

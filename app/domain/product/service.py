@@ -283,6 +283,13 @@ class ProductService:
                 raise NotFoundError(f"Product with slug '{slug}' not found")
         return await self._to_schema(db, product, current_user=current_user)
 
+    async def get_by_name(self, db: AsyncSession, name: str) -> ProductOutSchema:
+        """Exact, case-insensitive lookup for trusted internal callers (any status)."""
+        product = await self.repo.get_by_name(db, name)
+        if not product:
+            raise NotFoundError(f"Product '{name}' not found")
+        return await self._to_schema(db, product)
+
     async def update(
         self,
         db: AsyncSession,

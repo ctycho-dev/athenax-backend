@@ -1,14 +1,18 @@
+import secrets
+
 from fastapi import (
     HTTPException,
     status,
     Request,
+    Header,
     Depends
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
+from app.core.config import settings
 from app.domain.user.schema import UserOutSchema
 from app.domain.user.repository import UserRepository
-from app.enums.enums import UserRole
+from app.enums.enums import UserRole, SYSTEM_USER_EMAIL
 from app.exceptions.exceptions import NotFoundError
 from app.api.dependencies.db import get_db
 from app.middleware.logging import set_user_email
@@ -85,7 +89,29 @@ async def get_optional_user(
         return None
 
 
-require_admin_user = require_roles(UserRole.ADMIN, detail="Admin role required")
-require_researcher_user = require_roles(UserRole.RESEARCHER, UserRole.ADMIN, detail="Researcher role required")
-require_founder_or_admin = require_roles(UserRole.FOUNDER, UserRole.ADMIN, detail="Founder or admin role required")
+async def verify_internal_key(x_internal_key: str | None = Header(default=None)) -> None:
+    """Gate internal service-to-service endpoints with the shared X-Internal-Key secret."""
+    expected = settings.auth.internal_api_key
+    # Reject when the key is unconfigured so endpoints never open up by accident.
+    if not expected or not x_internal_key or not secrets.compare_digest(x_internal_key, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing internal key",
+        )
+
+
+async def get_system_user(db: AsyncSession = Depends(get_db)) -> UserOutSchema:
+    """Resolve the seeded system user that owns records created via internal endpoints."""
+    user = await UserRepository().get_by_email(db, SYSTEM_USER_EMAIL)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="System user not provisioned",
+        )
+    return UserOutSchema.model_validate(user, from_attributes=True)
+
+
+require_admin_user = require_roles(UserRole.ADMIN, UserRole.BD, detail="Admin role required")
+require_researcher_user = require_roles(UserRole.RESEARCHER, UserRole.ADMIN, UserRole.BD, detail="Researcher role required")
+require_founder_or_admin = require_roles(UserRole.FOUNDER, UserRole.ADMIN, UserRole.BD, detail="Founder or admin role required")
 require_investor_user = require_roles(UserRole.INVESTOR, detail="Investor role required")
