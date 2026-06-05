@@ -200,6 +200,16 @@ class ProductRepository(BaseRepository[Product]):
     def __init__(self) -> None:
         super().__init__(Product)
 
+    async def get_by_name(self, db: AsyncSession, name: str) -> Product | None:
+        """Exact, case-insensitive lookup, excluding soft-deleted rows."""
+        result = await db.execute(
+            select(Product).where(
+                func.lower(Product.name) == name.lower(),
+                Product.deleted_at.is_(None),
+            )
+        )
+        return result.scalars().first()
+
     # -------------------------
     # Stats
     # -------------------------

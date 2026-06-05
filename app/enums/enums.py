@@ -9,6 +9,13 @@ class UserRole(str, Enum):
     SPONSOR = "sponsor"
     FOUNDER = "founder"
     INVESTOR = "investor"
+    BD = "bd"  # business development; mirrors admin for all current functionality
+    SYSTEM = "system"  # owns records created by internal services; never logs in
+
+
+# Email of the seeded system user that owns records created via internal endpoints.
+# Shared by the seeding migration and the runtime get_system_user lookup.
+SYSTEM_USER_EMAIL = "system@athenax.internal"
 
 
 class TokenType(str, Enum):

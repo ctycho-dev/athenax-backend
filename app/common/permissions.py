@@ -4,8 +4,12 @@ from app.exceptions.exceptions import ValidationError
 
 
 
+# BD mirrors admin for all current functionality.
+ADMIN_ROLES = (UserRole.ADMIN, UserRole.BD)
+
+
 def is_admin(current_user: UserOutSchema) -> bool:
-    return current_user.role == UserRole.ADMIN
+    return current_user.role in ADMIN_ROLES
 
 
 def is_owner(entity, current_user: UserOutSchema) -> bool:

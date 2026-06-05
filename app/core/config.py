@@ -23,6 +23,7 @@ class ApiV1Prefix(BaseModel):
     product: str = "/product"
     article: str = "/article"
     broadcast: str = "/broadcast"
+    internal: str = "/internal"
 
 
 class ApiPrefix(BaseModel):
@@ -49,6 +50,7 @@ class AuthConfig(BaseSettings):
     access_token_expire_minutes: int
     cookie_secure: bool = True
     cookie_samesite: Literal['lax', 'strict', 'none'] = 'none'
+    internal_api_key: str = ""  # shared secret for X-Internal-Key service-to-service auth
 
     model_config = _cfg("")
 

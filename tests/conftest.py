@@ -13,6 +13,7 @@ from sqlalchemy.pool import NullPool
 from app.main import app
 from app.database.connection import Base
 from app.api.dependencies import get_db, get_current_user, get_email_service
+from app.api.dependencies.integrations import get_redis_client
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
 from app.infrastructure.email.service import EmailDeliveryError
@@ -140,6 +141,8 @@ async def client(session_factory) -> AsyncGenerator[ClientWithEmail, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_email_service] = lambda: fake_email_service
+    # Lifespan doesn't run under ASGITransport; ProductService guards Redis with `if self.redis:`
+    app.dependency_overrides[get_redis_client] = lambda: None
     
     from app.middleware.rate_limiter import limiter
     limiter.enabled = False

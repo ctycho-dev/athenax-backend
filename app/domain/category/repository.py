@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
@@ -10,6 +10,16 @@ from app.exceptions.exceptions import NotFoundError, ValidationError
 class CategoryRepository(BaseRepository[Category]):
     def __init__(self) -> None:
         super().__init__(Category)
+
+    async def get_by_name(
+        self, db: AsyncSession, name: str, *, is_subcategory: bool
+    ) -> Category | None:
+        """Exact, case-insensitive lookup. is_subcategory=True restricts to children (parent_id set)."""
+        parent_filter = Category.parent_id.is_not(None) if is_subcategory else Category.parent_id.is_(None)
+        result = await db.execute(
+            select(Category).where(func.lower(Category.name) == name.lower(), parent_filter)
+        )
+        return result.scalars().first()
 
     async def get_children(self, db: AsyncSession, parent_id: int) -> list[Category]:
         result = await db.execute(
