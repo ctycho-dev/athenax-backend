@@ -3,11 +3,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, get_article_service, require_admin_user
 from app.api.dependencies.auth import get_optional_user
+from app.api.dependencies.integrations import get_redis_client
+from app.common.cache_keys import ARTICLE_LIST_PREFIX, ARTICLE_LIST_TTL
+from app.common.cache_utils import cached_list
 from app.core.config import settings
 from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
 from app.domain.article.service import ArticleService
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ArticleStatus, ArticleType
+from app.infrastructure.redis.client import RedisClient
 from app.middleware.rate_limiter import limiter
 
 router = APIRouter(prefix=settings.api.v1.article, tags=["Article"])
@@ -37,7 +41,16 @@ async def list_articles(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ArticleService = Depends(get_article_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None:
+        return await cached_list(
+            redis,
+            key=f"{ARTICLE_LIST_PREFIX}:{article_type}:{tag}:{limit}:{offset}",
+            ttl=ARTICLE_LIST_TTL,
+            schema_class=ArticleSummarySchema,
+            fetch_fn=lambda: service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, tag=tag, current_user=None),
+        )
     return await service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, tag=tag, current_user=current_user)
 
 

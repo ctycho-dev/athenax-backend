@@ -3,7 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, require_admin_user
 from app.api.dependencies.auth import get_optional_user
+from app.api.dependencies.integrations import get_redis_client
 from app.api.dependencies.services import get_broadcast_service
+from app.common.cache_keys import BROADCAST_LIST_PREFIX, BROADCAST_LIST_TTL
+from app.common.cache_utils import cached_list
 from app.core.config import settings
 from app.domain.broadcast.schema import (
     BroadcastCreateSchema,
@@ -14,6 +17,7 @@ from app.domain.broadcast.schema import (
 from app.domain.broadcast.service import BroadcastService
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus, BroadcastType
+from app.infrastructure.redis.client import RedisClient
 from app.middleware.rate_limiter import limiter
 
 router = APIRouter(prefix=settings.api.v1.broadcast, tags=["Broadcast"])
@@ -43,7 +47,16 @@ async def list_broadcasts(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: BroadcastService = Depends(get_broadcast_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None:
+        return await cached_list(
+            redis,
+            key=f"{BROADCAST_LIST_PREFIX}:{broadcast_type}:{tag}:{limit}:{offset}",
+            ttl=BROADCAST_LIST_TTL,
+            schema_class=BroadcastSummarySchema,
+            fetch_fn=lambda: service.list_broadcasts(db, limit=limit, offset=offset, status=status, broadcast_type=broadcast_type, tag=tag, current_user=None),
+        )
     return await service.list_broadcasts(
         db, limit=limit, offset=offset, status=status,
         broadcast_type=broadcast_type, tag=tag, current_user=current_user,

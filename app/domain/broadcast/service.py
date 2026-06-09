@@ -17,7 +17,9 @@ from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus
+from app.common.cache_keys import BROADCAST_LIST_PREFIX
 from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.infrastructure.redis.client import RedisClient
 from app.utils.slug import slugify
 
 
@@ -27,10 +29,16 @@ class BroadcastService:
         repo: BroadcastRepository,
         tag_repo: TagRepository,
         user_repo: UserRepository,
+        redis: RedisClient | None = None,
     ):
         self.repo = repo
         self.tag_repo = tag_repo
         self.user_repo = user_repo
+        self.redis = redis
+
+    async def _invalidate_list_cache(self) -> None:
+        if self.redis:
+            await self.redis.delete_by_pattern(f"{BROADCAST_LIST_PREFIX}:*")
 
     async def create(
         self,
@@ -49,6 +57,7 @@ class BroadcastService:
 
         await db.commit()
         await db.refresh(broadcast)
+        await self._invalidate_list_cache()
         return await self._to_schema(db, broadcast)
 
     async def list_broadcasts(
@@ -131,11 +140,13 @@ class BroadcastService:
 
         await db.commit()
         await db.refresh(broadcast)
+        await self._invalidate_list_cache()
         return await self._to_schema(db, broadcast)
 
     async def delete_by_id(self, db: AsyncSession, broadcast_id: int, current_user: UserOutSchema) -> None:
         await self.repo.soft_delete(db, broadcast_id, deleted_by_id=current_user.id)
         await db.commit()
+        await self._invalidate_list_cache()
 
     # -------------------------
     # Helpers
