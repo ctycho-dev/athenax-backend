@@ -134,7 +134,6 @@ class BroadcastService:
         return await self._to_schema(db, broadcast)
 
     async def delete_by_id(self, db: AsyncSession, broadcast_id: int, current_user: UserOutSchema) -> None:
-        await self.repo.get_by_id(db, broadcast_id)
         await self.repo.soft_delete(db, broadcast_id, deleted_by_id=current_user.id)
         await db.commit()
 
@@ -143,12 +142,8 @@ class BroadcastService:
     # -------------------------
 
     async def _assert_slug_available(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> None:
-        try:
-            existing = await self.repo.get_by_slug(db, slug)
-            if existing.id != exclude_id:
-                raise ValidationError(f"Slug '{slug}' is already in use")
-        except NotFoundError:
-            pass
+        if await self.repo.slug_exists(db, slug, exclude_id=exclude_id):
+            raise ValidationError(f"Slug '{slug}' is already in use")
 
     async def _sync_tags(self, db: AsyncSession, broadcast_id: int, tag_names: list[str]) -> None:
         seen: dict[str, str] = {}

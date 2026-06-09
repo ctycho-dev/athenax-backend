@@ -129,7 +129,6 @@ class ArticleService:
         return await self._to_schema(db, article)
 
     async def delete_by_id(self, db: AsyncSession, article_id: int, current_user: UserOutSchema) -> None:
-        await self.repo.get_by_id(db, article_id)
         await self.repo.soft_delete(db, article_id, deleted_by_id=current_user.id)
         await db.commit()
 
@@ -156,12 +155,8 @@ class ArticleService:
         await sync_association(db, ArticleTag.__table__, "article_id", article_id, "tag_id", all_ids)
 
     async def _assert_slug_available(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> None:
-        try:
-            existing = await self.repo.get_by_slug(db, slug)
-            if existing.id != exclude_id:
-                raise ValidationError(f"Slug '{slug}' is already in use")
-        except NotFoundError:
-            pass
+        if await self.repo.slug_exists(db, slug, exclude_id=exclude_id):
+            raise ValidationError(f"Slug '{slug}' is already in use")
 
     def _assert_visible(self, article, current_user: UserOutSchema | None) -> None:
         if article.status != ArticleStatus.PUBLISHED:

@@ -2,7 +2,7 @@ from typing import Type, TypeVar, Generic, Optional, Any, Union, runtime_checkab
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_
+from sqlalchemy import and_, exists
 from app.exceptions.exceptions import NotFoundError, DatabaseError
 
 @runtime_checkable
@@ -40,6 +40,14 @@ class BaseRepository(Generic[T]):
             raise
         except Exception as e:
             raise DatabaseError(f"Failed to retrieve {self.model.__name__}: {e}") from e
+
+    async def assert_exists_by_id(self, session: AsyncSession, _id: int) -> None:
+        conditions = [self.model.id == _id]
+        if (f := self._active_filter()) is not None:
+            conditions.append(f)
+        result = await session.execute(select(exists().where(*conditions)))
+        if not bool(result.scalar()):
+            raise NotFoundError(f"{self.model.__name__} with ID {_id} not found")
 
     async def get_all(
         self,

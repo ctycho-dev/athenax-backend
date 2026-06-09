@@ -34,7 +34,7 @@ class CategoryService:
 
     async def list(self, db: AsyncSession, limit: int, offset: int, parent_id: int | None = None) -> list[Category]:
         if parent_id is not None:
-            await self.repo.get_by_id(db, parent_id)
+            await self.repo.assert_exists_by_id(db, parent_id)
             return await self.repo.get_children(db, parent_id)
         result = await db.execute(
             select(Category)

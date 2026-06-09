@@ -136,6 +136,60 @@ class AdminUser(HttpUser):
                         handle(dr, "delete team member")
 
     @tag("admin")
+    @task(2)
+    def create_update_delete_article(self):
+        with self.client.post(
+            "/api/v1/article",
+            json={"title": f"Load Test Article {_rand(6)}", "articleType": "whitepaper"},
+            catch_response=True,
+            name="POST /article",
+        ) as r:
+            handle(r, "create article")
+            if r.status_code == 201:
+                aid = r.json().get("id")
+                if aid:
+                    with self.client.patch(
+                        f"/api/v1/article/{aid}",
+                        json={"title": f"Updated Article {_rand(4)}"},
+                        catch_response=True,
+                        name="PATCH /article/[id]",
+                    ) as pr:
+                        handle(pr, "update article")
+                    with self.client.delete(
+                        f"/api/v1/article/{aid}",
+                        catch_response=True,
+                        name="DELETE /article/[id]",
+                    ) as dr:
+                        handle(dr, "delete article")
+
+    @tag("admin")
+    @task(2)
+    def create_update_delete_broadcast(self):
+        with self.client.post(
+            "/api/v1/broadcast",
+            json={"title": f"Load Test Broadcast {_rand(6)}", "broadcastType": "livestream"},
+            catch_response=True,
+            name="POST /broadcast",
+        ) as r:
+            handle(r, "create broadcast")
+            if r.status_code == 201:
+                bid = r.json().get("id")
+                if bid:
+                    with self.client.patch(
+                        f"/api/v1/broadcast/{bid}",
+                        json={"title": f"Updated Broadcast {_rand(4)}"},
+                        catch_response=True,
+                        name="PATCH /broadcast/[id]",
+                    ) as pr:
+                        handle(pr, "update broadcast")
+                    with self.client.delete(
+                        f"/api/v1/broadcast/{bid}",
+                        catch_response=True,
+                        name="DELETE /broadcast/[id]",
+                    ) as dr:
+                        handle(dr, "delete broadcast")
+
+    @tag("admin")
     @task(1)
     def create_pin_delete_comment(self):
         """Create a comment, pin it, delete it — exercises the pin endpoint with no lasting state."""
