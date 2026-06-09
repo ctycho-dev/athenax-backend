@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_db, get_article_service, require_admin_user
 from app.api.dependencies.auth import get_optional_user
 from app.core.config import settings
-from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleUpdateSchema
+from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
 from app.domain.article.service import ArticleService
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ArticleStatus, ArticleType
@@ -25,7 +25,7 @@ async def create_article(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[ArticleOutSchema])
+@router.get("", response_model=list[ArticleSummarySchema])
 @limiter.limit("60/minute")
 async def list_articles(
     request: Request,

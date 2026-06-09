@@ -246,20 +246,21 @@ class ProductService:
             return PaginatedSchema(items=[], total=total)
 
         product_ids = [p.id for p in products]
-        ix = await self._fetch_interaction_data(db, product_ids, current_user)
+        # Summary list omits counts/voted/interested — fetch only categories (+ the viewer's bookmark flag).
+        categories_map = await self.repo.get_categories_for_products(db, product_ids)
+        user_bookmarks: set[int] = (
+            await self.repo.get_user_bookmarks(db, product_ids, current_user.id) if current_user else set()
+        )
 
         results = []
         for product in products:
             out = ProductListSchema.model_validate(product, from_attributes=True)
             out.logo = self._logo_url(product.logo)
-            all_cats = ix.categories_map[product.id]
-            out.vote_count = ix.vote_counts[product.id]
-            out.bookmark_count = ix.bookmark_counts[product.id]
-            out.investor_interest_count = ix.investor_interest_counts[product.id]
+            all_cats = categories_map[product.id]
             out.category_ids = [c.id for c in all_cats if c.parent_id is None]
             out.sub_categories = [c.name for c in all_cats if c.parent_id is not None]
             if current_user:
-                out.bookmarked = product.id in ix.user_bookmarks
+                out.bookmarked = product.id in user_bookmarks
             results.append(out)
         return PaginatedSchema(items=results, total=total)
 
@@ -544,9 +545,12 @@ class ProductService:
     ) -> ProductOutSchema:
         if data.status == ProductStatus.APPROVED:
             all_cats = await self.repo.get_categories_for_product(db, product_id)
-            for cat in all_cats:
-                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value:
-                    await self.category_repo.update_instance(db, cat, {"status": VerificationStatus.APPROVED.value})
+            pending_sub_ids = [
+                cat.id for cat in all_cats
+                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value
+            ]
+            # Single bulk UPDATE instead of one query per pending sub-category.
+            await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)

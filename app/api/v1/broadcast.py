@@ -5,7 +5,12 @@ from app.api.dependencies import get_db, require_admin_user
 from app.api.dependencies.auth import get_optional_user
 from app.api.dependencies.services import get_broadcast_service
 from app.core.config import settings
-from app.domain.broadcast.schema import BroadcastCreateSchema, BroadcastOutSchema, BroadcastUpdateSchema
+from app.domain.broadcast.schema import (
+    BroadcastCreateSchema,
+    BroadcastOutSchema,
+    BroadcastSummarySchema,
+    BroadcastUpdateSchema,
+)
 from app.domain.broadcast.service import BroadcastService
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus, BroadcastType
@@ -26,7 +31,7 @@ async def create_broadcast(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[BroadcastOutSchema])
+@router.get("", response_model=list[BroadcastSummarySchema])
 @limiter.limit("60/minute")
 async def list_broadcasts(
     request: Request,

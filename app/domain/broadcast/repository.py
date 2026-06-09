@@ -1,5 +1,6 @@
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.common.base_repository import BaseRepository
 from app.domain.broadcast.model import Broadcast, BroadcastTag
@@ -30,7 +31,14 @@ class BroadcastRepository(BaseRepository[Broadcast]):
         limit: int,
         offset: int,
     ) -> list[Broadcast]:
-        q = select(Broadcast).where(Broadcast.deleted_at.is_(None))
+        # Prune the large `description` body — the list path serializes summaries only.
+        q = select(Broadcast).options(
+            load_only(
+                Broadcast.title, Broadcast.slug, Broadcast.broadcast_type,
+                Broadcast.status, Broadcast.origin_date, Broadcast.published_at,
+                Broadcast.created_at, Broadcast.updated_at,
+            )
+        ).where(Broadcast.deleted_at.is_(None))
         if status is not None:
             q = q.where(Broadcast.status == status)
         if broadcast_type is not None:

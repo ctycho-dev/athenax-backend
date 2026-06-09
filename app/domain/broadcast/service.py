@@ -7,7 +7,12 @@ from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
 from app.domain.broadcast.model import BroadcastTag
 from app.domain.broadcast.repository import BroadcastRepository
-from app.domain.broadcast.schema import BroadcastCreateSchema, BroadcastOutSchema, BroadcastUpdateSchema
+from app.domain.broadcast.schema import (
+    BroadcastCreateSchema,
+    BroadcastOutSchema,
+    BroadcastSummarySchema,
+    BroadcastUpdateSchema,
+)
 from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
@@ -55,7 +60,7 @@ class BroadcastService:
         broadcast_type,
         tag: str | None,
         current_user: UserOutSchema | None,
-    ) -> list[BroadcastOutSchema]:
+    ) -> list[BroadcastSummarySchema]:
         if current_user is None or not is_admin(current_user):
             status = BroadcastStatus.PUBLISHED
 
@@ -66,18 +71,13 @@ class BroadcastService:
             return []
 
         broadcast_ids = [b.id for b in broadcasts]
-        creator_ids = list({b.created_by_id for b in broadcasts if b.created_by_id})
-
-        tags_map, users_map = await asyncio.gather(
-            self.repo.get_tags_for_broadcasts(db, broadcast_ids),
-            self.user_repo.get_by_ids(db, creator_ids),
-        )
+        tags_map = await self.repo.get_tags_for_broadcasts(db, broadcast_ids)
 
         results = []
         for broadcast in broadcasts:
-            out = BroadcastOutSchema.model_validate(broadcast, from_attributes=True)
+            # List path omits the large `description` body — repo prunes it from the SELECT too.
+            out = BroadcastSummarySchema.model_validate(broadcast, from_attributes=True)
             out.tags = [t.name for t in tags_map[broadcast.id]]
-            out.creator_name = users_map[broadcast.created_by_id].name if broadcast.created_by_id in users_map else None
             results.append(out)
         return results
 

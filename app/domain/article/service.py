@@ -6,7 +6,7 @@ from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
 from app.domain.article.model import ArticleTag
 from app.domain.article.repository import ArticleRepository
-from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleUpdateSchema
+from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
 from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
@@ -56,28 +56,23 @@ class ArticleService:
         article_type,
         tag: str | None,
         current_user: UserOutSchema | None,
-    ) -> list[ArticleOutSchema]:
+    ) -> list[ArticleSummarySchema]:
         # Non-admins may only see published articles
         if current_user is None or not is_admin(current_user):
             status = ArticleStatus.PUBLISHED
 
+        # List path omits the large `content` body — repo prunes it from the SELECT too.
         articles = await self.repo.get_all_filtered(db, status=status, article_type=article_type, tag=tag, limit=limit, offset=offset)
         if not articles:
             return []
 
         article_ids = [a.id for a in articles]
-        creator_ids = list({a.created_by_id for a in articles if a.created_by_id})
-
-        tags_map, users_map = await _gather(
-            self.repo.get_tags_for_articles(db, article_ids),
-            self.user_repo.get_by_ids(db, creator_ids),
-        )
+        tags_map = await self.repo.get_tags_for_articles(db, article_ids)
 
         results = []
         for article in articles:
-            out = ArticleOutSchema.model_validate(article, from_attributes=True)
+            out = ArticleSummarySchema.model_validate(article, from_attributes=True)
             out.tags = [t.name for t in tags_map[article.id]]
-            out.creator_name = users_map[article.created_by_id].name if article.created_by_id in users_map else None
             results.append(out)
         return results
 

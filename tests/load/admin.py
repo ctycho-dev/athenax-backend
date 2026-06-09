@@ -1,12 +1,7 @@
-"""Admin persona — content management CRUD and isolated upload tasks.
+"""Admin persona — content management CRUD.
 
 Weight 1: rare traffic tier; uses longer think-time to reflect real admin cadence.
-
-Upload tasks are tagged @tag("upload") and excluded from the default run.
-Pass --tags upload explicitly to include them. They require R2 storage to be
-configured on the target instance — never run against prod.
 """
-import io
 import random
 import string
 
@@ -171,43 +166,3 @@ class AdminUser(HttpUser):
                     ) as dr:
                         handle(dr, "delete comment (admin)")
 
-    # --- Upload tasks — excluded from default run, require R2 storage ---
-    # Run with: locust ... --tags upload
-
-    @tag("upload")
-    @task(1)
-    def upload_media(self):
-        pid = hot_pick(CACHE["product_ids"])
-        if pid is None:
-            return
-        # Minimal valid GIF so the upload doesn't fail image validation
-        gif = io.BytesIO(
-            b"GIF89a\x01\x00\x01\x00\x00\xff\x00,"
-            b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x00;"
-        )
-        with self.client.post(
-            f"/api/v1/product/{pid}/media/upload",
-            files={"file": ("test.gif", gif, "image/gif")},
-            data={"mediaType": "image"},
-            catch_response=True,
-            name="POST /product/[id]/media/upload",
-        ) as r:
-            handle(r, "upload media")
-
-    @tag("upload")
-    @task(1)
-    def upload_logo(self):
-        pid = hot_pick(CACHE["product_ids"])
-        if pid is None:
-            return
-        gif = io.BytesIO(
-            b"GIF89a\x01\x00\x01\x00\x00\xff\x00,"
-            b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x00;"
-        )
-        with self.client.post(
-            f"/api/v1/product/{pid}/logo/upload",
-            files={"file": ("logo.gif", gif, "image/gif")},
-            catch_response=True,
-            name="POST /product/[id]/logo/upload",
-        ) as r:
-            handle(r, "upload logo")

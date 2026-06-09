@@ -46,3 +46,18 @@ class BroadcastOutSchema(CamelModel):
     tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class BroadcastSummarySchema(CamelModel):
+    """List-path schema — omits the large `description` body."""
+
+    id: int
+    title: str
+    slug: str
+    broadcast_type: BroadcastType
+    status: BroadcastStatus
+    origin_date: datetime | None
+    published_at: datetime | None
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
