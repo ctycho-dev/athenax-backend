@@ -126,6 +126,24 @@ Only main domain tables use soft delete (e.g. `Product`, `Article`, `Broadcast`)
 - `sort_order`: query `get_max_sort_order()` + 10 when not provided (spaced integers: 10, 20, 30…).
 - R2 env vars: `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_CDN_BASE_URL`.
 
+### Uniqueness Constraints
+
+- Never pre-check uniqueness before insert — it's a race condition. Let the DB constraint be the only guard.
+- `BaseRepository` catches `IntegrityError` and raises `ValidationError` (400) on `create`, `update`, and `update_instance`.
+
+### List Endpoint Performance
+
+- List paths use a `SummarySchema` + `load_only(...)` in the repo — heavy columns are never read from Postgres, not just skipped at serialization.
+- Independent queries in a service (count, categories, bookmarks) run with `asyncio.gather()` not sequentially.
+- Serialize to Redis with `model_dump(mode="json")` — plain `model_dump()` returns `datetime`/enum objects `json.dumps()` can't handle.
+- Cache anonymous list responses only — admins bypass cache. Invalidate with `redis.delete_by_pattern(f"{PREFIX}:*")` on any write.
+
+### Indexes and Query Analysis
+
+- Add indexes on columns used for filtering and sorting — e.g. `(status, created_at)` on main tables, `user_id` on association tables where the PK leads with a different column.
+- Use `EXPLAIN (ANALYZE, BUFFERS)` to confirm index scans before and after — seq scan on a large table is the most common cause of slow lists.
+- Consolidate multiple `COUNT(*)` calls into one query using `COUNT(*) FILTER (WHERE ...)` aggregates.
+
 ### Testing Patterns
 
 Tests are async integration tests in `tests/integration/`. The `conftest.py` provides:
