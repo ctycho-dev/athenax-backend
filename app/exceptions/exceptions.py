@@ -35,6 +35,13 @@ class DatabaseError(Exception):
         super().__init__(message)
 
 
+class ConflictError(Exception):
+    """Raised when a resource conflicts with existing data (e.g. unique constraint)."""
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
+
+
 class ExternalServiceError(Exception):
     """Exception raised for database-related errors."""
     def __init__(self, message: str):
@@ -126,6 +133,23 @@ def add_exception_handlers(app: FastAPI):
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(ConflictError)
+    async def conflict_error_handler(request, exc: ConflictError):
+        logger.info(
+            "conflict_error",
+            extra={
+                "request_id": get_request_id(),
+                "user_email": get_user_email() or "anonymous",
+                "detail": str(exc),
+                "path": request.url.path,
+                "method": request.method
+            },
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
             content={"detail": exc.message},
         )
 

@@ -4,7 +4,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, exists
-from app.exceptions.exceptions import NotFoundError, DatabaseError, ValidationError
+from app.exceptions.exceptions import ConflictError, NotFoundError, DatabaseError, ValidationError
+
+PG_UNIQUE_VIOLATION = "23505"
+PG_FK_VIOLATION = "23503"
+PG_CHECK_VIOLATION = "23514"
+
+
+def _translate_integrity_error(exc: IntegrityError, model_name: str) -> Exception:
+    pgcode = getattr(exc.orig, "pgcode", None) or getattr(getattr(exc.orig, "diag", None), "sqlstate", None)
+    if pgcode == PG_UNIQUE_VIOLATION:
+        return ConflictError(f"{model_name} already exists or conflicts with existing data")
+    if pgcode == PG_FK_VIOLATION:
+        return ValidationError(f"{model_name} references missing related data")
+    if pgcode == PG_CHECK_VIOLATION:
+        return ValidationError(f"{model_name} violates a domain constraint")
+    return DatabaseError(f"Failed to write {model_name}: {exc.orig}")
 
 @runtime_checkable
 class AudiProtocol(Protocol):
@@ -83,7 +98,7 @@ class BaseRepository(Generic[T]):
             await session.refresh(instance)
             return instance
         except IntegrityError as e:
-            raise ValidationError(f"{self.model.__name__} with these details already exists") from e
+            raise _translate_integrity_error(e, self.model.__name__) from e
         except Exception as e:
             raise DatabaseError(f"Failed to create {self.model.__name__}: {e}") from e
 
@@ -119,7 +134,7 @@ class BaseRepository(Generic[T]):
         except NotFoundError:
             raise
         except IntegrityError as e:
-            raise ValidationError(f"{self.model.__name__} with these details already exists") from e
+            raise _translate_integrity_error(e, self.model.__name__) from e
         except Exception as e:
             raise DatabaseError(f"Failed to update {self.model.__name__}: {e}") from e
 
@@ -144,7 +159,7 @@ class BaseRepository(Generic[T]):
             await session.flush()
             return instance
         except IntegrityError as e:
-            raise ValidationError(f"{self.model.__name__} with these details already exists") from e
+            raise _translate_integrity_error(e, self.model.__name__) from e
         except Exception as e:
             raise DatabaseError(f"Failed to update {self.model.__name__}: {e}") from e
 
