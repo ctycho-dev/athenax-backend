@@ -1,9 +1,10 @@
 from typing import Type, TypeVar, Generic, Optional, Any, Union, runtime_checkable, Protocol
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, exists
-from app.exceptions.exceptions import NotFoundError, DatabaseError
+from app.exceptions.exceptions import NotFoundError, DatabaseError, ValidationError
 
 @runtime_checkable
 class AudiProtocol(Protocol):
@@ -81,6 +82,8 @@ class BaseRepository(Generic[T]):
             await session.flush()
             await session.refresh(instance)
             return instance
+        except IntegrityError as e:
+            raise ValidationError(f"{self.model.__name__} with these details already exists") from e
         except Exception as e:
             raise DatabaseError(f"Failed to create {self.model.__name__}: {e}") from e
 
@@ -115,9 +118,11 @@ class BaseRepository(Generic[T]):
             return instance
         except NotFoundError:
             raise
+        except IntegrityError as e:
+            raise ValidationError(f"{self.model.__name__} with these details already exists") from e
         except Exception as e:
             raise DatabaseError(f"Failed to update {self.model.__name__}: {e}") from e
-    
+
     async def update_instance(
         self,
         session: AsyncSession,
@@ -138,6 +143,8 @@ class BaseRepository(Generic[T]):
 
             await session.flush()
             return instance
+        except IntegrityError as e:
+            raise ValidationError(f"{self.model.__name__} with these details already exists") from e
         except Exception as e:
             raise DatabaseError(f"Failed to update {self.model.__name__}: {e}") from e
 

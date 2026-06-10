@@ -18,7 +18,7 @@ from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus
 from app.common.cache_keys import BROADCAST_LIST_PREFIX
-from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.exceptions.exceptions import NotFoundError
 from app.infrastructure.redis.client import RedisClient
 from app.utils.slug import slugify
 
@@ -122,13 +122,9 @@ class BroadcastService:
         tag_names = payload.pop("tags", None)
 
         if "slug" in payload:
-            slug = slugify(payload["slug"])
-            await self._assert_slug_available(db, slug, exclude_id=broadcast_id)
-            payload["slug"] = slug
+            payload["slug"] = slugify(payload["slug"])
         elif "title" in payload:
-            slug = slugify(payload["title"])
-            await self._assert_slug_available(db, slug, exclude_id=broadcast_id)
-            payload["slug"] = slug
+            payload["slug"] = slugify(payload["title"])
 
         if "status" in payload:
             payload = self._apply_published_at(payload, current_published_at=broadcast.published_at)
@@ -151,10 +147,6 @@ class BroadcastService:
     # -------------------------
     # Helpers
     # -------------------------
-
-    async def _assert_slug_available(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> None:
-        if await self.repo.slug_exists(db, slug, exclude_id=exclude_id):
-            raise ValidationError(f"Slug '{slug}' is already in use")
 
     async def _sync_tags(self, db: AsyncSession, broadcast_id: int, tag_names: list[str]) -> None:
         seen: dict[str, str] = {}

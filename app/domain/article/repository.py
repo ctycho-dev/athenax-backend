@@ -13,13 +13,6 @@ class ArticleRepository(BaseRepository[Article]):
     def __init__(self) -> None:
         super().__init__(Article)
 
-    async def slug_exists(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> bool:
-        q = select(exists().where(Article.slug == slug, Article.deleted_at.is_(None)))
-        if exclude_id is not None:
-            q = select(exists().where(Article.slug == slug, Article.deleted_at.is_(None), Article.id != exclude_id))
-        result = await db.execute(q)
-        return bool(result.scalar())
-
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Article:
         result = await db.execute(
             select(Article).where(Article.slug == slug, Article.deleted_at.is_(None))

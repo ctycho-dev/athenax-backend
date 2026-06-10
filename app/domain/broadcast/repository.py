@@ -13,13 +13,6 @@ class BroadcastRepository(BaseRepository[Broadcast]):
     def __init__(self) -> None:
         super().__init__(Broadcast)
 
-    async def slug_exists(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> bool:
-        q = select(exists().where(Broadcast.slug == slug, Broadcast.deleted_at.is_(None)))
-        if exclude_id is not None:
-            q = select(exists().where(Broadcast.slug == slug, Broadcast.deleted_at.is_(None), Broadcast.id != exclude_id))
-        result = await db.execute(q)
-        return bool(result.scalar())
-
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Broadcast:
         result = await db.execute(
             select(Broadcast).where(Broadcast.slug == slug, Broadcast.deleted_at.is_(None))
