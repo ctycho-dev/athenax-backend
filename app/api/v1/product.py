@@ -38,7 +38,8 @@ from app.domain.product.schema import (
 )
 from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStage, ProductStatus
 from app.domain.product.service import ProductService
-from app.common.cache_keys import PRODUCT_STATS, PRODUCT_STATS_TTL
+from app.common.cache_keys import PRODUCT_DETAIL_PREFIX, PRODUCT_DETAIL_TTL, PRODUCT_LIST_PREFIX, PRODUCT_LIST_TTL, PRODUCT_STATS, PRODUCT_STATS_TTL
+from app.common.cache_utils import cached_detail
 from app.domain.user.schema import UserOutSchema
 from app.api.dependencies.integrations import get_redis_client
 from app.infrastructure.redis.client import RedisClient
@@ -75,7 +76,20 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None and not q:
+        cache_key = f"{PRODUCT_LIST_PREFIX}:{category_id}:{date_filter}:{sort_by}:{listed}:{limit}:{offset}"
+        cached = await redis.get(cache_key)
+        if cached:
+            return PaginatedSchema[ProductListSchema].model_validate_json(cached)
+        result = await service.list(
+            db, limit=limit, offset=offset, status=status, current_user=None,
+            category_id=category_id, date_filter=date_filter, sort_by=sort_by,
+            search=q, upvoted=upvoted, listed=listed,
+        )
+        await redis.set(cache_key, result.model_dump_json(), ttl_seconds=PRODUCT_LIST_TTL)
+        return result
     return await service.list(
         db, limit=limit, offset=offset, status=status, current_user=current_user,
         category_id=category_id, date_filter=date_filter, sort_by=sort_by,
@@ -153,7 +167,16 @@ async def get_product_by_slug(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None:
+        return await cached_detail(
+            redis,
+            key=f"{PRODUCT_DETAIL_PREFIX}:{slug}",
+            ttl=PRODUCT_DETAIL_TTL,
+            schema_class=ProductOutSchema,
+            fetch_fn=lambda: service.get_by_slug(db, slug=slug, current_user=None),
+        )
     return await service.get_by_slug(db, slug=slug, current_user=current_user)
 
 
