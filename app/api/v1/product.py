@@ -76,9 +76,9 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
-    redis: RedisClient = Depends(get_redis_client),
+    redis: RedisClient | None = Depends(get_redis_client),
 ):
-    if current_user is None and not q:
+    if current_user is None and not q and redis is not None:
         cache_key = f"{PRODUCT_LIST_PREFIX}:{category_id}:{date_filter}:{sort_by}:{listed}:{limit}:{offset}"
         cached = await redis.get(cache_key)
         if cached:
