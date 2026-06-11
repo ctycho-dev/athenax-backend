@@ -5,8 +5,8 @@ from app.api.dependencies import get_db, require_admin_user
 from app.api.dependencies.auth import get_optional_user
 from app.api.dependencies.integrations import get_redis_client
 from app.api.dependencies.services import get_broadcast_service
-from app.common.cache_keys import BROADCAST_LIST_PREFIX, BROADCAST_LIST_TTL
-from app.common.cache_utils import cached_list
+from app.common.cache_keys import BROADCAST_DETAIL_PREFIX, BROADCAST_DETAIL_TTL, BROADCAST_LIST_PREFIX, BROADCAST_LIST_TTL
+from app.common.cache_utils import cached_detail, cached_list
 from app.core.config import settings
 from app.domain.broadcast.schema import (
     BroadcastCreateSchema,
@@ -71,7 +71,16 @@ async def get_broadcast_by_slug(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: BroadcastService = Depends(get_broadcast_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None:
+        return await cached_detail(
+            redis,
+            key=f"{BROADCAST_DETAIL_PREFIX}:{slug}",
+            ttl=BROADCAST_DETAIL_TTL,
+            schema_class=BroadcastOutSchema,
+            fetch_fn=lambda: service.get_by_slug(db, slug=slug, current_user=None),
+        )
     return await service.get_by_slug(db, slug=slug, current_user=current_user)
 
 

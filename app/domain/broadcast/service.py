@@ -17,7 +17,7 @@ from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus
-from app.common.cache_keys import BROADCAST_LIST_PREFIX
+from app.common.cache_keys import BROADCAST_DETAIL_PREFIX, BROADCAST_LIST_PREFIX
 from app.exceptions.exceptions import NotFoundError
 from app.infrastructure.redis.client import RedisClient
 from app.utils.slug import slugify
@@ -39,6 +39,10 @@ class BroadcastService:
     async def _invalidate_list_cache(self) -> None:
         if self.redis:
             await self.redis.delete_by_pattern(f"{BROADCAST_LIST_PREFIX}:*")
+
+    async def _invalidate_detail_cache(self, slug: str) -> None:
+        if self.redis:
+            await self.redis.delete(f"{BROADCAST_DETAIL_PREFIX}:{slug}")
 
     async def create(
         self,
@@ -118,6 +122,7 @@ class BroadcastService:
         current_user: UserOutSchema,
     ) -> BroadcastOutSchema:
         broadcast = await self.repo.get_by_id(db, broadcast_id)
+        old_slug = broadcast.slug
         payload = data.model_dump(exclude_unset=True)
         tag_names = payload.pop("tags", None)
 
@@ -136,13 +141,19 @@ class BroadcastService:
 
         await db.commit()
         await db.refresh(broadcast)
-        await self._invalidate_list_cache()
+
+        invalidations = [self._invalidate_list_cache(), self._invalidate_detail_cache(broadcast.slug)]
+        if old_slug != broadcast.slug:
+            invalidations.append(self._invalidate_detail_cache(old_slug))
+        await asyncio.gather(*invalidations)
+
         return await self._to_schema(db, broadcast)
 
     async def delete_by_id(self, db: AsyncSession, broadcast_id: int, current_user: UserOutSchema) -> None:
+        broadcast = await self.repo.get_by_id(db, broadcast_id)
         await self.repo.soft_delete(db, broadcast_id, deleted_by_id=current_user.id)
         await db.commit()
-        await self._invalidate_list_cache()
+        await asyncio.gather(self._invalidate_list_cache(), self._invalidate_detail_cache(broadcast.slug))
 
     # -------------------------
     # Helpers
