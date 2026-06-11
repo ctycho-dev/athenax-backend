@@ -153,7 +153,6 @@ class PaperService:
         paper_id: int,
         data: PaperVerificationStatusUpdateSchema,
     ) -> PaperOutSchema:
-        await self.repo.get_by_id(db, paper_id)
         paper = await self.repo.update(db, paper_id, {"verification_status": data.verification_status}, current_user_id=None)
         await db.commit()
         await db.refresh(paper)
@@ -166,7 +165,7 @@ class PaperService:
         voted: bool,
         current_user: UserOutSchema,
     ) -> VoteOutSchema:
-        await self.repo.get_by_id(db, paper_id)
+        await self.repo.assert_exists_by_id(db, paper_id)
 
         if voted:
             await self.repo.add_vote(db, paper_id, current_user.id)
@@ -203,8 +202,10 @@ class PaperService:
         if not papers:
             return []
         ids = [p.id for p in papers]
-        vote_counts = await self.repo.get_vote_counts(db, ids)
-        categories_map = await self.repo.get_categories_for_papers(db, ids)
+        vote_counts, categories_map = await asyncio.gather(
+            self.repo.get_vote_counts(db, ids),
+            self.repo.get_categories_for_papers(db, ids),
+        )
         results = []
         for p in papers:
             out = PaperOutSchema.model_validate(p, from_attributes=True)

@@ -93,7 +93,23 @@ class ProductSimilarSchema(CamelModel):
     categories: list[str] = Field(default_factory=list)
 
 
-class ProductListSchema(ProductBaseSchema):
+class ProductListSchema(CamelModel):
+    """Browse/list summary — omits the `description` body, counts, and internal fields."""
+
+    id: int
+    slug: str
+    name: str
+    short_desc: str | None
+    stage: ProductStage | None
+    funding: float | None
+    founded: int | None
+    quality_badge: str | None
+    logo: str | None
+    status: ProductStatus
+    category_ids: list[int] = Field(default_factory=list)
+    sub_categories: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
     bookmarked: bool | None = None
 
 

@@ -1,12 +1,7 @@
-"""Admin persona — content management CRUD and isolated upload tasks.
+"""Admin persona — content management CRUD.
 
 Weight 1: rare traffic tier; uses longer think-time to reflect real admin cadence.
-
-Upload tasks are tagged @tag("upload") and excluded from the default run.
-Pass --tags upload explicitly to include them. They require R2 storage to be
-configured on the target instance — never run against prod.
 """
-import io
 import random
 import string
 
@@ -141,6 +136,60 @@ class AdminUser(HttpUser):
                         handle(dr, "delete team member")
 
     @tag("admin")
+    @task(2)
+    def create_update_delete_article(self):
+        with self.client.post(
+            "/api/v1/article",
+            json={"title": f"Load Test Article {_rand(6)}", "articleType": "whitepaper"},
+            catch_response=True,
+            name="POST /article",
+        ) as r:
+            handle(r, "create article")
+            if r.status_code == 201:
+                aid = r.json().get("id")
+                if aid:
+                    with self.client.patch(
+                        f"/api/v1/article/{aid}",
+                        json={"title": f"Updated Article {_rand(4)}"},
+                        catch_response=True,
+                        name="PATCH /article/[id]",
+                    ) as pr:
+                        handle(pr, "update article")
+                    with self.client.delete(
+                        f"/api/v1/article/{aid}",
+                        catch_response=True,
+                        name="DELETE /article/[id]",
+                    ) as dr:
+                        handle(dr, "delete article")
+
+    @tag("admin")
+    @task(2)
+    def create_update_delete_broadcast(self):
+        with self.client.post(
+            "/api/v1/broadcast",
+            json={"title": f"Load Test Broadcast {_rand(6)}", "broadcastType": "livestream"},
+            catch_response=True,
+            name="POST /broadcast",
+        ) as r:
+            handle(r, "create broadcast")
+            if r.status_code == 201:
+                bid = r.json().get("id")
+                if bid:
+                    with self.client.patch(
+                        f"/api/v1/broadcast/{bid}",
+                        json={"title": f"Updated Broadcast {_rand(4)}"},
+                        catch_response=True,
+                        name="PATCH /broadcast/[id]",
+                    ) as pr:
+                        handle(pr, "update broadcast")
+                    with self.client.delete(
+                        f"/api/v1/broadcast/{bid}",
+                        catch_response=True,
+                        name="DELETE /broadcast/[id]",
+                    ) as dr:
+                        handle(dr, "delete broadcast")
+
+    @tag("admin")
     @task(1)
     def create_pin_delete_comment(self):
         """Create a comment, pin it, delete it — exercises the pin endpoint with no lasting state."""
@@ -171,43 +220,3 @@ class AdminUser(HttpUser):
                     ) as dr:
                         handle(dr, "delete comment (admin)")
 
-    # --- Upload tasks — excluded from default run, require R2 storage ---
-    # Run with: locust ... --tags upload
-
-    @tag("upload")
-    @task(1)
-    def upload_media(self):
-        pid = hot_pick(CACHE["product_ids"])
-        if pid is None:
-            return
-        # Minimal valid GIF so the upload doesn't fail image validation
-        gif = io.BytesIO(
-            b"GIF89a\x01\x00\x01\x00\x00\xff\x00,"
-            b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x00;"
-        )
-        with self.client.post(
-            f"/api/v1/product/{pid}/media/upload",
-            files={"file": ("test.gif", gif, "image/gif")},
-            data={"mediaType": "image"},
-            catch_response=True,
-            name="POST /product/[id]/media/upload",
-        ) as r:
-            handle(r, "upload media")
-
-    @tag("upload")
-    @task(1)
-    def upload_logo(self):
-        pid = hot_pick(CACHE["product_ids"])
-        if pid is None:
-            return
-        gif = io.BytesIO(
-            b"GIF89a\x01\x00\x01\x00\x00\xff\x00,"
-            b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x00;"
-        )
-        with self.client.post(
-            f"/api/v1/product/{pid}/logo/upload",
-            files={"file": ("logo.gif", gif, "image/gif")},
-            catch_response=True,
-            name="POST /product/[id]/logo/upload",
-        ) as r:
-            handle(r, "upload logo")

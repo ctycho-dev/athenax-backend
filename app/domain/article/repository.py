@@ -1,5 +1,6 @@
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.common.base_repository import BaseRepository
 from app.domain.article.model import Article, ArticleTag
@@ -30,7 +31,17 @@ class ArticleRepository(BaseRepository[Article]):
         limit: int,
         offset: int,
     ) -> list[Article]:
-        q = select(Article).where(Article.deleted_at.is_(None))
+        # Prune the large `content` body — the list path serializes summaries only.
+        q = select(Article).options(
+            load_only(
+                Article.title,
+                Article.slug,
+                Article.article_type,
+                Article.status,
+                Article.published_at,
+                Article.created_at,
+            )
+        ).where(Article.deleted_at.is_(None))
         if status is not None:
             q = q.where(Article.status == status)
         if article_type is not None:

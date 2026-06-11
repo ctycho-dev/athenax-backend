@@ -231,35 +231,47 @@ class ProductService:
         admin_viewing_pending = (current_user and is_admin(current_user) and status == ProductStatus.PENDING)
         if listed is None and category_id is None and not admin_viewing_pending:
             listed = True
+        # First query provisions the session connection; remaining independent queries run concurrently.
         products = await self.repo.get_all_by_status(
             db, status, limit=limit, offset=offset, user_id=user_id,
             category_id=category_id, date_filter=date_filter, sort_by=sort_by,
             search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
         )
-        total = await self.repo.count_by_status(
-            db, status, user_id=user_id,
-            category_id=category_id, date_filter=date_filter,
-            search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
-        )
 
         if not products:
+            total = await self.repo.count_by_status(
+                db, status, user_id=user_id,
+                category_id=category_id, date_filter=date_filter,
+                search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
+            )
             return PaginatedSchema(items=[], total=total)
 
         product_ids = [p.id for p in products]
-        ix = await self._fetch_interaction_data(db, product_ids, current_user)
+        # Summary list omits counts/voted/interested — fetch only categories (+ the viewer's bookmark flag).
+        coros: list = [
+            self.repo.count_by_status(
+                db, status, user_id=user_id,
+                category_id=category_id, date_filter=date_filter,
+                search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
+            ),
+            self.repo.get_categories_for_products(db, product_ids),
+        ]
+        if current_user:
+            coros.append(self.repo.get_user_bookmarks(db, product_ids, current_user.id))
+        gather_results = await asyncio.gather(*coros)
+        total = gather_results[0]
+        categories_map = gather_results[1]
+        user_bookmarks: set[int] = gather_results[2] if current_user else set()
 
         results = []
         for product in products:
             out = ProductListSchema.model_validate(product, from_attributes=True)
             out.logo = self._logo_url(product.logo)
-            all_cats = ix.categories_map[product.id]
-            out.vote_count = ix.vote_counts[product.id]
-            out.bookmark_count = ix.bookmark_counts[product.id]
-            out.investor_interest_count = ix.investor_interest_counts[product.id]
+            all_cats = categories_map[product.id]
             out.category_ids = [c.id for c in all_cats if c.parent_id is None]
             out.sub_categories = [c.name for c in all_cats if c.parent_id is not None]
             if current_user:
-                out.bookmarked = product.id in ix.user_bookmarks
+                out.bookmarked = product.id in user_bookmarks
             results.append(out)
         return PaginatedSchema(items=results, total=total)
 
@@ -544,9 +556,12 @@ class ProductService:
     ) -> ProductOutSchema:
         if data.status == ProductStatus.APPROVED:
             all_cats = await self.repo.get_categories_for_product(db, product_id)
-            for cat in all_cats:
-                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value:
-                    await self.category_repo.update_instance(db, cat, {"status": VerificationStatus.APPROVED.value})
+            pending_sub_ids = [
+                cat.id for cat in all_cats
+                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value
+            ]
+            # Single bulk UPDATE instead of one query per pending sub-category.
+            await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)
@@ -618,7 +633,7 @@ class ProductService:
     async def create_media(
         self, db: AsyncSession, product_id: int, data: ProductMediaCreateSchema, current_user: UserOutSchema
     ) -> ProductMediaOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         media = await self.media_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(media)
@@ -760,7 +775,7 @@ class ProductService:
     async def create_team_member(
         self, db: AsyncSession, product_id: int, data: TeamMemberCreateSchema, current_user: UserOutSchema
     ) -> TeamMemberOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         payload = {**data.model_dump(), "product_id": product_id, "status": VerificationStatus.APPROVED}
         member = await self.team_repo.create(db, payload, current_user_id=current_user.id)
         await db.commit()
@@ -849,7 +864,7 @@ class ProductService:
     async def create_voice(
         self, db: AsyncSession, product_id: int, data: ProductVoiceCreateSchema, current_user: UserOutSchema
     ) -> ProductVoiceOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         voice = await self.voice_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(voice)
@@ -889,7 +904,7 @@ class ProductService:
     async def create_bounty(
         self, db: AsyncSession, product_id: int, data: BountyCreateSchema, current_user: UserOutSchema
     ) -> BountyOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         bounty = await self.bounty_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(bounty)

@@ -203,9 +203,53 @@ class AnonymousVisitor(HttpUser):
             handle(r, "article list")
 
     @tag("read")
+    @task(2)
+    def view_article_detail(self):
+        aid = hot_pick(CACHE["article_ids"])
+        if aid is None:
+            return
+        with self.client.get(
+            f"/api/v1/article/{aid}", catch_response=True, name="GET /article/[id]"
+        ) as r:
+            handle(r, "article detail")
+
+    @tag("read")
+    @task(1)
+    def view_article_by_slug(self):
+        slug = hot_pick(CACHE["article_slugs"])
+        if slug is None:
+            return
+        with self.client.get(
+            f"/api/v1/article/slug/{slug}", catch_response=True, name="GET /article/slug/[slug]"
+        ) as r:
+            handle(r, "article by slug")
+
+    @tag("read")
     @task(3)
     def list_broadcasts(self):
         with self.client.get(
             "/api/v1/broadcast/?limit=50", catch_response=True, name="GET /broadcast/ (list)"
         ) as r:
             handle(r, "broadcast list")
+
+    @tag("read")
+    @task(2)
+    def view_broadcast_detail(self):
+        bid = hot_pick(CACHE["broadcast_ids"])
+        if bid is None:
+            return
+        with self.client.get(
+            f"/api/v1/broadcast/{bid}", catch_response=True, name="GET /broadcast/[id]"
+        ) as r:
+            handle(r, "broadcast detail")
+
+    @tag("read")
+    @task(1)
+    def view_broadcast_by_slug(self):
+        slug = hot_pick(CACHE["broadcast_slugs"])
+        if slug is None:
+            return
+        with self.client.get(
+            f"/api/v1/broadcast/slug/{slug}", catch_response=True, name="GET /broadcast/slug/[slug]"
+        ) as r:
+            handle(r, "broadcast by slug")

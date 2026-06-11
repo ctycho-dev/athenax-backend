@@ -2,16 +2,18 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.cache_keys import ARTICLE_LIST_PREFIX
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
 from app.domain.article.model import ArticleTag
 from app.domain.article.repository import ArticleRepository
-from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleUpdateSchema
+from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
 from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ArticleStatus
-from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.exceptions.exceptions import NotFoundError
+from app.infrastructure.redis.client import RedisClient
 from app.utils.slug import slugify
 
 
@@ -21,10 +23,16 @@ class ArticleService:
         repo: ArticleRepository,
         tag_repo: TagRepository,
         user_repo: UserRepository,
+        redis: RedisClient | None = None,
     ):
         self.repo = repo
         self.tag_repo = tag_repo
         self.user_repo = user_repo
+        self.redis = redis
+
+    async def _invalidate_list_cache(self) -> None:
+        if self.redis:
+            await self.redis.delete_by_pattern(f"{ARTICLE_LIST_PREFIX}:*")
 
     async def create(
         self,
@@ -35,9 +43,7 @@ class ArticleService:
         payload = data.model_dump()
         tag_names = payload.pop("tags", [])
 
-        slug = slugify(data.title)
-        await self._assert_slug_available(db, slug)
-        payload["slug"] = slug
+        payload["slug"] = slugify(data.title)
         payload = self._apply_published_at(payload)
 
         article = await self.repo.create(db, payload, current_user_id=current_user.id)
@@ -45,6 +51,7 @@ class ArticleService:
 
         await db.commit()
         await db.refresh(article)
+        await self._invalidate_list_cache()
         return await self._to_schema(db, article)
 
     async def list_articles(
@@ -56,28 +63,23 @@ class ArticleService:
         article_type,
         tag: str | None,
         current_user: UserOutSchema | None,
-    ) -> list[ArticleOutSchema]:
+    ) -> list[ArticleSummarySchema]:
         # Non-admins may only see published articles
         if current_user is None or not is_admin(current_user):
             status = ArticleStatus.PUBLISHED
 
+        # List path omits the large `content` body — repo prunes it from the SELECT too.
         articles = await self.repo.get_all_filtered(db, status=status, article_type=article_type, tag=tag, limit=limit, offset=offset)
         if not articles:
             return []
 
         article_ids = [a.id for a in articles]
-        creator_ids = list({a.created_by_id for a in articles if a.created_by_id})
-
-        tags_map, users_map = await _gather(
-            self.repo.get_tags_for_articles(db, article_ids),
-            self.user_repo.get_by_ids(db, creator_ids),
-        )
+        tags_map = await self.repo.get_tags_for_articles(db, article_ids)
 
         results = []
         for article in articles:
-            out = ArticleOutSchema.model_validate(article, from_attributes=True)
+            out = ArticleSummarySchema.model_validate(article, from_attributes=True)
             out.tags = [t.name for t in tags_map[article.id]]
-            out.creator_name = users_map[article.created_by_id].name if article.created_by_id in users_map else None
             results.append(out)
         return results
 
@@ -113,13 +115,9 @@ class ArticleService:
         tag_names = payload.pop("tags", None)
 
         if "slug" in payload:
-            slug = slugify(payload["slug"])
-            await self._assert_slug_available(db, slug, exclude_id=article_id)
-            payload["slug"] = slug
+            payload["slug"] = slugify(payload["slug"])
         elif "title" in payload:
-            slug = slugify(payload["title"])
-            await self._assert_slug_available(db, slug, exclude_id=article_id)
-            payload["slug"] = slug
+            payload["slug"] = slugify(payload["title"])
 
         if "status" in payload:
             payload = self._apply_published_at(payload, current_published_at=article.published_at)
@@ -131,12 +129,13 @@ class ArticleService:
 
         await db.commit()
         await db.refresh(article)
+        await self._invalidate_list_cache()
         return await self._to_schema(db, article)
 
     async def delete_by_id(self, db: AsyncSession, article_id: int, current_user: UserOutSchema) -> None:
-        await self.repo.get_by_id(db, article_id)
         await self.repo.soft_delete(db, article_id, deleted_by_id=current_user.id)
         await db.commit()
+        await self._invalidate_list_cache()
 
     # -------------------------
     # Helpers
@@ -159,14 +158,6 @@ class ArticleService:
         ]
         all_ids = {t.id for t in existing} | {t.id for t in new_tags}
         await sync_association(db, ArticleTag.__table__, "article_id", article_id, "tag_id", all_ids)
-
-    async def _assert_slug_available(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> None:
-        try:
-            existing = await self.repo.get_by_slug(db, slug)
-            if existing.id != exclude_id:
-                raise ValidationError(f"Slug '{slug}' is already in use")
-        except NotFoundError:
-            pass
 
     def _assert_visible(self, article, current_user: UserOutSchema | None) -> None:
         if article.status != ArticleStatus.PUBLISHED:

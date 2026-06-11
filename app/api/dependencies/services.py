@@ -150,8 +150,9 @@ def get_university_service(
 
 def get_category_service(
     repo: CategoryRepository = Depends(get_category_repo),
+    redis: RedisClient = Depends(get_redis_client),
 ) -> CategoryService:
-    return CategoryService(repo=repo)
+    return CategoryService(repo=repo, redis=redis)
 
 
 def get_lab_service(
@@ -177,16 +178,18 @@ def get_article_service(
     repo: ArticleRepository = Depends(get_article_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    redis: RedisClient = Depends(get_redis_client),
 ) -> ArticleService:
-    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
+    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, redis=redis)
 
 
 def get_broadcast_service(
     repo: BroadcastRepository = Depends(get_broadcast_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    redis: RedisClient = Depends(get_redis_client),
 ) -> BroadcastService:
-    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
+    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, redis=redis)
 
 
 def get_product_service(

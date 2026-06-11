@@ -51,7 +51,11 @@ class ProductCategory(Base, TimestampMixin):
 
 class ProductVote(Base, TimestampMixin):
     __tablename__ = "product_votes"
-    __table_args__ = (PrimaryKeyConstraint("product_id", "user_id"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("product_id", "user_id"),
+        # PK leads with product_id; this serves user-scoped lookups (/me/voted) by user_id + recency.
+        Index("ix_product_votes_user_created", "user_id", "created_at"),
+    )
 
     product_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
@@ -63,7 +67,11 @@ class ProductVote(Base, TimestampMixin):
 
 class ProductBookmark(Base, TimestampMixin):
     __tablename__ = "product_bookmarks"
-    __table_args__ = (PrimaryKeyConstraint("product_id", "user_id"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("product_id", "user_id"),
+        # Serves /me/bookmarked (filter by user_id, order by recency).
+        Index("ix_product_bookmarks_user_created", "user_id", "created_at"),
+    )
 
     product_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
@@ -107,6 +115,10 @@ class ProductComment(Base, TimestampMixin, UserAuditMixin):
 
 class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     __tablename__ = "products"
+    __table_args__ = (
+        # Dominant browse path: filter by status, order by created_at (btree scanned backward for DESC).
+        Index("ix_products_status_created", "status", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True

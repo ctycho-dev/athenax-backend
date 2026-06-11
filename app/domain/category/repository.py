@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.base_repository import BaseRepository
@@ -28,6 +28,18 @@ class CategoryRepository(BaseRepository[Category]):
             .order_by(Category.name.asc())
         )
         return list(result.scalars().all())
+
+    async def set_status_by_ids(
+        self, db: AsyncSession, category_ids: list[int], status: str
+    ) -> None:
+        """Bulk status update — one set-based UPDATE instead of a per-row loop."""
+        if not category_ids:
+            return
+        await db.execute(
+            update(Category)
+            .where(Category.id.in_(category_ids))
+            .values(status=status)
+        )
 
     async def assert_exist(self, db: AsyncSession, category_ids: list[int]) -> None:
         """Raise NotFoundError if any of the given category IDs do not exist."""

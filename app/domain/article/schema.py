@@ -46,6 +46,5 @@ class ArticleSummarySchema(CamelModel):
     article_type: ArticleType
     status: ArticleStatus
     published_at: datetime | None
-    creator_name: str | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime

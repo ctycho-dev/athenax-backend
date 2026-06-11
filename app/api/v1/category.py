@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_db, require_admin_user
+from app.api.dependencies.integrations import get_redis_client
 from app.api.dependencies.services import get_category_service
+from app.common.cache_keys import CATEGORY_LIST_PREFIX, CATEGORY_LIST_TTL
+from app.common.cache_utils import cached_list
 from app.core.config import settings
 from app.domain.category.schema import (
     CategoryCreateSchema,
@@ -12,6 +15,7 @@ from app.domain.category.schema import (
 )
 from app.domain.category.service import CategoryService
 from app.domain.user.schema import UserOutSchema
+from app.infrastructure.redis.client import RedisClient
 from app.middleware.rate_limiter import limiter
 
 router = APIRouter(prefix=settings.api.v1.category, tags=["Category"])
@@ -38,7 +42,17 @@ async def list_categories(
     parent_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     service: CategoryService = Depends(get_category_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if parent_id is None:
+        return await cached_list(
+            redis,
+            key=f"{CATEGORY_LIST_PREFIX}:{limit}:{offset}",
+            ttl=CATEGORY_LIST_TTL,
+            schema_class=CategoryOutSchema,
+            fetch_fn=lambda: service.list(db, limit=limit, offset=offset, parent_id=None),
+            from_attributes=True,
+        )
     return await service.list(db, limit=limit, offset=offset, parent_id=parent_id)
 
 

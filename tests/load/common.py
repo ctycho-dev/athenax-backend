@@ -52,11 +52,13 @@ ADMIN_POOL: list[tuple[str, str]]    = _parse_pool("LOAD_ADMIN_POOL",    "load-a
 # ---------------------------------------------------------------------------
 
 CACHE: dict[str, list] = {
-    "product_ids":   [],
-    "product_slugs": [],
-    "category_ids":  [],
-    "article_ids":   [],
-    "broadcast_ids": [],
+    "product_ids":    [],
+    "product_slugs":  [],
+    "category_ids":   [],
+    "article_ids":    [],
+    "article_slugs":  [],
+    "broadcast_ids":  [],
+    "broadcast_slugs": [],
 }
 
 _lock = threading.Lock()       # guards the IP counter only
@@ -131,16 +133,18 @@ def _do_populate(client) -> None:
         except Exception:  # noqa: BLE001 — cache priming is best-effort
             pass
 
-    for url, cache_key in [
-        ("/api/v1/category/?limit=50",   "category_ids"),
-        ("/api/v1/article/?limit=50",    "article_ids"),
-        ("/api/v1/broadcast/?limit=50",  "broadcast_ids"),
+    for url, id_key, slug_key in [
+        ("/api/v1/category/?limit=50",  "category_ids",  None),
+        ("/api/v1/article/?limit=50",   "article_ids",   "article_slugs"),
+        ("/api/v1/broadcast/?limit=50", "broadcast_ids", "broadcast_slugs"),
     ]:
         try:
-            r = client.get(url, name=f"[cache] {cache_key.split('_')[0]} list")
+            r = client.get(url, name=f"[cache] {id_key.split('_')[0]} list")
             if r.status_code == 200:
-                items = r.json().get("items", [])
-                CACHE[cache_key] = [i["id"] for i in items if i.get("id")]
+                items = r.json()
+                CACHE[id_key] = [i["id"] for i in items if i.get("id")]
+                if slug_key:
+                    CACHE[slug_key] = [i["slug"] for i in items if i.get("slug")]
         except Exception:  # noqa: BLE001
             pass
 

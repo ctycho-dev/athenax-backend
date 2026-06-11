@@ -39,6 +39,19 @@ class RedisClient:
         except Exception:
             logger.warning("Redis delete failed for key %s", key)
 
+    async def delete_by_pattern(self, pattern: str) -> None:
+        # Finds and deletes all keys matching the pattern (e.g. "article:list:*") in batches, without blocking Redis
+        try:
+            cursor = 0
+            while True:
+                cursor, keys = await self._client.scan(cursor, match=pattern, count=100)  # type: ignore[misc]
+                if keys:
+                    await self._client.delete(*keys)  # type: ignore[misc]
+                if cursor == 0:
+                    break
+        except Exception:
+            logger.warning("Redis delete_by_pattern failed for pattern %s", pattern)
+
     async def close(self) -> None:
         await self._client.aclose()
 

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.common.base_repository import BaseRepository
 from app.domain.category.model import Category
@@ -338,7 +339,14 @@ class ProductRepository(BaseRepository[Product]):
         listed: bool | None = None,
     ) -> list[Product]:
         q, _ = self._build_status_query(status, user_id, category_id, date_filter, sort_by, search, upvoted_by_user_id, listed)
-        q = q.limit(limit).offset(offset)
+        # Summary list serializes these columns only — prune the `description` body and unused fields from the read.
+        q = q.options(
+            load_only(
+                Product.slug, Product.name, Product.short_desc, Product.stage,
+                Product.funding, Product.founded, Product.quality_badge,
+                Product.logo, Product.status, Product.created_at, Product.updated_at,
+            )
+        ).limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
 

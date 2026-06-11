@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -308,11 +310,14 @@ class UserService:
     async def get_user_with_profile(
         self, db: AsyncSession, user_id: int
     ) -> UserWithProfileOutSchema:
+        # get_by_id provisions the session connection; profile fetches run concurrently after.
         user = await self.repo.get_by_id(db, user_id)
-        investor = await self.investor_profile_repo.get_by_user_id(db, user_id)
-        researcher = await self.researcher_profile_repo.get_by_user_id(db, user_id)
-        sponsor = await self.sponsor_profile_repo.get_by_user_id(db, user_id)
-        categories = await self.user_category_repo.get_by_user_id(db, user_id)
+        investor, researcher, sponsor, categories = await asyncio.gather(
+            self.investor_profile_repo.get_by_user_id(db, user_id),
+            self.researcher_profile_repo.get_by_user_id(db, user_id),
+            self.sponsor_profile_repo.get_by_user_id(db, user_id),
+            self.user_category_repo.get_by_user_id(db, user_id),
+        )
 
         result = UserWithProfileOutSchema.model_validate(user, from_attributes=True)
         result.investor_profile = InvestorProfileOutSchema.model_validate(investor, from_attributes=True) if investor else None
@@ -337,8 +342,7 @@ class UserService:
         return token
 
     async def _create_user_record(self, db: AsyncSession, user: UserSignupSchema) -> UserOutSchema:
-        existing_user = await self.repo.get_by_email(db, user.email)
-        if existing_user:
+        if await self.repo.email_exists(db, user.email):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User already exists",
