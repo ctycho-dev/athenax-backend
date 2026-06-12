@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, require_admin_user
+from app.common.permissions import is_admin
 from app.api.dependencies.auth import get_optional_user
 from app.api.dependencies.integrations import get_redis_client
 from app.api.dependencies.services import get_broadcast_service
@@ -49,13 +50,13 @@ async def list_broadcasts(
     service: BroadcastService = Depends(get_broadcast_service),
     redis: RedisClient = Depends(get_redis_client),
 ):
-    if current_user is None:
+    if current_user is None or not is_admin(current_user):
         return await cached_list(
             redis,
             key=f"{BROADCAST_LIST_PREFIX}:{broadcast_type}:{tag}:{limit}:{offset}",
             ttl=BROADCAST_LIST_TTL,
             schema_class=BroadcastSummarySchema,
-            fetch_fn=lambda: service.list_broadcasts(db, limit=limit, offset=offset, status=status, broadcast_type=broadcast_type, tag=tag, current_user=None),
+            fetch_fn=lambda: service.list_broadcasts(db, limit=limit, offset=offset, status=status, broadcast_type=broadcast_type, tag=tag, current_user=current_user),
         )
     return await service.list_broadcasts(
         db, limit=limit, offset=offset, status=status,
@@ -73,13 +74,13 @@ async def get_broadcast_by_slug(
     service: BroadcastService = Depends(get_broadcast_service),
     redis: RedisClient = Depends(get_redis_client),
 ):
-    if current_user is None:
+    if current_user is None or not is_admin(current_user):
         return await cached_detail(
             redis,
             key=f"{BROADCAST_DETAIL_PREFIX}:{slug}",
             ttl=BROADCAST_DETAIL_TTL,
             schema_class=BroadcastOutSchema,
-            fetch_fn=lambda: service.get_by_slug(db, slug=slug, current_user=None),
+            fetch_fn=lambda: service.get_by_slug(db, slug=slug, current_user=current_user),
         )
     return await service.get_by_slug(db, slug=slug, current_user=current_user)
 
