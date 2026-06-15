@@ -51,7 +51,7 @@ from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE
 from app.infrastructure.redis.client import RedisClient
 from app.core.config import settings
 from app.utils.slug import generate_slug
-from app.common.cache_keys import PRODUCT_STATS
+from app.common.cache_keys import PRODUCT_DETAIL_PREFIX, PRODUCT_LIST_PREFIX, PRODUCT_STATS
 
 # Helper to determine comment depth based on path (e.g. "1.5.7" -> depth 2)
 def _path_depth(path: str | None) -> int:
@@ -99,6 +99,17 @@ class ProductService:
     async def _invalidate_stats_cache(self) -> None:
         if self.redis:
             await self.redis.delete(PRODUCT_STATS)
+
+    async def _invalidate_list_cache(self) -> None:
+        if self.redis:
+            await self.redis.delete_by_pattern(f"{PRODUCT_LIST_PREFIX}:*")
+
+    async def _invalidate_detail_cache(self, slug: str) -> None:
+        if self.redis:
+            await asyncio.gather(
+                self.redis.delete(f"{PRODUCT_DETAIL_PREFIX}:{slug}"),
+                self.redis.delete_by_pattern(f"{PRODUCT_DETAIL_PREFIX}:member:*:{slug}"),
+            )
 
     async def _fetch_interaction_data(
         self,
@@ -311,6 +322,7 @@ class ProductService:
     ) -> ProductOutSchema:
         product = await self.repo.get_by_id(db, product_id)
         assert_can_modify(product, current_user)
+        old_slug = product.slug
 
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
@@ -354,6 +366,12 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
+
+        invalidations = [self._invalidate_list_cache(), self._invalidate_detail_cache(product.slug)]
+        if old_slug != product.slug:
+            invalidations.append(self._invalidate_detail_cache(old_slug))
+        await asyncio.gather(*invalidations)
+
         return await self._to_schema(db, product)
 
     async def delete_by_id(
@@ -366,7 +384,11 @@ class ProductService:
         assert_can_modify(product, current_user)
         await self.repo.soft_delete(db, product_id, deleted_by_id=current_user.id)
         await db.commit()
-        await self._invalidate_stats_cache()
+        await asyncio.gather(
+            self._invalidate_stats_cache(),
+            self._invalidate_list_cache(),
+            self._invalidate_detail_cache(product.slug),
+        )
 
     async def list_voted(
         self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
@@ -565,7 +587,11 @@ class ProductService:
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)
-        await self._invalidate_stats_cache()
+        await asyncio.gather(
+            self._invalidate_stats_cache(),
+            self._invalidate_list_cache(),
+            self._invalidate_detail_cache(product.slug),
+        )
         return await self._to_schema(db, product)
 
     # -------------------------
@@ -736,6 +762,7 @@ class ProductService:
         await storage.upload_file(key=key, data=data, content_type=file.content_type)
         await self.repo.update_instance(db, product, {"logo": key})
         await db.commit()
+        await self._invalidate_detail_cache(product.slug)
         return ProductLogoOutSchema(logo=self._logo_url(key))  # type: ignore[arg-type]
 
     async def delete_logo(
@@ -756,6 +783,7 @@ class ProductService:
                 pass  # best-effort
         await self.repo.update_instance(db, product, {"logo": None})
         await db.commit()
+        await self._invalidate_detail_cache(product.slug)
 
     # -------------------------
     # Product Team

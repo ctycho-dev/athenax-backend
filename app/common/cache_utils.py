@@ -33,3 +33,26 @@ async def cached_list(
     schemas = [schema_class.model_validate(item, from_attributes=from_attributes) for item in result]
     await redis.set(key, json.dumps([s.model_dump(mode="json") for s in schemas]), ttl_seconds=ttl)
     return schemas
+
+
+async def cached_detail(
+    redis: RedisClient | None,
+    key: str,
+    ttl: int,
+    schema_class: type[S],
+    fetch_fn: Callable[[], Awaitable],
+    *,
+    from_attributes: bool = False,
+) -> S:
+    """Try Redis first; on miss, fetch from DB, cache it, then return. Skips cache if Redis is unavailable."""
+    if redis is None:
+        return await fetch_fn()
+
+    cached = await redis.get(key)
+    if cached:
+        return schema_class.model_validate(json.loads(cached))
+
+    result = await fetch_fn()
+    schema = schema_class.model_validate(result, from_attributes=from_attributes)
+    await redis.set(key, json.dumps(schema.model_dump(mode="json")), ttl_seconds=ttl)
+    return schema

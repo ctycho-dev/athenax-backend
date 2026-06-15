@@ -1,8 +1,9 @@
+import asyncio
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.cache_keys import ARTICLE_LIST_PREFIX
+from app.common.cache_keys import ARTICLE_DETAIL_PREFIX, ARTICLE_LIST_PREFIX
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
 from app.domain.article.model import ArticleTag
@@ -33,6 +34,10 @@ class ArticleService:
     async def _invalidate_list_cache(self) -> None:
         if self.redis:
             await self.redis.delete_by_pattern(f"{ARTICLE_LIST_PREFIX}:*")
+
+    async def _invalidate_detail_cache(self, slug: str) -> None:
+        if self.redis:
+            await self.redis.delete(f"{ARTICLE_DETAIL_PREFIX}:{slug}")
 
     async def create(
         self,
@@ -111,6 +116,7 @@ class ArticleService:
         current_user: UserOutSchema,
     ) -> ArticleOutSchema:
         article = await self.repo.get_by_id(db, article_id)
+        old_slug = article.slug
         payload = data.model_dump(exclude_unset=True)
         tag_names = payload.pop("tags", None)
 
@@ -129,13 +135,19 @@ class ArticleService:
 
         await db.commit()
         await db.refresh(article)
-        await self._invalidate_list_cache()
+
+        invalidations = [self._invalidate_list_cache(), self._invalidate_detail_cache(article.slug)]
+        if old_slug != article.slug:
+            invalidations.append(self._invalidate_detail_cache(old_slug))
+        await asyncio.gather(*invalidations)
+
         return await self._to_schema(db, article)
 
     async def delete_by_id(self, db: AsyncSession, article_id: int, current_user: UserOutSchema) -> None:
+        article = await self.repo.get_by_id(db, article_id)
         await self.repo.soft_delete(db, article_id, deleted_by_id=current_user.id)
         await db.commit()
-        await self._invalidate_list_cache()
+        await asyncio.gather(self._invalidate_list_cache(), self._invalidate_detail_cache(article.slug))
 
     # -------------------------
     # Helpers
@@ -178,7 +190,7 @@ class ArticleService:
         return payload
 
     async def _to_schema(self, db: AsyncSession, article) -> ArticleOutSchema:
-        tags, users_map = await _gather(
+        tags, users_map = await asyncio.gather(
             self.repo.get_tags_for_article(db, article.id),
             self.user_repo.get_by_ids(db, [article.created_by_id] if article.created_by_id else []),
         )
@@ -186,8 +198,3 @@ class ArticleService:
         out.tags = [t.name for t in tags]
         out.creator_name = users_map[article.created_by_id].name if article.created_by_id in users_map else None
         return out
-
-
-async def _gather(*coros):
-    import asyncio
-    return await asyncio.gather(*coros)
