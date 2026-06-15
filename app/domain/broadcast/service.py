@@ -5,9 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
+from app.domain.article.repository import ArticleRepository
 from app.domain.broadcast.model import BroadcastTag
 from app.domain.broadcast.repository import BroadcastRepository
 from app.domain.broadcast.schema import (
+    ArticleForBroadcastSchema,
     BroadcastCreateSchema,
     BroadcastOutSchema,
     BroadcastSummarySchema,
@@ -29,11 +31,13 @@ class BroadcastService:
         repo: BroadcastRepository,
         tag_repo: TagRepository,
         user_repo: UserRepository,
+        article_repo: ArticleRepository,
         redis: RedisClient | None = None,
     ):
         self.repo = repo
         self.tag_repo = tag_repo
         self.user_repo = user_repo
+        self.article_repo = article_repo
         self.redis = redis
 
     async def _invalidate_list_cache(self) -> None:
@@ -195,11 +199,14 @@ class BroadcastService:
         return payload
 
     async def _to_schema(self, db: AsyncSession, broadcast) -> BroadcastOutSchema:
-        tags, users_map = await asyncio.gather(
+        tags, users_map, article = await asyncio.gather(
             self.repo.get_tags_for_broadcast(db, broadcast.id),
             self.user_repo.get_by_ids(db, [broadcast.created_by_id] if broadcast.created_by_id else []),
+            self.article_repo.get_by_broadcast_id(db, broadcast.id),
         )
         out = BroadcastOutSchema.model_validate(broadcast, from_attributes=True)
         out.tags = [t.name for t in tags]
         out.creator_name = users_map[broadcast.created_by_id].name if broadcast.created_by_id in users_map else None
+        if article:
+            out.article = ArticleForBroadcastSchema.model_validate(article, from_attributes=True)
         return out

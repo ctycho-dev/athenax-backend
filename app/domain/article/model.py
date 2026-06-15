@@ -43,6 +43,9 @@ class Article(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
         SQLEnum(ArticleType, name="article_type", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
+    broadcast_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("broadcasts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
