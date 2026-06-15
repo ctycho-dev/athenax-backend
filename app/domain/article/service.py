@@ -3,12 +3,13 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.cache_keys import ARTICLE_DETAIL_PREFIX, ARTICLE_LIST_PREFIX
+from app.common.cache_keys import ARTICLE_DETAIL_PREFIX, ARTICLE_LIST_PREFIX, BROADCAST_DETAIL_PREFIX
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
 from app.domain.article.model import ArticleTag
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
+from app.domain.broadcast.repository import BroadcastRepository
 from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
@@ -24,11 +25,13 @@ class ArticleService:
         repo: ArticleRepository,
         tag_repo: TagRepository,
         user_repo: UserRepository,
+        broadcast_repo: BroadcastRepository,
         redis: RedisClient | None = None,
     ):
         self.repo = repo
         self.tag_repo = tag_repo
         self.user_repo = user_repo
+        self.broadcast_repo = broadcast_repo
         self.redis = redis
 
     async def _invalidate_list_cache(self) -> None:
@@ -39,6 +42,15 @@ class ArticleService:
         if self.redis:
             await self.redis.delete(f"{ARTICLE_DETAIL_PREFIX}:{slug}")
 
+    async def _invalidate_broadcast_detail_cache(self, db: AsyncSession, broadcast_id: int | None) -> None:
+        if not self.redis or not broadcast_id:
+            return
+        try:
+            broadcast = await self.broadcast_repo.get_by_id(db, broadcast_id)
+            await self.redis.delete(f"{BROADCAST_DETAIL_PREFIX}:{broadcast.slug}")
+        except NotFoundError:
+            pass
+
     async def create(
         self,
         db: AsyncSession,
@@ -48,6 +60,9 @@ class ArticleService:
         payload = data.model_dump()
         tag_names = payload.pop("tags", [])
 
+        if data.broadcast_id:
+            await self.broadcast_repo.get_by_id(db, data.broadcast_id)
+
         payload["slug"] = slugify(data.title)
         payload = self._apply_published_at(payload)
 
@@ -56,7 +71,10 @@ class ArticleService:
 
         await db.commit()
         await db.refresh(article)
-        await self._invalidate_list_cache()
+        await asyncio.gather(
+            self._invalidate_list_cache(),
+            self._invalidate_broadcast_detail_cache(db, article.broadcast_id),
+        )
         return await self._to_schema(db, article)
 
     async def list_articles(
@@ -117,8 +135,12 @@ class ArticleService:
     ) -> ArticleOutSchema:
         article = await self.repo.get_by_id(db, article_id)
         old_slug = article.slug
+        old_broadcast_id = article.broadcast_id
         payload = data.model_dump(exclude_unset=True)
         tag_names = payload.pop("tags", None)
+
+        if payload.get("broadcast_id"):
+            await self.broadcast_repo.get_by_id(db, payload["broadcast_id"])
 
         if "slug" in payload:
             payload["slug"] = slugify(payload["slug"])
@@ -139,6 +161,10 @@ class ArticleService:
         invalidations = [self._invalidate_list_cache(), self._invalidate_detail_cache(article.slug)]
         if old_slug != article.slug:
             invalidations.append(self._invalidate_detail_cache(old_slug))
+        # Invalidate broadcast cache for both old and new broadcast_id when the link changes
+        if "broadcast_id" in payload:
+            invalidations.append(self._invalidate_broadcast_detail_cache(db, old_broadcast_id))
+            invalidations.append(self._invalidate_broadcast_detail_cache(db, article.broadcast_id))
         await asyncio.gather(*invalidations)
 
         return await self._to_schema(db, article)
@@ -147,7 +173,11 @@ class ArticleService:
         article = await self.repo.get_by_id(db, article_id)
         await self.repo.soft_delete(db, article_id, deleted_by_id=current_user.id)
         await db.commit()
-        await asyncio.gather(self._invalidate_list_cache(), self._invalidate_detail_cache(article.slug))
+        await asyncio.gather(
+            self._invalidate_list_cache(),
+            self._invalidate_detail_cache(article.slug),
+            self._invalidate_broadcast_detail_cache(db, article.broadcast_id),
+        )
 
     # -------------------------
     # Helpers

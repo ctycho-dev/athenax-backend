@@ -9,11 +9,14 @@ from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
+from app.domain.broadcast.model import Broadcast
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import UserRole
+from app.enums.enums import BroadcastStatus, BroadcastType, UserRole
 from app.main import app
 from tests.conftest import TEST_DATABASE_URL, ClientWithEmail
+
+SEED_BROADCAST_ID = 10
 
 
 @pytest_asyncio.fixture(scope="module", autouse=True)
@@ -29,8 +32,19 @@ async def seed_users():
             ])
             .on_conflict_do_nothing()
         )
-        # Advance the sequence past explicitly inserted IDs to avoid PK conflicts with auto-increment
         await session.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))"))
+        await session.execute(
+            pg_insert(Broadcast)
+            .values([{
+                "id": SEED_BROADCAST_ID,
+                "title": "Seed Broadcast",
+                "slug": "seed-broadcast",
+                "broadcast_type": BroadcastType.LIVESTREAM,
+                "status": BroadcastStatus.PUBLISHED,
+            }])
+            .on_conflict_do_nothing()
+        )
+        await session.execute(text("SELECT setval('broadcasts_id_seq', (SELECT MAX(id) FROM broadcasts))"))
         await session.commit()
     await engine.dispose()
 
