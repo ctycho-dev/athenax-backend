@@ -78,3 +78,12 @@ class ArticleRepository(BaseRepository[Article]):
         self, db: AsyncSession, article_id: int
     ) -> list[Tag]:
         return (await self.get_tags_for_articles(db, [article_id]))[article_id]
+
+    async def get_by_broadcast_id(self, db: AsyncSession, broadcast_id: int) -> Article | None:
+        result = await db.execute(
+            select(Article).where(
+                Article.broadcast_id == broadcast_id,
+                Article.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()

@@ -178,18 +178,20 @@ def get_article_service(
     repo: ArticleRepository = Depends(get_article_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    broadcast_repo: BroadcastRepository = Depends(get_broadcast_repo),
     redis: RedisClient = Depends(get_redis_client),
 ) -> ArticleService:
-    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, redis=redis)
+    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, broadcast_repo=broadcast_repo, redis=redis)
 
 
 def get_broadcast_service(
     repo: BroadcastRepository = Depends(get_broadcast_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    article_repo: ArticleRepository = Depends(get_article_repo),
     redis: RedisClient = Depends(get_redis_client),
 ) -> BroadcastService:
-    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, redis=redis)
+    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, article_repo=article_repo, redis=redis)
 
 
 def get_product_service(
