@@ -106,7 +106,10 @@ class ProductService:
 
     async def _invalidate_detail_cache(self, slug: str) -> None:
         if self.redis:
-            await self.redis.delete(f"{PRODUCT_DETAIL_PREFIX}:{slug}")
+            await asyncio.gather(
+                self.redis.delete(f"{PRODUCT_DETAIL_PREFIX}:{slug}"),
+                self.redis.delete_by_pattern(f"{PRODUCT_DETAIL_PREFIX}:member:*:{slug}"),
+            )
 
     async def _fetch_interaction_data(
         self,
