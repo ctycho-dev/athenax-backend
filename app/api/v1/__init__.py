@@ -11,6 +11,7 @@ from .product import router as product_router
 from .article import router as article_router
 from .broadcast import router as broadcast_router
 from .internal import router as internal_router
+from .subscriber import router as subscriber_router
 
 router = APIRouter(
     prefix=settings.api.v1.prefix,
@@ -25,5 +26,6 @@ router.include_router(product_router)
 router.include_router(article_router)
 router.include_router(broadcast_router)
 router.include_router(internal_router)
+router.include_router(subscriber_router)
 
 __all__ = ["router"]

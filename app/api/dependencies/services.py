@@ -29,6 +29,8 @@ from app.domain.article.service import ArticleService
 from app.domain.broadcast.repository import BroadcastRepository
 from app.domain.broadcast.service import BroadcastService
 from app.domain.tag.repository import TagRepository
+from app.domain.subscriber.repository import SubscriberRepository
+from app.domain.subscriber.service import SubscriberService
 from app.common.storage import R2StorageService
 
 
@@ -192,6 +194,17 @@ def get_broadcast_service(
     redis: RedisClient = Depends(get_redis_client),
 ) -> BroadcastService:
     return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, article_repo=article_repo, redis=redis)
+
+
+def get_subscriber_repo() -> SubscriberRepository:
+    return SubscriberRepository()
+
+
+def get_subscriber_service(
+    repo: SubscriberRepository = Depends(get_subscriber_repo),
+    email_service: EmailService = Depends(get_email_service),
+) -> SubscriberService:
+    return SubscriberService(repo=repo, email_service=email_service)
 
 
 def get_product_service(

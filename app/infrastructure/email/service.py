@@ -141,6 +141,125 @@ class EmailService:
   </body>
 </html>"""
 
+    async def send_subscriber_welcome_email(self, email: str, unsubscribe_url: str) -> None:
+        html = self._build_subscriber_welcome_html(email, unsubscribe_url)
+        await self.send_email(email, "You're subscribed to AthenaX", html)
+
+    @staticmethod
+    def _build_subscriber_welcome_html(email: str, unsubscribe_url: str) -> str:
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to AthenaX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap');
+  body,table,td,a{{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}}
+  table,td{{mso-table-lspace:0pt;mso-table-rspace:0pt}}
+  img{{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none}}
+  body{{margin:0;padding:0;width:100%!important;background-color:#F5F1E8}}
+  @media only screen and (max-width:620px){{
+    .wrapper{{width:100%!important;padding:0 16px!important}}
+    .content-pad{{padding:24px 20px!important}}
+    .hero-title{{font-size:26px!important}}
+  }}
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F1E8;">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#F5F1E8;">
+<tr><td align="center" style="padding:32px 16px 48px;">
+<table role="presentation" cellpadding="0" cellspacing="0" width="520" class="wrapper" style="max-width:520px;width:100%;">
+
+<!-- LOGO -->
+<tr><td align="center" style="padding-bottom:28px;">
+  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+    <td style="padding-right:10px;vertical-align:middle;">
+      <div style="width:36px;height:36px;background:#1a1a1a;border-radius:9px;display:inline-block;text-align:center;line-height:36px;">
+        <img src="https://athenax.mypinx.store/Logo_Icon_White.png" alt="AthenaX" width="22" height="22" style="display:inline-block;vertical-align:middle;" />
+      </div>
+    </td>
+    <td style="font-family:'Inter',-apple-system,sans-serif;font-size:22px;font-weight:800;color:#1a1a1a;letter-spacing:-0.03em;vertical-align:middle;">
+      AthenaX
+    </td>
+    <td style="padding-left:6px;vertical-align:middle;">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:8px;background:#1a1a1a;color:#fff;padding:2px 5px;border-radius:3px;letter-spacing:0.06em;">BETA</span>
+    </td>
+  </tr></table>
+</td></tr>
+
+<!-- MAIN CARD -->
+<tr><td>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#FFFFFF;border:2px solid #1a1a1a;border-radius:8px;box-shadow:3px 3px 0 #1a1a1a;">
+
+  <!-- Window bar -->
+  <tr><td style="border-bottom:2px solid #1a1a1a;padding:8px 14px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#E24B4A;margin-right:5px;"></span></td>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#EF9F27;margin-right:5px;"></span></td>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#639922;margin-right:10px;"></span></td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;font-weight:500;color:#1a1a1a;">WELCOME.SYS</td>
+    </tr></table>
+  </td></tr>
+
+  <!-- Body -->
+  <tr><td class="content-pad" style="padding:32px 36px 36px;">
+    <p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#999;letter-spacing:0.15em;text-transform:uppercase;margin:0 0 16px;">SUBSCRIPTION CONFIRMED</p>
+    <h1 class="hero-title" style="font-family:'Inter',-apple-system,sans-serif;font-size:30px;font-weight:800;color:#1a1a1a;margin:0 0 18px;letter-spacing:-0.03em;line-height:1.15;">You're in.</h1>
+    <p style="font-family:'Inter',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 14px;">
+      Thanks for subscribing to the AthenaX newsletter. Every week, we'll send you a short roundup of what's happening across frontier tech:
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;">
+      <tr>
+        <td width="24" valign="top" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#EF9F27;padding:6px 0;">&#8594;</td>
+        <td style="font-family:'Inter',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0;">Top launches of the week across AI, biotech, crypto, robotics, dev tools, and infrastructure</td>
+      </tr>
+      <tr>
+        <td width="24" valign="top" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#EF9F27;padding:6px 0;">&#8594;</td>
+        <td style="font-family:'Inter',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0;">Editorial context on what's being built across the frontier and why it matters</td>
+      </tr>
+      <tr>
+        <td width="24" valign="top" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#EF9F27;padding:6px 0;">&#8594;</td>
+        <td style="font-family:'Inter',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0;">New bounties, cohort updates, and community highlights <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#999;letter-spacing:0.04em;">(coming soon)</span></td>
+      </tr>
+    </table>
+    <p style="font-family:'Inter',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 24px;">
+      Your first newsletter lands soon. In the meantime, come explore what's already live:
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" align="center">
+    <tr><td>
+      <a href="https://www.athenax.co/launch" style="display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#fff;background:#E94842;border:2px solid #1a1a1a;border-radius:4px;padding:13px 28px;text-decoration:none;box-shadow:2px 2px 0 #1a1a1a;">Browse the Launch Feed &#8594;</a>
+    </td></tr>
+    </table>
+  </td></tr>
+</table>
+</td></tr>
+
+<!-- FOOTER -->
+<tr><td style="padding-top:28px;">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+  <tr><td align="center">
+    <p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#aaa;letter-spacing:0.06em;margin:0 0 6px;">
+      &gt;_ ATHENAX &middot; WHERE NEW PRODUCTS BEGIN
+    </p>
+    <p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#bbb;margin:0 0 10px;">
+      CC0 /// NO RIGHTS RESERVED /// OPEN SOURCE
+    </p>
+    <p style="font-family:'Inter',sans-serif;font-size:11px;color:#bbb;margin:0;">
+      You're receiving this because {email} subscribed to AthenaX updates.
+      <br/>
+      <a href="{unsubscribe_url}" style="color:#999;text-decoration:underline;">Unsubscribe</a>
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
     @staticmethod
     def _build_url(base_url: str, token: str) -> str:
         target = base_url.rstrip("?")
