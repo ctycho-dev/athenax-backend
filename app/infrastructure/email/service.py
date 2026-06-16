@@ -62,6 +62,7 @@ class EmailService:
         html = render_email("subscriber_welcome.html", {
             "email": email,
             "unsubscribe_url": unsubscribe_url,
+            "launch_url": f"{settings.frontend_url.rstrip('/')}/launch",
         })
         await self.send_email(email, "You're subscribed to AthenaX", html)
 
