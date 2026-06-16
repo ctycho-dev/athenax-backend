@@ -1,24 +1,16 @@
 {% extends "base.html" %}
-
-{% block title %}{{ title }} — AthenaX{% endblock %}
+{% from "macros.html" import btn %}
 
 {% block window_label %}AUTH.SYS{% endblock %}
 
 {% block content %}
-<p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#999;letter-spacing:0.15em;text-transform:uppercase;margin:0 0 16px;">ACCOUNT ACTION REQUIRED</p>
-<h1 style="font-family:'Inter',-apple-system,sans-serif;font-size:30px;font-weight:800;color:#1a1a1a;margin:0 0 18px;letter-spacing:-0.03em;line-height:1.15;">{{ title }}.</h1>
-<p style="font-family:'Inter',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 8px;">Hi {{ name }},</p>
-<p style="font-family:'Inter',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 28px;">{{ intro }}</p>
-<table role="presentation" cellpadding="0" cellspacing="0" align="center">
-<tr><td>
-  <a href="{{ action_url }}" style="display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#fff;background:#E94842;border:2px solid #1a1a1a;border-radius:4px;padding:13px 28px;text-decoration:none;box-shadow:2px 2px 0 #1a1a1a;">{{ cta_text }} &#8594;</a>
-</td></tr>
-</table>
+<span class="ax-label">ACCOUNT ACTION REQUIRED</span>
+<h1 class="ax-h1">{{ title }}.</h1>
+<p class="ax-body">Hi {{ name }},</p>
+<p class="ax-body" style="margin-bottom:28px;">{{ intro }}</p>
+{{ btn(action_url, cta_text + " →") }}
 {% endblock %}
 
 {% block footer_links %}
-<p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#bbb;margin:0 0 6px;">
-  TOKEN // <code style="color:#aaa;">{{ token }}</code>
-</p>
-<p style="font-family:'Inter',sans-serif;font-size:11px;color:#bbb;margin:0;">{{ footer_text }}</p>
+<p class="ax-footer-text">{{ footer_text }}</p>
 {% endblock %}

@@ -3,13 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}AthenaX{% endblock %}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=VT323&family=Londrina+Solid:wght@400;900&display=swap');
   body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
   table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}
   img{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none}
   body{margin:0;padding:0;width:100%!important;background-color:#F5F1E8}
+
+  /* Reusable typography */
+  .ax-label{font-family:'VT323',monospace;font-size:14px;color:#999;letter-spacing:0.15em;text-transform:uppercase;display:block;margin:0 0 14px}
+  .ax-h1{font-family:'Space Grotesk',-apple-system,sans-serif;font-size:30px;font-weight:800;color:#1a1a1a;margin:0 0 18px;letter-spacing:-0.03em;line-height:1.15}
+  .ax-body{font-family:'Space Grotesk',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 8px}
+  .ax-small{font-family:'Space Grotesk',-apple-system,sans-serif;font-size:14px;color:#777;line-height:1.7;margin:0}
+  .ax-arrow{font-family:'VT323',monospace;font-size:18px;color:#EF9F27;padding:6px 0}
+  .ax-bullet{font-family:'Space Grotesk',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0}
+  .ax-btn{display:inline-block;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:#ffffff;background:#e8323c;border:2px solid #1c1c27;border-radius:10px;padding:10px 22px;text-decoration:none;box-shadow:4px 4px 0 #1c1c27;white-space:nowrap}
+  .ax-footer-text{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#bbb;margin:0}
+  .ax-footer-mono{font-family:'VT323',monospace;font-size:13px;color:#bbb;margin:0 0 6px}
+
   @media only screen and (max-width:620px){
     .wrapper{width:100%!important;padding:0 16px!important}
     .content-pad{padding:24px 20px!important}
@@ -29,26 +40,26 @@
           <img src="https://athenax.mypinx.store/Logo_Icon_White.png" alt="AthenaX" width="22" height="22" style="display:inline-block;vertical-align:middle;" />
         </div>
       </td>
-      <td style="font-family:'Inter',-apple-system,sans-serif;font-size:22px;font-weight:800;color:#1a1a1a;letter-spacing:-0.03em;vertical-align:middle;">
+      <td style="font-family:'Londrina Solid',sans-serif;font-size:24px;font-weight:900;color:#1a1a1a;letter-spacing:0.01em;vertical-align:middle;">
         AthenaX
       </td>
       <td style="padding-left:6px;vertical-align:middle;">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:8px;background:#1a1a1a;color:#fff;padding:2px 5px;border-radius:3px;letter-spacing:0.06em;">BETA</span>
+        <span style="font-family:'VT323',monospace;font-size:12px;background:#1a1a1a;color:#fff;padding:2px 5px;border-radius:3px;letter-spacing:0.06em;">BETA</span>
       </td>
     </tr></table>
   </td></tr>
 
   <!-- MAIN CARD -->
-  <tr><td>
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#FFFFFF;border:2px solid #1a1a1a;border-radius:8px;box-shadow:3px 3px 0 #1a1a1a;">
+  <tr><td style="background:#1c1c27;border-radius:16px;padding:2px;box-shadow:5px 5px 0 #1c1c27;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;border-radius:14px;overflow:hidden;">
 
     <!-- Window bar -->
-    <tr><td style="border-bottom:2px solid #1a1a1a;padding:8px 14px;">
+    <tr><td style="background:#ffffff;border-bottom:2px solid #1c1c27;padding:9px 14px;">
       <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-        <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#E24B4A;margin-right:5px;"></span></td>
-        <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#EF9F27;margin-right:5px;"></span></td>
-        <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#639922;margin-right:10px;"></span></td>
-        <td style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;font-weight:500;color:#1a1a1a;">{% block window_label %}ATHENAX.SYS{% endblock %}</td>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#e8323c;margin-right:5px;"></span></td>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f5d94e;margin-right:5px;"></span></td>
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#6caf50;margin-right:10px;"></span></td>
+        <td style="font-family:'VT323',monospace;font-size:14px;letter-spacing:0.07em;text-transform:uppercase;color:#1c1c27;">{% block window_label %}ATHENAX.SYS{% endblock %}</td>
       </tr></table>
     </td></tr>
 
@@ -64,10 +75,10 @@
   <tr><td style="padding-top:28px;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
     <tr><td align="center">
-      <p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#aaa;letter-spacing:0.06em;margin:0 0 6px;">
+      <p style="font-family:'VT323',monospace;font-size:13px;color:#aaa;letter-spacing:0.06em;margin:0 0 6px;">
         &gt;_ ATHENAX &middot; WHERE NEW PRODUCTS BEGIN
       </p>
-      <p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#bbb;margin:0 0 10px;">
+      <p style="font-family:'VT323',monospace;font-size:13px;color:#bbb;margin:0 0 10px;">
         CC0 /// NO RIGHTS RESERVED /// OPEN SOURCE
       </p>
       {% block footer_links %}{% endblock %}

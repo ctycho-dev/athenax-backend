@@ -217,6 +217,7 @@ def get_product_service(
     backer_repo: ProductBackerRepository = Depends(get_backer_repo),
     voice_repo: ProductVoiceRepository = Depends(get_voice_repo),
     bounty_repo: BountyRepository = Depends(get_bounty_repo),
+    email_service: EmailService = Depends(get_email_service),
     redis: RedisClient = Depends(get_redis_client),
 ) -> ProductService:
     return ProductService(
@@ -229,5 +230,6 @@ def get_product_service(
         backer_repo=backer_repo,
         voice_repo=voice_repo,
         bounty_repo=bounty_repo,
+        email_service=email_service,
         redis=redis,
     )

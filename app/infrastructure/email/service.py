@@ -50,6 +50,14 @@ class EmailService:
         })
         await self.send_email(email, "Reset your AthenaX password", html)
 
+    async def send_product_submission_email(self, email: str, name: str, product_name: str) -> None:
+        html = render_email("product_submission.html", {"name": name, "product_name": product_name})
+        await self.send_email(email, f"We received your submission: {product_name}", html)
+
+    async def send_product_approved_email(self, email: str, name: str, product_name: str, product_url: str) -> None:
+        html = render_email("product_approved.html", {"name": name, "product_name": product_name, "product_url": product_url})
+        await self.send_email(email, f"{product_name} is now live on AthenaX", html)
+
     async def send_subscriber_welcome_email(self, email: str, unsubscribe_url: str) -> None:
         html = render_email("subscriber_welcome.html", {
             "email": email,
