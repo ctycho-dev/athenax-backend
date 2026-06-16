@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to AthenaX{% endblock %}
+
+{% block window_label %}WELCOME.SYS{% endblock %}
+
+{% block content %}
+<p style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#999;letter-spacing:0.15em;text-transform:uppercase;margin:0 0 16px;">SUBSCRIPTION CONFIRMED</p>
+<h1 style="font-family:'Inter',-apple-system,sans-serif;font-size:30px;font-weight:800;color:#1a1a1a;margin:0 0 18px;letter-spacing:-0.03em;line-height:1.15;">You're in.</h1>
+<p style="font-family:'Inter',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 14px;">
+  Thanks for subscribing to the AthenaX newsletter. Every week, we'll send you a short roundup of what's happening across frontier tech:
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;">
+  <tr>
+    <td width="24" valign="top" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#EF9F27;padding:6px 0;">&#8594;</td>
+    <td style="font-family:'Inter',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0;">Top launches of the week across AI, biotech, crypto, robotics, dev tools, and infrastructure</td>
+  </tr>
+  <tr>
+    <td width="24" valign="top" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#EF9F27;padding:6px 0;">&#8594;</td>
+    <td style="font-family:'Inter',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0;">Editorial context on what's being built across the frontier and why it matters</td>
+  </tr>
+  <tr>
+    <td width="24" valign="top" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#EF9F27;padding:6px 0;">&#8594;</td>
+    <td style="font-family:'Inter',sans-serif;font-size:14px;color:#444;line-height:1.6;padding:5px 0;">New bounties, cohort updates, and community highlights <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#999;letter-spacing:0.04em;">(coming soon)</span></td>
+  </tr>
+</table>
+<p style="font-family:'Inter',-apple-system,sans-serif;font-size:15px;color:#444;line-height:1.7;margin:0 0 24px;">
+  Your first newsletter lands soon. In the meantime, come explore what's already live:
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" align="center">
+<tr><td>
+  <a href="https://www.athenax.co/launch" style="display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:#fff;background:#E94842;border:2px solid #1a1a1a;border-radius:4px;padding:13px 28px;text-decoration:none;box-shadow:2px 2px 0 #1a1a1a;">Browse the Launch Feed &#8594;</a>
+</td></tr>
+</table>
+{% endblock %}
+
+{% block footer_links %}
+<p style="font-family:'Inter',sans-serif;font-size:11px;color:#bbb;margin:0;">
+  You're receiving this because {{ email }} subscribed to AthenaX updates.
+  <br/>
+  <a href="{{ unsubscribe_url }}" style="color:#999;text-decoration:underline;">Unsubscribe</a>
+</p>
+{% endblock %}
