@@ -609,12 +609,18 @@ class ProductService:
             try:
                 submitter = await self.user_repo.get_by_id(db, product.created_by_id)
                 product_url = f"{settings.frontend_url.rstrip('/')}/launch/{product.slug}"
-                await self.email_service.send_product_approved_email(
+                asyncio.create_task(self._send_approval_email(
                     submitter.email, submitter.name, product.name, product_url
-                )
-            except (EmailDeliveryError, NotFoundError):
+                ))
+            except NotFoundError:
                 logger.warning("product_approved_email_failed", extra={"product_id": product_id})
         return await self._to_schema(db, product)
+
+    async def _send_approval_email(self, email: str, name: str, product_name: str, product_url: str) -> None:
+        try:
+            await self.email_service.send_product_approved_email(email, name, product_name, product_url)
+        except EmailDeliveryError:
+            logger.warning("product_approved_email_failed", extra={"email": email})
 
     # -------------------------
     # Product Links
