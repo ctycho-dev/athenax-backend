@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "macros.html" import btn %}
+
+{% block window_label %}AUTH.SYS{% endblock %}
+
+{% block content %}
+<span class="ax-label">ACCOUNT ACTION REQUIRED</span>
+<h1 class="ax-h1">{{ title }}.</h1>
+<p class="ax-body">Hi {{ name }},</p>
+<p class="ax-body" style="margin-bottom:28px;">{{ intro }}</p>
+{{ btn(action_url, cta_text + " →") }}
+{% endblock %}
+
+{% block footer_links %}
+<p class="ax-footer-text">{{ footer_text }}</p>
+{% endblock %}

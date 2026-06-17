@@ -18,6 +18,7 @@ from .services import (
     get_product_service,
     get_article_service,
     get_broadcast_service,
+    get_subscriber_service,
 )
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "get_product_service",
     "get_article_service",
     "get_broadcast_service",
+    "get_subscriber_service",
 ]

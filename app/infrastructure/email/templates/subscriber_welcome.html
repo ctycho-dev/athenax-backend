@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "macros.html" import btn, bullet %}
+
+{% block window_label %}WELCOME.SYS{% endblock %}
+
+{% block content %}
+<span class="ax-label">SUBSCRIPTION CONFIRMED</span>
+<h1 class="ax-h1">You're in.</h1>
+<p class="ax-body" style="margin-bottom:14px;">
+  Thanks for subscribing to the AthenaX newsletter. Every week, we'll send you a short roundup of what's happening across frontier tech:
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;">
+  {% call bullet() %}Top launches of the week across AI, biotech, crypto, robotics, dev tools, and infrastructure{% endcall %}
+  {% call bullet() %}Editorial context on what's being built across the frontier and why it matters{% endcall %}
+  {% call bullet() %}New bounties, cohort updates, and community highlights <span style="font-family:'VT323',monospace;font-size:12px;color:#999;letter-spacing:0.04em;">(coming soon)</span>{% endcall %}
+</table>
+<p class="ax-body" style="margin-bottom:24px;">
+  Your first newsletter lands soon. In the meantime, come explore what's already live:
+</p>
+{{ btn(launch_url, "Browse the Launch Feed →") }}
+{% endblock %}
+
+{% block footer_links %}
+<p class="ax-footer-text">
+  You're receiving this because {{ email }} subscribed to AthenaX updates.
+  <br/>
+  <a href="{{ unsubscribe_url }}" style="color:#999;text-decoration:underline;">Unsubscribe</a>
+</p>
+{% endblock %}

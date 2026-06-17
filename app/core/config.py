@@ -24,6 +24,7 @@ class ApiV1Prefix(BaseModel):
     article: str = "/article"
     broadcast: str = "/broadcast"
     internal: str = "/internal"
+    subscriber: str = "/subscriber"
 
 
 class ApiPrefix(BaseModel):
@@ -78,6 +79,7 @@ class Settings(BaseSettings):
     cors_origin: str = ''
     cors_origin_regex: str = ''
     frontend_url: str = ''
+    backend_url: str = ''
 
     api: ApiPrefix = ApiPrefix()
     db: DbConfig = DbConfig()  # pyright: ignore[reportCallIssue]
@@ -85,6 +87,10 @@ class Settings(BaseSettings):
     auth: AuthConfig = AuthConfig()  # pyright: ignore[reportCallIssue]
     resend: ResendConfig = ResendConfig()  # pyright: ignore[reportCallIssue]
     r2: R2Config = R2Config()  # pyright: ignore[reportCallIssue]
+
+    @property
+    def subscriber_unsubscribe_url(self) -> str:
+        return f"{self.frontend_url.rstrip('/')}/unsubscribe"
 
     @property
     def email_verify_url(self) -> str:

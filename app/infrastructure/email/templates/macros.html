@@ -1,0 +1,28 @@
+{#
+  Reusable email components.
+  Usage in child templates:
+    {% from "macros.html" import btn, bullet %}
+#}
+
+{% macro btn(url, text) %}
+<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin-top:4px;">
+<tr><td>
+  <a href="{{ url }}" class="ax-btn">{{ text }}</a>
+</td></tr>
+</table>
+{% endmacro %}
+
+{#
+  Bullet row — uses caller() for rich content support.
+  Usage:
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px;">
+      {% call bullet() %}Plain text{% endcall %}
+      {% call bullet() %}Rich <strong>content</strong> supported{% endcall %}
+    </table>
+#}
+{% macro bullet() %}
+<tr>
+  <td width="28" valign="top" class="ax-arrow">&#8594;</td>
+  <td class="ax-bullet">{{ caller() }}</td>
+</tr>
+{% endmacro %}

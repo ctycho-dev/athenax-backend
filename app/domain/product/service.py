@@ -45,13 +45,17 @@ from app.domain.product.schema import (
 from fastapi import UploadFile
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, VerificationStatus
+from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
 from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.infrastructure.email.service import EmailDeliveryError, EmailService
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
 from app.infrastructure.redis.client import RedisClient
 from app.core.config import settings
 from app.utils.slug import generate_slug
 from app.common.cache_keys import PRODUCT_DETAIL_PREFIX, PRODUCT_LIST_PREFIX, PRODUCT_STATS
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 # Helper to determine comment depth based on path (e.g. "1.5.7" -> depth 2)
 def _path_depth(path: str | None) -> int:
@@ -81,6 +85,7 @@ class ProductService:
         backer_repo: ProductBackerRepository,
         voice_repo: ProductVoiceRepository,
         bounty_repo: BountyRepository,
+        email_service: EmailService | None = None,
         user_repo: UserRepository | None = None,
         redis: RedisClient | None = None,
     ):
@@ -93,6 +98,7 @@ class ProductService:
         self.backer_repo = backer_repo
         self.voice_repo = voice_repo
         self.bounty_repo = bounty_repo
+        self.email_service = email_service or EmailService()
         self.user_repo = user_repo or UserRepository()
         self.redis = redis
 
@@ -213,6 +219,13 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
+        if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
+            try:
+                await self.email_service.send_product_submission_email(
+                    current_user.email, current_user.name, product.name
+                )
+            except EmailDeliveryError:
+                logger.warning("product_submission_email_failed", extra={"user_id": current_user.id})
         return await self._to_schema(db, product)
 
     async def list(
@@ -592,7 +605,22 @@ class ProductService:
             self._invalidate_list_cache(),
             self._invalidate_detail_cache(product.slug),
         )
+        if data.status == ProductStatus.APPROVED and product.created_by_id:
+            try:
+                submitter = await self.user_repo.get_by_id(db, product.created_by_id)
+                product_url = f"{settings.frontend_url.rstrip('/')}/launch/{product.slug}"
+                asyncio.create_task(self._send_approval_email(
+                    submitter.email, submitter.name, product.name, product_url
+                ))
+            except NotFoundError:
+                logger.warning("product_approved_email_failed", extra={"product_id": product_id})
         return await self._to_schema(db, product)
+
+    async def _send_approval_email(self, email: str, name: str, product_name: str, product_url: str) -> None:
+        try:
+            await self.email_service.send_product_approved_email(email, name, product_name, product_url)
+        except EmailDeliveryError:
+            logger.warning("product_approved_email_failed", extra={"email": email})
 
     # -------------------------
     # Product Links
