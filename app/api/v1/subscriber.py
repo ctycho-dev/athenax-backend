@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Query, Request, status
-from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, require_admin_user
@@ -24,19 +23,13 @@ async def subscribe(
     await service.subscribe(db, payload)
 
 
-@router.get("/unsubscribe", response_class=HTMLResponse)
+@router.get("/unsubscribe", status_code=status.HTTP_200_OK)
 async def unsubscribe_by_token(
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
     service: SubscriberService = Depends(get_subscriber_service),
-):
+) -> None:
     await service.unsubscribe_by_token(db, token)
-    return HTMLResponse(
-        content="<html><body style='font-family:sans-serif;text-align:center;padding:60px'>"
-                "<h2>You've been unsubscribed.</h2>"
-                "<p>You won't receive any more emails from AthenaX.</p>"
-                "</body></html>"
-    )
 
 
 @router.delete("/{subscriber_id}", status_code=status.HTTP_204_NO_CONTENT)

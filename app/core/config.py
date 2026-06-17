@@ -90,7 +90,7 @@ class Settings(BaseSettings):
 
     @property
     def subscriber_unsubscribe_url(self) -> str:
-        return f"{self.backend_url.rstrip('/')}/api/v1/subscriber/unsubscribe"
+        return f"{self.frontend_url.rstrip('/')}/unsubscribe"
 
     @property
     def email_verify_url(self) -> str:
