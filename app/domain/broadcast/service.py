@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
+from app.common.schema import PaginatedSchema
 from app.domain.article.repository import ArticleRepository
 from app.domain.broadcast.model import BroadcastTag
 from app.domain.broadcast.repository import BroadcastRepository
@@ -77,15 +78,16 @@ class BroadcastService:
         broadcast_type,
         tag: str | None,
         current_user: UserOutSchema | None,
-    ) -> list[BroadcastSummarySchema]:
+    ) -> PaginatedSchema[BroadcastSummarySchema]:
         if current_user is None or not is_admin(current_user):
             status = BroadcastStatus.PUBLISHED
 
+        total = await self.repo.count_filtered(db, status=status, broadcast_type=broadcast_type, tag=tag)
         broadcasts = await self.repo.get_all_filtered(
             db, status=status, broadcast_type=broadcast_type, tag=tag, limit=limit, offset=offset
         )
         if not broadcasts:
-            return []
+            return PaginatedSchema(items=[], total=total)
 
         broadcast_ids = [b.id for b in broadcasts]
         tags_map = await self.repo.get_tags_for_broadcasts(db, broadcast_ids)
@@ -96,7 +98,7 @@ class BroadcastService:
             out = BroadcastSummarySchema.model_validate(broadcast, from_attributes=True)
             out.tags = [t.name for t in tags_map[broadcast.id]]
             results.append(out)
-        return results
+        return PaginatedSchema(items=results, total=total)
 
     async def get_by_id(
         self,

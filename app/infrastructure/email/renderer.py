@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from premailer import transform
 
 _env = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "templates"),
@@ -9,4 +10,5 @@ _env = Environment(
 
 
 def render_email(template_name: str, context: dict) -> str:
-    return _env.get_template(template_name).render(**context)
+    html = _env.get_template(template_name).render(**context)
+    return transform(html)

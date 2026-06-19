@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.cache_keys import ARTICLE_DETAIL_PREFIX, ARTICLE_LIST_PREFIX, BROADCAST_DETAIL_PREFIX
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
+from app.common.schema import PaginatedSchema
 from app.domain.article.model import ArticleTag
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
@@ -86,15 +87,16 @@ class ArticleService:
         article_type,
         tag: str | None,
         current_user: UserOutSchema | None,
-    ) -> list[ArticleSummarySchema]:
+    ) -> PaginatedSchema[ArticleSummarySchema]:
         # Non-admins may only see published articles
         if current_user is None or not is_admin(current_user):
             status = ArticleStatus.PUBLISHED
 
         # List path omits the large `content` body — repo prunes it from the SELECT too.
+        total = await self.repo.count_filtered(db, status=status, article_type=article_type, tag=tag)
         articles = await self.repo.get_all_filtered(db, status=status, article_type=article_type, tag=tag, limit=limit, offset=offset)
         if not articles:
-            return []
+            return PaginatedSchema(items=[], total=total)
 
         article_ids = [a.id for a in articles]
         tags_map = await self.repo.get_tags_for_articles(db, article_ids)
@@ -104,7 +106,7 @@ class ArticleService:
             out = ArticleSummarySchema.model_validate(article, from_attributes=True)
             out.tags = [t.name for t in tags_map[article.id]]
             results.append(out)
-        return results
+        return PaginatedSchema(items=results, total=total)
 
     async def get_by_id(
         self,
@@ -215,7 +217,8 @@ class ArticleService:
         if new_status == ArticleStatus.PUBLISHED:
             if payload.get("published_at") is None and current_published_at is None:
                 payload["published_at"] = datetime.now(timezone.utc)
-        elif new_status is not None:
+        elif new_status is not None and payload.get("published_at") is None:
+            # Clear the date when unpublishing, but keep an explicitly chosen one.
             payload["published_at"] = None
         return payload
 

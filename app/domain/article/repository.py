@@ -22,6 +22,31 @@ class ArticleRepository(BaseRepository[Article]):
             raise NotFoundError(f"Article with slug '{slug}' not found")
         return article
 
+    def _apply_filters(
+        self,
+        q,
+        status: ArticleStatus | None,
+        article_type: ArticleType | None,
+        tag: str | None,
+    ):
+        q = q.where(Article.deleted_at.is_(None))
+        if status is not None:
+            q = q.where(Article.status == status)
+        if article_type is not None:
+            q = q.where(Article.article_type == article_type)
+        if tag is not None:
+            q = q.where(
+                exists(
+                    select(ArticleTag.article_id)
+                    .join(Tag, Tag.id == ArticleTag.tag_id)
+                    .where(
+                        ArticleTag.article_id == Article.id,
+                        func.lower(Tag.name) == tag.lower().strip(),
+                    )
+                )
+            )
+        return q
+
     async def get_all_filtered(
         self,
         db: AsyncSession,
@@ -41,25 +66,22 @@ class ArticleRepository(BaseRepository[Article]):
                 Article.published_at,
                 Article.created_at,
             )
-        ).where(Article.deleted_at.is_(None))
-        if status is not None:
-            q = q.where(Article.status == status)
-        if article_type is not None:
-            q = q.where(Article.article_type == article_type)
-        if tag is not None:
-            q = q.where(
-                exists(
-                    select(ArticleTag.article_id)
-                    .join(Tag, Tag.id == ArticleTag.tag_id)
-                    .where(
-                        ArticleTag.article_id == Article.id,
-                        func.lower(Tag.name) == tag.lower().strip(),
-                    )
-                )
-            )
+        )
+        q = self._apply_filters(q, status, article_type, tag)
         q = q.order_by(Article.published_at.desc().nulls_last(), Article.id.desc()).limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def count_filtered(
+        self,
+        db: AsyncSession,
+        status: ArticleStatus | None,
+        article_type: ArticleType | None,
+        tag: str | None,
+    ) -> int:
+        q = self._apply_filters(select(func.count(Article.id)), status, article_type, tag)
+        result = await db.execute(q)
+        return result.scalar() or 0
 
     async def get_tags_for_articles(
         self, db: AsyncSession, article_ids: list[int]

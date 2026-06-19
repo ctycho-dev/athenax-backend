@@ -7,7 +7,8 @@ from app.api.dependencies.auth import get_optional_user
 from app.api.dependencies.integrations import get_redis_client
 from app.infrastructure.redis.client import RedisClient
 from app.common.cache_keys import ARTICLE_DETAIL_PREFIX, ARTICLE_DETAIL_TTL, ARTICLE_LIST_PREFIX, ARTICLE_LIST_TTL
-from app.common.cache_utils import cached_detail, cached_list
+from app.common.cache_utils import cached_detail
+from app.common.schema import PaginatedSchema
 from app.core.config import settings
 from app.domain.article.schema import ArticleCreateSchema, ArticleOutSchema, ArticleSummarySchema, ArticleUpdateSchema
 from app.domain.article.service import ArticleService
@@ -31,7 +32,7 @@ async def create_article(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[ArticleSummarySchema])
+@router.get("", response_model=PaginatedSchema[ArticleSummarySchema])
 @limiter.limit("60/minute")
 async def list_articles(
     request: Request,
@@ -46,11 +47,11 @@ async def list_articles(
     redis: RedisClient = Depends(get_redis_client),
 ):
     if current_user is None or not is_admin(current_user):
-        return await cached_list(
+        return await cached_detail(
             redis,
             key=f"{ARTICLE_LIST_PREFIX}:{article_type}:{tag}:{limit}:{offset}",
             ttl=ARTICLE_LIST_TTL,
-            schema_class=ArticleSummarySchema,
+            schema_class=PaginatedSchema[ArticleSummarySchema],
             fetch_fn=lambda: service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, tag=tag, current_user=current_user),
         )
     return await service.list_articles(db, limit=limit, offset=offset, status=status, article_type=article_type, tag=tag, current_user=current_user)

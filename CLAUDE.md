@@ -75,7 +75,7 @@ Never pre-check uniqueness — race condition. Let the DB constraint guard. `Bas
 
 ## List Endpoint Performance
 - Use `SummarySchema` + `load_only(...)` in repo — heavy columns never fetched.
-- Independent queries run with `asyncio.gather()`.
+- Never `asyncio.gather()` multiple queries on the same `AsyncSession` — concurrent ops on one session raise `IllegalStateChangeError`. Await DB queries sequentially; only `gather()` work that uses separate sessions or no DB (e.g. Redis).
 - Redis: serialize with `model_dump(mode="json")`. Cache anonymous responses only; admins bypass. Invalidate with `redis.delete_by_pattern(f"{PREFIX}:*")` on writes.
 - Index columns used for filtering/sorting. Use `EXPLAIN (ANALYZE, BUFFERS)` to confirm index scans.
 - Consolidate `COUNT(*)` calls with `COUNT(*) FILTER (WHERE ...)` aggregates.
