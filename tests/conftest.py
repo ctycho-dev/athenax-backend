@@ -55,6 +55,15 @@ class FakeEmailService:
             }
         )
 
+    async def send_product_submission_email(self, email: str, name: str, product_name: str) -> None:
+        self.sent_emails.append({"type": "product_submission", "email": email, "name": name, "product_name": product_name})
+
+    async def send_product_approved_email(self, email: str, name: str, product_name: str, product_url: str) -> None:
+        self.sent_emails.append({"type": "product_approved", "email": email, "name": name, "product_name": product_name, "product_url": product_url})
+
+    async def send_subscriber_welcome_email(self, email: str, unsubscribe_url: str) -> None:
+        self.sent_emails.append({"type": "subscriber_welcome", "email": email, "unsubscribe_url": unsubscribe_url})
+
 
 class ClientWithEmail(AsyncClient):
     fake_email_service: FakeEmailService

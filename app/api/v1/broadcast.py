@@ -7,7 +7,8 @@ from app.api.dependencies.auth import get_optional_user
 from app.api.dependencies.integrations import get_redis_client
 from app.api.dependencies.services import get_broadcast_service
 from app.common.cache_keys import BROADCAST_DETAIL_PREFIX, BROADCAST_DETAIL_TTL, BROADCAST_LIST_PREFIX, BROADCAST_LIST_TTL
-from app.common.cache_utils import cached_detail, cached_list
+from app.common.cache_utils import cached_detail
+from app.common.schema import PaginatedSchema
 from app.core.config import settings
 from app.domain.broadcast.schema import (
     BroadcastCreateSchema,
@@ -36,7 +37,7 @@ async def create_broadcast(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[BroadcastSummarySchema])
+@router.get("", response_model=PaginatedSchema[BroadcastSummarySchema])
 @limiter.limit("60/minute")
 async def list_broadcasts(
     request: Request,
@@ -51,11 +52,11 @@ async def list_broadcasts(
     redis: RedisClient = Depends(get_redis_client),
 ):
     if current_user is None or not is_admin(current_user):
-        return await cached_list(
+        return await cached_detail(
             redis,
             key=f"{BROADCAST_LIST_PREFIX}:{broadcast_type}:{tag}:{limit}:{offset}",
             ttl=BROADCAST_LIST_TTL,
-            schema_class=BroadcastSummarySchema,
+            schema_class=PaginatedSchema[BroadcastSummarySchema],
             fetch_fn=lambda: service.list_broadcasts(db, limit=limit, offset=offset, status=status, broadcast_type=broadcast_type, tag=tag, current_user=current_user),
         )
     return await service.list_broadcasts(

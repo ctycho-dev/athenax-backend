@@ -22,6 +22,31 @@ class BroadcastRepository(BaseRepository[Broadcast]):
             raise NotFoundError(f"Broadcast with slug '{slug}' not found")
         return broadcast
 
+    def _apply_filters(
+        self,
+        q,
+        status: BroadcastStatus | None,
+        broadcast_type: BroadcastType | None,
+        tag: str | None,
+    ):
+        q = q.where(Broadcast.deleted_at.is_(None))
+        if status is not None:
+            q = q.where(Broadcast.status == status)
+        if broadcast_type is not None:
+            q = q.where(Broadcast.broadcast_type == broadcast_type)
+        if tag is not None:
+            q = q.where(
+                exists(
+                    select(BroadcastTag.broadcast_id)
+                    .join(Tag, Tag.id == BroadcastTag.tag_id)
+                    .where(
+                        BroadcastTag.broadcast_id == Broadcast.id,
+                        func.lower(Tag.name) == tag.lower().strip(),
+                    )
+                )
+            )
+        return q
+
     async def get_all_filtered(
         self,
         db: AsyncSession,
@@ -38,25 +63,22 @@ class BroadcastRepository(BaseRepository[Broadcast]):
                 Broadcast.status, Broadcast.origin_date, Broadcast.published_at,
                 Broadcast.created_at, Broadcast.updated_at,
             )
-        ).where(Broadcast.deleted_at.is_(None))
-        if status is not None:
-            q = q.where(Broadcast.status == status)
-        if broadcast_type is not None:
-            q = q.where(Broadcast.broadcast_type == broadcast_type)
-        if tag is not None:
-            q = q.where(
-                exists(
-                    select(BroadcastTag.broadcast_id)
-                    .join(Tag, Tag.id == BroadcastTag.tag_id)
-                    .where(
-                        BroadcastTag.broadcast_id == Broadcast.id,
-                        func.lower(Tag.name) == tag.lower().strip(),
-                    )
-                )
-            )
+        )
+        q = self._apply_filters(q, status, broadcast_type, tag)
         q = q.order_by(Broadcast.origin_date.desc().nulls_last(), Broadcast.id.desc()).limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def count_filtered(
+        self,
+        db: AsyncSession,
+        status: BroadcastStatus | None,
+        broadcast_type: BroadcastType | None,
+        tag: str | None,
+    ) -> int:
+        q = self._apply_filters(select(func.count(Broadcast.id)), status, broadcast_type, tag)
+        result = await db.execute(q)
+        return result.scalar() or 0
 
     async def get_tags_for_broadcasts(
         self, db: AsyncSession, broadcast_ids: list[int]
