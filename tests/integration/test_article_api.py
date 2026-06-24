@@ -9,11 +9,14 @@ from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
+from app.domain.broadcast.model import Broadcast
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import UserRole
+from app.enums.enums import BroadcastStatus, BroadcastType, UserRole
 from app.main import app
 from tests.conftest import TEST_DATABASE_URL, ClientWithEmail
+
+SEED_BROADCAST_ID = 10
 
 
 @pytest_asyncio.fixture(scope="module", autouse=True)
@@ -29,8 +32,19 @@ async def seed_users():
             ])
             .on_conflict_do_nothing()
         )
-        # Advance the sequence past explicitly inserted IDs to avoid PK conflicts with auto-increment
         await session.execute(text("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))"))
+        await session.execute(
+            pg_insert(Broadcast)
+            .values([{
+                "id": SEED_BROADCAST_ID,
+                "title": "Seed Broadcast",
+                "slug": "seed-broadcast",
+                "broadcast_type": BroadcastType.LIVESTREAM,
+                "status": BroadcastStatus.PUBLISHED,
+            }])
+            .on_conflict_do_nothing()
+        )
+        await session.execute(text("SELECT setval('broadcasts_id_seq', (SELECT MAX(id) FROM broadcasts))"))
         await session.commit()
     await engine.dispose()
 
@@ -101,7 +115,9 @@ class TestArticleAPI:
     async def test_list_articles_is_public(self, client: ClientWithEmail):
         response = await client.get("/api/v1/article")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        body = response.json()
+        assert isinstance(body["items"], list)
+        assert isinstance(body["total"], int)
 
     async def test_list_articles_only_shows_published_to_public(self, client: ClientWithEmail):
         # Create a draft (not visible to public)
@@ -113,7 +129,7 @@ class TestArticleAPI:
         finally:
             del app.dependency_overrides[get_optional_user]
 
-        ids = [a["id"] for a in response.json()]
+        ids = [a["id"] for a in response.json()["items"]]
         assert draft["id"] not in ids
 
     async def test_list_articles_admin_can_filter_by_status(self, client: ClientWithEmail):
@@ -126,7 +142,7 @@ class TestArticleAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        ids = [a["id"] for a in response.json()]
+        ids = [a["id"] for a in response.json()["items"]]
         assert draft["id"] in ids
 
     async def test_list_articles_filter_by_type(self, client: ClientWithEmail):
@@ -137,7 +153,7 @@ class TestArticleAPI:
 
         response = await client.get("/api/v1/article?articleType=roundtable")
         assert response.status_code == 200
-        assert all(a["articleType"] == "roundtable" for a in response.json())
+        assert all(a["articleType"] == "roundtable" for a in response.json()["items"])
 
     async def test_list_articles_filter_by_type_livestream(self, client: ClientWithEmail):
         payload = {**ARTICLE_PAYLOAD, "articleType": "livestream", "title": "Livestream One", "status": "published"}
@@ -147,7 +163,7 @@ class TestArticleAPI:
 
         response = await client.get("/api/v1/article?articleType=livestream")
         assert response.status_code == 200
-        assert all(a["articleType"] == "livestream" for a in response.json())
+        assert all(a["articleType"] == "livestream" for a in response.json()["items"])
 
     async def test_list_articles_non_admin_status_draft_param_ignored(self, client: ClientWithEmail):
         # Non-admin passing ?status=draft should still only get published
@@ -160,9 +176,9 @@ class TestArticleAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        ids = [a["id"] for a in response.json()]
+        ids = [a["id"] for a in response.json()["items"]]
         assert draft["id"] not in ids
-        assert all(a["status"] == "published" for a in response.json())
+        assert all(a["status"] == "published" for a in response.json()["items"])
 
     async def test_list_articles_admin_filter_by_published_status(self, client: ClientWithEmail):
         article = await self._create_article_as_admin(client)
@@ -175,7 +191,7 @@ class TestArticleAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        assert all(a["status"] == "published" for a in response.json())
+        assert all(a["status"] == "published" for a in response.json()["items"])
 
     async def test_list_articles_filter_by_tag(self, client: ClientWithEmail):
         payload = {**ARTICLE_PAYLOAD, "title": "Tagged Article", "status": "published", "tags": ["machine-learning"]}
@@ -187,14 +203,14 @@ class TestArticleAPI:
 
         response = await client.get("/api/v1/article?tag=machine-learning")
         assert response.status_code == 200
-        ids = [a["id"] for a in response.json()]
+        ids = [a["id"] for a in response.json()["items"]]
         assert tagged["id"] in ids
         assert untagged["id"] not in ids
 
     async def test_list_articles_filter_by_tag_no_matches(self, client: ClientWithEmail):
         response = await client.get("/api/v1/article?tag=nonexistent-tag-xyz")
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json()["items"] == []
 
     async def test_list_articles_filter_combined_type_and_tag(self, client: ClientWithEmail):
         tag = "combined-filter-tag"
@@ -207,9 +223,9 @@ class TestArticleAPI:
 
         response = await client.get(f"/api/v1/article?articleType=whitepaper&tag={tag}")
         assert response.status_code == 200
-        ids = [a["id"] for a in response.json()]
+        ids = [a["id"] for a in response.json()["items"]]
         assert match["id"] in ids
-        assert all(a["articleType"] == "whitepaper" for a in response.json())
+        assert all(a["articleType"] == "whitepaper" for a in response.json()["items"])
 
     # ------------------------------------------------------------------
     # Get by ID
@@ -340,6 +356,16 @@ class TestArticleAPI:
         assert response.json()["publishedAt"] is not None
         assert "2025-01-15" in response.json()["publishedAt"]
 
+    async def test_create_draft_keeps_custom_published_at(self, client: ClientWithEmail):
+        # A chosen date must survive being saved as a draft, not be wiped.
+        custom_date = "2025-01-15T10:00:00+00:00"
+        payload = {**ARTICLE_PAYLOAD, "title": "Draft Custom Published At", "status": "draft", "publishedAt": custom_date}
+        with _override_admin():
+            response = await client.post("/api/v1/article", json=payload)
+
+        assert response.status_code == 201
+        assert "2025-01-15" in response.json()["publishedAt"]
+
     # ------------------------------------------------------------------
     # Create — tags
     # ------------------------------------------------------------------
@@ -432,6 +458,17 @@ class TestArticleAPI:
 
         assert response.status_code == 200
         assert response.json()["publishedAt"] is None
+
+    async def test_publish_preserves_existing_published_at(self, client: ClientWithEmail):
+        # Publishing a draft that already has a chosen date must not reset it to now.
+        custom_date = "2025-01-15T10:00:00+00:00"
+        article = await self._create_article_as_admin(
+            client, payload={**ARTICLE_PAYLOAD, "status": "draft", "publishedAt": custom_date}
+        )
+        assert "2025-01-15" in article["publishedAt"]
+
+        published = await self._publish_article(client, article["id"])
+        assert "2025-01-15" in published["publishedAt"]
 
     async def test_update_tags_syncs_correctly(self, client: ClientWithEmail):
         article = await self._create_article_as_admin(client)

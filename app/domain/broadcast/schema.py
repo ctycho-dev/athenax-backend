@@ -3,7 +3,18 @@ from datetime import datetime
 from pydantic import Field
 
 from app.common.schema import CamelModel
-from app.enums.enums import BroadcastStatus, BroadcastType
+from app.enums.enums import ArticleStatus, ArticleType, BroadcastStatus, BroadcastType
+
+
+class ArticleForBroadcastSchema(CamelModel):
+    id: int
+    title: str
+    slug: str
+    article_type: ArticleType
+    status: ArticleStatus
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class BroadcastCreateSchema(CamelModel):
@@ -43,6 +54,22 @@ class BroadcastOutSchema(CamelModel):
     origin_date: datetime | None
     published_at: datetime | None
     creator_name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    article: ArticleForBroadcastSchema | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BroadcastSummarySchema(CamelModel):
+    """List-path schema — omits the large `description` body."""
+
+    id: int
+    title: str
+    slug: str
+    broadcast_type: BroadcastType
+    status: BroadcastStatus
+    origin_date: datetime | None
+    published_at: datetime | None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

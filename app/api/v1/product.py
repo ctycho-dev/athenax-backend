@@ -9,6 +9,7 @@ from app.api.dependencies import (
 from app.api.dependencies.services import get_storage_service
 from app.common.storage import R2StorageService
 from app.api.dependencies.auth import get_optional_user, require_admin_user, require_investor_user
+from app.common.permissions import is_admin
 from app.common.schema import PaginatedSchema
 from app.core.config import settings
 from app.domain.product.schema import (
@@ -38,7 +39,12 @@ from app.domain.product.schema import (
 )
 from app.enums.enums import ProductDateFilter, ProductSortBy, ProductStage, ProductStatus
 from app.domain.product.service import ProductService
-from app.common.cache_keys import PRODUCT_STATS, PRODUCT_STATS_TTL
+from app.common.cache_keys import (
+    PRODUCT_DETAIL_PREFIX, PRODUCT_DETAIL_TTL, PRODUCT_MEMBER_DETAIL_TTL,
+    PRODUCT_LIST_PREFIX, PRODUCT_LIST_TTL, PRODUCT_MEMBER_LIST_TTL,
+    PRODUCT_STATS, PRODUCT_STATS_TTL,
+)
+from app.common.cache_utils import cached_detail
 from app.domain.user.schema import UserOutSchema
 from app.api.dependencies.integrations import get_redis_client
 from app.infrastructure.redis.client import RedisClient
@@ -75,7 +81,34 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
+    redis: RedisClient | None = Depends(get_redis_client),
 ):
+    if q or (current_user is not None and is_admin(current_user)):
+        return await service.list(
+            db, limit=limit, offset=offset, status=status, current_user=current_user,
+            category_id=category_id, date_filter=date_filter, sort_by=sort_by,
+            search=q, upvoted=upvoted, listed=listed,
+        )
+
+    if redis is not None:
+        if current_user is None:
+            cache_key = f"{PRODUCT_LIST_PREFIX}:{category_id}:{date_filter}:{sort_by}:{listed}:{limit}:{offset}"
+            ttl = PRODUCT_LIST_TTL
+        else:
+            cache_key = f"{PRODUCT_LIST_PREFIX}:member:{current_user.id}:{category_id}:{date_filter}:{sort_by}:{listed}:{upvoted}:{limit}:{offset}"
+            ttl = PRODUCT_MEMBER_LIST_TTL
+
+        cached = await redis.get(cache_key)
+        if cached:
+            return PaginatedSchema[ProductListSchema].model_validate_json(cached)
+        result = await service.list(
+            db, limit=limit, offset=offset, status=status, current_user=current_user,
+            category_id=category_id, date_filter=date_filter, sort_by=sort_by,
+            search=q, upvoted=upvoted, listed=listed,
+        )
+        await redis.set(cache_key, result.model_dump_json(), ttl_seconds=ttl)
+        return result
+
     return await service.list(
         db, limit=limit, offset=offset, status=status, current_user=current_user,
         category_id=category_id, date_filter=date_filter, sort_by=sort_by,
@@ -153,8 +186,22 @@ async def get_product_by_slug(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: ProductService = Depends(get_product_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
-    return await service.get_by_slug(db, slug=slug, current_user=current_user)
+    if current_user is not None and is_admin(current_user):
+        return await service.get_by_slug(db, slug=slug, current_user=current_user)
+
+    cache_key = (
+        f"{PRODUCT_DETAIL_PREFIX}:{slug}"
+        if current_user is None
+        else f"{PRODUCT_DETAIL_PREFIX}:member:{current_user.id}:{slug}"
+    )
+    ttl = PRODUCT_DETAIL_TTL if current_user is None else PRODUCT_MEMBER_DETAIL_TTL
+
+    async def fetch():
+        return await service.get_by_slug(db, slug=slug, current_user=current_user)
+
+    return await cached_detail(redis, key=cache_key, ttl=ttl, schema_class=ProductOutSchema, fetch_fn=fetch)
 
 
 @router.get("/{product_id}", response_model=ProductOutSchema)

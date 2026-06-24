@@ -197,7 +197,9 @@ class TestBroadcastAPI:
     async def test_list_broadcasts_is_public(self, client: ClientWithEmail):
         response = await client.get("/api/v1/broadcast")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        body = response.json()
+        assert isinstance(body["items"], list)
+        assert isinstance(body["total"], int)
 
     async def test_list_broadcasts_only_shows_published_to_public(self, client: ClientWithEmail):
         draft = await self._create_broadcast_as_admin(client)
@@ -208,7 +210,7 @@ class TestBroadcastAPI:
         finally:
             del app.dependency_overrides[get_optional_user]
 
-        ids = [b["id"] for b in response.json()]
+        ids = [b["id"] for b in response.json()["items"]]
         assert draft["id"] not in ids
 
     async def test_list_broadcasts_admin_can_filter_by_status(self, client: ClientWithEmail):
@@ -221,7 +223,7 @@ class TestBroadcastAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        ids = [b["id"] for b in response.json()]
+        ids = [b["id"] for b in response.json()["items"]]
         assert draft["id"] in ids
 
     async def test_list_broadcasts_non_admin_status_param_ignored(self, client: ClientWithEmail):
@@ -234,9 +236,9 @@ class TestBroadcastAPI:
             del app.dependency_overrides[get_optional_user]
 
         assert response.status_code == 200
-        ids = [b["id"] for b in response.json()]
+        ids = [b["id"] for b in response.json()["items"]]
         assert draft["id"] not in ids
-        assert all(b["status"] == "published" for b in response.json())
+        assert all(b["status"] == "published" for b in response.json()["items"])
 
     async def test_list_broadcasts_filter_by_type(self, client: ClientWithEmail):
         payload = {**BROADCAST_PAYLOAD, "broadcastType": "roundtable", "title": "Roundtable Broadcast", "status": "published"}
@@ -246,7 +248,7 @@ class TestBroadcastAPI:
 
         response = await client.get("/api/v1/broadcast?broadcastType=roundtable")
         assert response.status_code == 200
-        assert all(b["broadcastType"] == "roundtable" for b in response.json())
+        assert all(b["broadcastType"] == "roundtable" for b in response.json()["items"])
 
     async def test_list_broadcasts_filter_by_tag(self, client: ClientWithEmail):
         payload = {**BROADCAST_PAYLOAD, "title": "Tagged Broadcast", "status": "published", "tags": ["quantum-computing"]}
@@ -258,14 +260,14 @@ class TestBroadcastAPI:
 
         response = await client.get("/api/v1/broadcast?tag=quantum-computing")
         assert response.status_code == 200
-        ids = [b["id"] for b in response.json()]
+        ids = [b["id"] for b in response.json()["items"]]
         assert tagged["id"] in ids
         assert untagged["id"] not in ids
 
     async def test_list_broadcasts_filter_tag_no_matches(self, client: ClientWithEmail):
         response = await client.get("/api/v1/broadcast?tag=nonexistent-xyz-tag")
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json()["items"] == []
 
     # ------------------------------------------------------------------
     # Get by ID

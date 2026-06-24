@@ -29,6 +29,8 @@ from app.domain.article.service import ArticleService
 from app.domain.broadcast.repository import BroadcastRepository
 from app.domain.broadcast.service import BroadcastService
 from app.domain.tag.repository import TagRepository
+from app.domain.subscriber.repository import SubscriberRepository
+from app.domain.subscriber.service import SubscriberService
 from app.common.storage import R2StorageService
 
 
@@ -150,8 +152,9 @@ def get_university_service(
 
 def get_category_service(
     repo: CategoryRepository = Depends(get_category_repo),
+    redis: RedisClient = Depends(get_redis_client),
 ) -> CategoryService:
-    return CategoryService(repo=repo)
+    return CategoryService(repo=repo, redis=redis)
 
 
 def get_lab_service(
@@ -177,16 +180,31 @@ def get_article_service(
     repo: ArticleRepository = Depends(get_article_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    broadcast_repo: BroadcastRepository = Depends(get_broadcast_repo),
+    redis: RedisClient = Depends(get_redis_client),
 ) -> ArticleService:
-    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
+    return ArticleService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, broadcast_repo=broadcast_repo, redis=redis)
 
 
 def get_broadcast_service(
     repo: BroadcastRepository = Depends(get_broadcast_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
     user_repo: UserRepository = Depends(get_user_repo),
+    article_repo: ArticleRepository = Depends(get_article_repo),
+    redis: RedisClient = Depends(get_redis_client),
 ) -> BroadcastService:
-    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo)
+    return BroadcastService(repo=repo, tag_repo=tag_repo, user_repo=user_repo, article_repo=article_repo, redis=redis)
+
+
+def get_subscriber_repo() -> SubscriberRepository:
+    return SubscriberRepository()
+
+
+def get_subscriber_service(
+    repo: SubscriberRepository = Depends(get_subscriber_repo),
+    email_service: EmailService = Depends(get_email_service),
+) -> SubscriberService:
+    return SubscriberService(repo=repo, email_service=email_service)
 
 
 def get_product_service(
@@ -199,6 +217,7 @@ def get_product_service(
     backer_repo: ProductBackerRepository = Depends(get_backer_repo),
     voice_repo: ProductVoiceRepository = Depends(get_voice_repo),
     bounty_repo: BountyRepository = Depends(get_bounty_repo),
+    email_service: EmailService = Depends(get_email_service),
     redis: RedisClient = Depends(get_redis_client),
 ) -> ProductService:
     return ProductService(
@@ -211,5 +230,6 @@ def get_product_service(
         backer_repo=backer_repo,
         voice_repo=voice_repo,
         bounty_repo=bounty_repo,
+        email_service=email_service,
         redis=redis,
     )

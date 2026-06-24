@@ -13,6 +13,7 @@ from sqlalchemy.pool import NullPool
 from app.main import app
 from app.database.connection import Base
 from app.api.dependencies import get_db, get_current_user, get_email_service
+from app.api.dependencies.integrations import get_redis_client
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
 from app.infrastructure.email.service import EmailDeliveryError
@@ -53,6 +54,15 @@ class FakeEmailService:
                 "token": token,
             }
         )
+
+    async def send_product_submission_email(self, email: str, name: str, product_name: str) -> None:
+        self.sent_emails.append({"type": "product_submission", "email": email, "name": name, "product_name": product_name})
+
+    async def send_product_approved_email(self, email: str, name: str, product_name: str, product_url: str) -> None:
+        self.sent_emails.append({"type": "product_approved", "email": email, "name": name, "product_name": product_name, "product_url": product_url})
+
+    async def send_subscriber_welcome_email(self, email: str, unsubscribe_url: str) -> None:
+        self.sent_emails.append({"type": "subscriber_welcome", "email": email, "unsubscribe_url": unsubscribe_url})
 
 
 class ClientWithEmail(AsyncClient):
@@ -140,6 +150,8 @@ async def client(session_factory) -> AsyncGenerator[ClientWithEmail, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_email_service] = lambda: fake_email_service
+    # Lifespan doesn't run under ASGITransport; ProductService guards Redis with `if self.redis:`
+    app.dependency_overrides[get_redis_client] = lambda: None
     
     from app.middleware.rate_limiter import limiter
     limiter.enabled = False

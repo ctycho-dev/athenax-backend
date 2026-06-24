@@ -1,5 +1,6 @@
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.common.base_repository import BaseRepository
 from app.domain.article.model import Article, ArticleTag
@@ -21,16 +22,14 @@ class ArticleRepository(BaseRepository[Article]):
             raise NotFoundError(f"Article with slug '{slug}' not found")
         return article
 
-    async def get_all_filtered(
+    def _apply_filters(
         self,
-        db: AsyncSession,
+        q,
         status: ArticleStatus | None,
         article_type: ArticleType | None,
         tag: str | None,
-        limit: int,
-        offset: int,
-    ) -> list[Article]:
-        q = select(Article).where(Article.deleted_at.is_(None))
+    ):
+        q = q.where(Article.deleted_at.is_(None))
         if status is not None:
             q = q.where(Article.status == status)
         if article_type is not None:
@@ -46,9 +45,43 @@ class ArticleRepository(BaseRepository[Article]):
                     )
                 )
             )
+        return q
+
+    async def get_all_filtered(
+        self,
+        db: AsyncSession,
+        status: ArticleStatus | None,
+        article_type: ArticleType | None,
+        tag: str | None,
+        limit: int,
+        offset: int,
+    ) -> list[Article]:
+        # Prune the large `content` body — the list path serializes summaries only.
+        q = select(Article).options(
+            load_only(
+                Article.title,
+                Article.slug,
+                Article.article_type,
+                Article.status,
+                Article.published_at,
+                Article.created_at,
+            )
+        )
+        q = self._apply_filters(q, status, article_type, tag)
         q = q.order_by(Article.published_at.desc().nulls_last(), Article.id.desc()).limit(limit).offset(offset)
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def count_filtered(
+        self,
+        db: AsyncSession,
+        status: ArticleStatus | None,
+        article_type: ArticleType | None,
+        tag: str | None,
+    ) -> int:
+        q = self._apply_filters(select(func.count(Article.id)), status, article_type, tag)
+        result = await db.execute(q)
+        return result.scalar() or 0
 
     async def get_tags_for_articles(
         self, db: AsyncSession, article_ids: list[int]
@@ -67,3 +100,12 @@ class ArticleRepository(BaseRepository[Article]):
         self, db: AsyncSession, article_id: int
     ) -> list[Tag]:
         return (await self.get_tags_for_articles(db, [article_id]))[article_id]
+
+    async def get_by_broadcast_id(self, db: AsyncSession, broadcast_id: int) -> Article | None:
+        result = await db.execute(
+            select(Article).where(
+                Article.broadcast_id == broadcast_id,
+                Article.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()

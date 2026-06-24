@@ -45,13 +45,17 @@ from app.domain.product.schema import (
 from fastapi import UploadFile
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, VerificationStatus
+from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
 from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.infrastructure.email.service import EmailDeliveryError, EmailService
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
 from app.infrastructure.redis.client import RedisClient
 from app.core.config import settings
 from app.utils.slug import generate_slug
-from app.common.cache_keys import PRODUCT_STATS
+from app.common.cache_keys import PRODUCT_DETAIL_PREFIX, PRODUCT_LIST_PREFIX, PRODUCT_STATS
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 # Helper to determine comment depth based on path (e.g. "1.5.7" -> depth 2)
 def _path_depth(path: str | None) -> int:
@@ -81,6 +85,7 @@ class ProductService:
         backer_repo: ProductBackerRepository,
         voice_repo: ProductVoiceRepository,
         bounty_repo: BountyRepository,
+        email_service: EmailService | None = None,
         user_repo: UserRepository | None = None,
         redis: RedisClient | None = None,
     ):
@@ -93,12 +98,24 @@ class ProductService:
         self.backer_repo = backer_repo
         self.voice_repo = voice_repo
         self.bounty_repo = bounty_repo
+        self.email_service = email_service or EmailService()
         self.user_repo = user_repo or UserRepository()
         self.redis = redis
 
     async def _invalidate_stats_cache(self) -> None:
         if self.redis:
             await self.redis.delete(PRODUCT_STATS)
+
+    async def _invalidate_list_cache(self) -> None:
+        if self.redis:
+            await self.redis.delete_by_pattern(f"{PRODUCT_LIST_PREFIX}:*")
+
+    async def _invalidate_detail_cache(self, slug: str) -> None:
+        if self.redis:
+            await asyncio.gather(
+                self.redis.delete(f"{PRODUCT_DETAIL_PREFIX}:{slug}"),
+                self.redis.delete_by_pattern(f"{PRODUCT_DETAIL_PREFIX}:member:*:{slug}"),
+            )
 
     async def _fetch_interaction_data(
         self,
@@ -202,6 +219,13 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
+        if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
+            try:
+                await self.email_service.send_product_submission_email(
+                    current_user.email, current_user.name, product.name
+                )
+            except EmailDeliveryError:
+                logger.warning("product_submission_email_failed", extra={"user_id": current_user.id})
         return await self._to_schema(db, product)
 
     async def list(
@@ -231,35 +255,47 @@ class ProductService:
         admin_viewing_pending = (current_user and is_admin(current_user) and status == ProductStatus.PENDING)
         if listed is None and category_id is None and not admin_viewing_pending:
             listed = True
+        # First query provisions the session connection; remaining independent queries run concurrently.
         products = await self.repo.get_all_by_status(
             db, status, limit=limit, offset=offset, user_id=user_id,
             category_id=category_id, date_filter=date_filter, sort_by=sort_by,
             search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
         )
-        total = await self.repo.count_by_status(
-            db, status, user_id=user_id,
-            category_id=category_id, date_filter=date_filter,
-            search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
-        )
 
         if not products:
+            total = await self.repo.count_by_status(
+                db, status, user_id=user_id,
+                category_id=category_id, date_filter=date_filter,
+                search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
+            )
             return PaginatedSchema(items=[], total=total)
 
         product_ids = [p.id for p in products]
-        ix = await self._fetch_interaction_data(db, product_ids, current_user)
+        # Summary list omits counts/voted/interested — fetch only categories (+ the viewer's bookmark flag).
+        coros: list = [
+            self.repo.count_by_status(
+                db, status, user_id=user_id,
+                category_id=category_id, date_filter=date_filter,
+                search=search, upvoted_by_user_id=upvoted_by_user_id, listed=listed,
+            ),
+            self.repo.get_categories_for_products(db, product_ids),
+        ]
+        if current_user:
+            coros.append(self.repo.get_user_bookmarks(db, product_ids, current_user.id))
+        gather_results = await asyncio.gather(*coros)
+        total = gather_results[0]
+        categories_map = gather_results[1]
+        user_bookmarks: set[int] = gather_results[2] if current_user else set()
 
         results = []
         for product in products:
             out = ProductListSchema.model_validate(product, from_attributes=True)
             out.logo = self._logo_url(product.logo)
-            all_cats = ix.categories_map[product.id]
-            out.vote_count = ix.vote_counts[product.id]
-            out.bookmark_count = ix.bookmark_counts[product.id]
-            out.investor_interest_count = ix.investor_interest_counts[product.id]
+            all_cats = categories_map[product.id]
             out.category_ids = [c.id for c in all_cats if c.parent_id is None]
             out.sub_categories = [c.name for c in all_cats if c.parent_id is not None]
             if current_user:
-                out.bookmarked = product.id in ix.user_bookmarks
+                out.bookmarked = product.id in user_bookmarks
             results.append(out)
         return PaginatedSchema(items=results, total=total)
 
@@ -283,6 +319,13 @@ class ProductService:
                 raise NotFoundError(f"Product with slug '{slug}' not found")
         return await self._to_schema(db, product, current_user=current_user)
 
+    async def get_by_name(self, db: AsyncSession, name: str) -> ProductOutSchema:
+        """Exact, case-insensitive lookup for trusted internal callers (any status)."""
+        product = await self.repo.get_by_name(db, name)
+        if not product:
+            raise NotFoundError(f"Product '{name}' not found")
+        return await self._to_schema(db, product)
+
     async def update(
         self,
         db: AsyncSession,
@@ -292,6 +335,7 @@ class ProductService:
     ) -> ProductOutSchema:
         product = await self.repo.get_by_id(db, product_id)
         assert_can_modify(product, current_user)
+        old_slug = product.slug
 
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
@@ -335,6 +379,12 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
+
+        invalidations = [self._invalidate_list_cache(), self._invalidate_detail_cache(product.slug)]
+        if old_slug != product.slug:
+            invalidations.append(self._invalidate_detail_cache(old_slug))
+        await asyncio.gather(*invalidations)
+
         return await self._to_schema(db, product)
 
     async def delete_by_id(
@@ -347,7 +397,11 @@ class ProductService:
         assert_can_modify(product, current_user)
         await self.repo.soft_delete(db, product_id, deleted_by_id=current_user.id)
         await db.commit()
-        await self._invalidate_stats_cache()
+        await asyncio.gather(
+            self._invalidate_stats_cache(),
+            self._invalidate_list_cache(),
+            self._invalidate_detail_cache(product.slug),
+        )
 
     async def list_voted(
         self, db: AsyncSession, limit: int, offset: int, current_user: UserOutSchema
@@ -537,14 +591,36 @@ class ProductService:
     ) -> ProductOutSchema:
         if data.status == ProductStatus.APPROVED:
             all_cats = await self.repo.get_categories_for_product(db, product_id)
-            for cat in all_cats:
-                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value:
-                    await self.category_repo.update_instance(db, cat, {"status": VerificationStatus.APPROVED.value})
+            pending_sub_ids = [
+                cat.id for cat in all_cats
+                if cat.parent_id is not None and cat.status == VerificationStatus.PENDING.value
+            ]
+            # Single bulk UPDATE instead of one query per pending sub-category.
+            await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(product)
-        await self._invalidate_stats_cache()
+        await asyncio.gather(
+            self._invalidate_stats_cache(),
+            self._invalidate_list_cache(),
+            self._invalidate_detail_cache(product.slug),
+        )
+        if data.status == ProductStatus.APPROVED and product.created_by_id:
+            try:
+                submitter = await self.user_repo.get_by_id(db, product.created_by_id)
+                product_url = f"{settings.frontend_url.rstrip('/')}/launch/{product.slug}"
+                asyncio.create_task(self._send_approval_email(
+                    submitter.email, submitter.name, product.name, product_url
+                ))
+            except NotFoundError:
+                logger.warning("product_approved_email_failed", extra={"product_id": product_id})
         return await self._to_schema(db, product)
+
+    async def _send_approval_email(self, email: str, name: str, product_name: str, product_url: str) -> None:
+        try:
+            await self.email_service.send_product_approved_email(email, name, product_name, product_url)
+        except EmailDeliveryError:
+            logger.warning("product_approved_email_failed", extra={"email": email})
 
     # -------------------------
     # Product Links
@@ -611,7 +687,7 @@ class ProductService:
     async def create_media(
         self, db: AsyncSession, product_id: int, data: ProductMediaCreateSchema, current_user: UserOutSchema
     ) -> ProductMediaOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         media = await self.media_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(media)
@@ -714,6 +790,7 @@ class ProductService:
         await storage.upload_file(key=key, data=data, content_type=file.content_type)
         await self.repo.update_instance(db, product, {"logo": key})
         await db.commit()
+        await self._invalidate_detail_cache(product.slug)
         return ProductLogoOutSchema(logo=self._logo_url(key))  # type: ignore[arg-type]
 
     async def delete_logo(
@@ -734,6 +811,7 @@ class ProductService:
                 pass  # best-effort
         await self.repo.update_instance(db, product, {"logo": None})
         await db.commit()
+        await self._invalidate_detail_cache(product.slug)
 
     # -------------------------
     # Product Team
@@ -753,7 +831,7 @@ class ProductService:
     async def create_team_member(
         self, db: AsyncSession, product_id: int, data: TeamMemberCreateSchema, current_user: UserOutSchema
     ) -> TeamMemberOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         payload = {**data.model_dump(), "product_id": product_id, "status": VerificationStatus.APPROVED}
         member = await self.team_repo.create(db, payload, current_user_id=current_user.id)
         await db.commit()
@@ -842,7 +920,7 @@ class ProductService:
     async def create_voice(
         self, db: AsyncSession, product_id: int, data: ProductVoiceCreateSchema, current_user: UserOutSchema
     ) -> ProductVoiceOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         voice = await self.voice_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(voice)
@@ -882,7 +960,7 @@ class ProductService:
     async def create_bounty(
         self, db: AsyncSession, product_id: int, data: BountyCreateSchema, current_user: UserOutSchema
     ) -> BountyOutSchema:
-        await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_exists_by_id(db, product_id)
         bounty = await self.bounty_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
         await db.commit()
         await db.refresh(bounty)

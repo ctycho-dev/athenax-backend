@@ -2,13 +2,24 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db, require_admin_user
+from app.common.permissions import is_admin
 from app.api.dependencies.auth import get_optional_user
+from app.api.dependencies.integrations import get_redis_client
 from app.api.dependencies.services import get_broadcast_service
+from app.common.cache_keys import BROADCAST_DETAIL_PREFIX, BROADCAST_DETAIL_TTL, BROADCAST_LIST_PREFIX, BROADCAST_LIST_TTL
+from app.common.cache_utils import cached_detail
+from app.common.schema import PaginatedSchema
 from app.core.config import settings
-from app.domain.broadcast.schema import BroadcastCreateSchema, BroadcastOutSchema, BroadcastUpdateSchema
+from app.domain.broadcast.schema import (
+    BroadcastCreateSchema,
+    BroadcastOutSchema,
+    BroadcastSummarySchema,
+    BroadcastUpdateSchema,
+)
 from app.domain.broadcast.service import BroadcastService
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus, BroadcastType
+from app.infrastructure.redis.client import RedisClient
 from app.middleware.rate_limiter import limiter
 
 router = APIRouter(prefix=settings.api.v1.broadcast, tags=["Broadcast"])
@@ -26,7 +37,7 @@ async def create_broadcast(
     return await service.create(db, payload, current_user=current_user)
 
 
-@router.get("", response_model=list[BroadcastOutSchema])
+@router.get("", response_model=PaginatedSchema[BroadcastSummarySchema])
 @limiter.limit("60/minute")
 async def list_broadcasts(
     request: Request,
@@ -38,7 +49,16 @@ async def list_broadcasts(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: BroadcastService = Depends(get_broadcast_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None or not is_admin(current_user):
+        return await cached_detail(
+            redis,
+            key=f"{BROADCAST_LIST_PREFIX}:{broadcast_type}:{tag}:{limit}:{offset}",
+            ttl=BROADCAST_LIST_TTL,
+            schema_class=PaginatedSchema[BroadcastSummarySchema],
+            fetch_fn=lambda: service.list_broadcasts(db, limit=limit, offset=offset, status=status, broadcast_type=broadcast_type, tag=tag, current_user=current_user),
+        )
     return await service.list_broadcasts(
         db, limit=limit, offset=offset, status=status,
         broadcast_type=broadcast_type, tag=tag, current_user=current_user,
@@ -53,7 +73,16 @@ async def get_broadcast_by_slug(
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema | None = Depends(get_optional_user),
     service: BroadcastService = Depends(get_broadcast_service),
+    redis: RedisClient = Depends(get_redis_client),
 ):
+    if current_user is None or not is_admin(current_user):
+        return await cached_detail(
+            redis,
+            key=f"{BROADCAST_DETAIL_PREFIX}:{slug}",
+            ttl=BROADCAST_DETAIL_TTL,
+            schema_class=BroadcastOutSchema,
+            fetch_fn=lambda: service.get_by_slug(db, slug=slug, current_user=current_user),
+        )
     return await service.get_by_slug(db, slug=slug, current_user=current_user)
 
 

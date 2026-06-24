@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "macros.html" import btn, bullet %}
+
+{% block window_label %}APPROVED.SYS{% endblock %}
+
+{% block content %}
+<span class="ax-label">YOU'RE LIVE</span>
+<h1 class="ax-h1">Your product is approved.</h1>
+<p class="ax-body">Hi {{ name }},</p>
+<p class="ax-body" style="margin-bottom:20px;">
+  <strong style="color:#1a1a1a;">{{ product_name }}</strong> is now live on the AthenaX launch feed. The community can discover, upvote, and engage with it right now.
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
+  {% call bullet() %}Share your listing to drive early traction{% endcall %}
+  {% call bullet() %}Engage with comments and feedback from the community{% endcall %}
+  {% call bullet() %}Keep your product page updated as you ship{% endcall %}
+</table>
+{{ btn(product_url, "View on AthenaX →") }}
+{% endblock %}
+
+{% block footer_links %}
+<p class="ax-footer-text">You're receiving this because your product was approved on AthenaX.</p>
+{% endblock %}

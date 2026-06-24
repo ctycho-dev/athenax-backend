@@ -5,14 +5,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_association
 from app.common.permissions import is_admin
+from app.common.schema import PaginatedSchema
+from app.domain.article.repository import ArticleRepository
 from app.domain.broadcast.model import BroadcastTag
 from app.domain.broadcast.repository import BroadcastRepository
-from app.domain.broadcast.schema import BroadcastCreateSchema, BroadcastOutSchema, BroadcastUpdateSchema
+from app.domain.broadcast.schema import (
+    ArticleForBroadcastSchema,
+    BroadcastCreateSchema,
+    BroadcastOutSchema,
+    BroadcastSummarySchema,
+    BroadcastUpdateSchema,
+)
 from app.domain.tag.repository import TagRepository
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus
-from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.common.cache_keys import BROADCAST_DETAIL_PREFIX, BROADCAST_LIST_PREFIX
+from app.exceptions.exceptions import NotFoundError
+from app.infrastructure.redis.client import RedisClient
 from app.utils.slug import slugify
 
 
@@ -22,10 +32,22 @@ class BroadcastService:
         repo: BroadcastRepository,
         tag_repo: TagRepository,
         user_repo: UserRepository,
+        article_repo: ArticleRepository,
+        redis: RedisClient | None = None,
     ):
         self.repo = repo
         self.tag_repo = tag_repo
         self.user_repo = user_repo
+        self.article_repo = article_repo
+        self.redis = redis
+
+    async def _invalidate_list_cache(self) -> None:
+        if self.redis:
+            await self.redis.delete_by_pattern(f"{BROADCAST_LIST_PREFIX}:*")
+
+    async def _invalidate_detail_cache(self, slug: str) -> None:
+        if self.redis:
+            await self.redis.delete(f"{BROADCAST_DETAIL_PREFIX}:{slug}")
 
     async def create(
         self,
@@ -44,6 +66,7 @@ class BroadcastService:
 
         await db.commit()
         await db.refresh(broadcast)
+        await self._invalidate_list_cache()
         return await self._to_schema(db, broadcast)
 
     async def list_broadcasts(
@@ -55,31 +78,27 @@ class BroadcastService:
         broadcast_type,
         tag: str | None,
         current_user: UserOutSchema | None,
-    ) -> list[BroadcastOutSchema]:
+    ) -> PaginatedSchema[BroadcastSummarySchema]:
         if current_user is None or not is_admin(current_user):
             status = BroadcastStatus.PUBLISHED
 
+        total = await self.repo.count_filtered(db, status=status, broadcast_type=broadcast_type, tag=tag)
         broadcasts = await self.repo.get_all_filtered(
             db, status=status, broadcast_type=broadcast_type, tag=tag, limit=limit, offset=offset
         )
         if not broadcasts:
-            return []
+            return PaginatedSchema(items=[], total=total)
 
         broadcast_ids = [b.id for b in broadcasts]
-        creator_ids = list({b.created_by_id for b in broadcasts if b.created_by_id})
-
-        tags_map, users_map = await asyncio.gather(
-            self.repo.get_tags_for_broadcasts(db, broadcast_ids),
-            self.user_repo.get_by_ids(db, creator_ids),
-        )
+        tags_map = await self.repo.get_tags_for_broadcasts(db, broadcast_ids)
 
         results = []
         for broadcast in broadcasts:
-            out = BroadcastOutSchema.model_validate(broadcast, from_attributes=True)
+            # List path omits the large `description` body — repo prunes it from the SELECT too.
+            out = BroadcastSummarySchema.model_validate(broadcast, from_attributes=True)
             out.tags = [t.name for t in tags_map[broadcast.id]]
-            out.creator_name = users_map[broadcast.created_by_id].name if broadcast.created_by_id in users_map else None
             results.append(out)
-        return results
+        return PaginatedSchema(items=results, total=total)
 
     async def get_by_id(
         self,
@@ -109,17 +128,14 @@ class BroadcastService:
         current_user: UserOutSchema,
     ) -> BroadcastOutSchema:
         broadcast = await self.repo.get_by_id(db, broadcast_id)
+        old_slug = broadcast.slug
         payload = data.model_dump(exclude_unset=True)
         tag_names = payload.pop("tags", None)
 
         if "slug" in payload:
-            slug = slugify(payload["slug"])
-            await self._assert_slug_available(db, slug, exclude_id=broadcast_id)
-            payload["slug"] = slug
+            payload["slug"] = slugify(payload["slug"])
         elif "title" in payload:
-            slug = slugify(payload["title"])
-            await self._assert_slug_available(db, slug, exclude_id=broadcast_id)
-            payload["slug"] = slug
+            payload["slug"] = slugify(payload["title"])
 
         if "status" in payload:
             payload = self._apply_published_at(payload, current_published_at=broadcast.published_at)
@@ -131,24 +147,23 @@ class BroadcastService:
 
         await db.commit()
         await db.refresh(broadcast)
+
+        invalidations = [self._invalidate_list_cache(), self._invalidate_detail_cache(broadcast.slug)]
+        if old_slug != broadcast.slug:
+            invalidations.append(self._invalidate_detail_cache(old_slug))
+        await asyncio.gather(*invalidations)
+
         return await self._to_schema(db, broadcast)
 
     async def delete_by_id(self, db: AsyncSession, broadcast_id: int, current_user: UserOutSchema) -> None:
-        await self.repo.get_by_id(db, broadcast_id)
+        broadcast = await self.repo.get_by_id(db, broadcast_id)
         await self.repo.soft_delete(db, broadcast_id, deleted_by_id=current_user.id)
         await db.commit()
+        await asyncio.gather(self._invalidate_list_cache(), self._invalidate_detail_cache(broadcast.slug))
 
     # -------------------------
     # Helpers
     # -------------------------
-
-    async def _assert_slug_available(self, db: AsyncSession, slug: str, exclude_id: int | None = None) -> None:
-        try:
-            existing = await self.repo.get_by_slug(db, slug)
-            if existing.id != exclude_id:
-                raise ValidationError(f"Slug '{slug}' is already in use")
-        except NotFoundError:
-            pass
 
     async def _sync_tags(self, db: AsyncSession, broadcast_id: int, tag_names: list[str]) -> None:
         seen: dict[str, str] = {}
@@ -186,11 +201,14 @@ class BroadcastService:
         return payload
 
     async def _to_schema(self, db: AsyncSession, broadcast) -> BroadcastOutSchema:
-        tags, users_map = await asyncio.gather(
+        tags, users_map, article = await asyncio.gather(
             self.repo.get_tags_for_broadcast(db, broadcast.id),
             self.user_repo.get_by_ids(db, [broadcast.created_by_id] if broadcast.created_by_id else []),
+            self.article_repo.get_by_broadcast_id(db, broadcast.id),
         )
         out = BroadcastOutSchema.model_validate(broadcast, from_attributes=True)
         out.tags = [t.name for t in tags]
         out.creator_name = users_map[broadcast.created_by_id].name if broadcast.created_by_id in users_map else None
+        if article:
+            out.article = ArticleForBroadcastSchema.model_validate(article, from_attributes=True)
         return out
