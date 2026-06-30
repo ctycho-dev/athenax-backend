@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import pytest
@@ -195,6 +196,26 @@ class TestPaperAPI:
             app.dependency_overrides[get_current_user] = original
 
         assert response.status_code == 404
+
+    async def test_create_paper_duplicate_title_gets_unique_slug(self, client: ClientWithEmail):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_researcher():
+            return build_mock_user(UserRole.RESEARCHER)
+
+        app.dependency_overrides[get_current_user] = override_researcher
+        try:
+            payload = {**PAPER_PAYLOAD, "title": "Paper Slug Collision Subject"}
+            first = await client.post("/api/v1/paper", json=payload)
+            second = await client.post("/api/v1/paper", json=payload)
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert first.status_code == 201
+        assert second.status_code == 201
+        # First gets the clean slug; the collision falls back to a random 4-hex suffix.
+        assert first.json()["slug"] == "paper-slug-collision-subject"
+        assert re.fullmatch(r"paper-slug-collision-subject-[0-9a-f]{4}", second.json()["slug"])
 
     # ------------------------------------------------------------------
     # CRUD helpers

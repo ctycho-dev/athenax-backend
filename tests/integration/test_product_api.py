@@ -1,9 +1,10 @@
+import re
 from datetime import datetime
 
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException, status
-from sqlalchemy import text
+from sqlalchemy import insert, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -11,6 +12,8 @@ from sqlalchemy.pool import NullPool
 from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
 from app.api.dependencies.services import get_storage_service
+from app.domain.category.model import Category
+from app.domain.product.model import ProductCategory
 from app.domain.user.model import User
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import UserRole
@@ -183,7 +186,64 @@ class TestProductAPI:
 
         assert response_1.status_code == 201
         assert response_2.status_code == 201
-        assert response_1.json()["slug"] != response_2.json()["slug"]
+        # First gets the clean slug; the collision falls back to a random 4-hex suffix.
+        assert response_1.json()["slug"] == "duplicate-name"
+        assert re.fullmatch(r"duplicate-name-[0-9a-f]{4}", response_2.json()["slug"])
+
+    async def test_create_product_slug_collision_preserves_custom_subcategory(
+        self, client: ClientWithEmail, db_session
+    ):
+        """A slug collision must roll back only the product insert (SAVEPOINT), not the
+        custom subcategory created earlier in the same request."""
+        parent_id = (
+            await db_session.execute(
+                insert(Category).values(name="Savepoint Parent").returning(Category.id)
+            )
+        ).scalar_one()
+        await db_session.commit()
+
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            payload = {
+                **PRODUCT_PAYLOAD,
+                "name": "Savepoint Collision Product",
+                "categoryIds": [parent_id],
+                "otherSubcategoryName": "Custom Sub Alpha",
+            }
+            first = await client.post("/api/v1/product", json=payload)
+            # Same name → slug collides; different subcategory created before the failing insert.
+            second = await client.post(
+                "/api/v1/product", json={**payload, "otherSubcategoryName": "Custom Sub Beta"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert first.status_code == 201
+        # Without the SAVEPOINT fix the full rollback would discard "Custom Sub Beta",
+        # and the follow-up category sync would fail → non-201.
+        assert second.status_code == 201
+        assert first.json()["slug"] == "savepoint-collision-product"
+        assert re.fullmatch(r"savepoint-collision-product-[0-9a-f]{4}", second.json()["slug"])
+
+        # The subcategory from the colliding request survived and is linked to the product.
+        sub_id = (
+            await db_session.execute(select(Category.id).where(Category.name == "Custom Sub Beta"))
+        ).scalar_one_or_none()
+        assert sub_id is not None
+        link = (
+            await db_session.execute(
+                select(ProductCategory.product_id).where(
+                    ProductCategory.product_id == second.json()["id"],
+                    ProductCategory.category_id == sub_id,
+                )
+            )
+        ).scalar_one_or_none()
+        assert link is not None
 
     # ------------------------------------------------------------------
     # CRUD helpers

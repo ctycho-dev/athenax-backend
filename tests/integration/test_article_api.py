@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import pytest
@@ -325,6 +326,18 @@ class TestArticleAPI:
 
         assert response.status_code == 201
         assert "unique-slug-generation-test" in response.json()["slug"]
+
+    async def test_create_article_duplicate_title_gets_unique_slug(self, client: ClientWithEmail):
+        payload = {**ARTICLE_PAYLOAD, "title": "Article Slug Collision Subject"}
+        with _override_admin():
+            first = await client.post("/api/v1/article", json=payload)
+            second = await client.post("/api/v1/article", json=payload)
+
+        assert first.status_code == 201
+        assert second.status_code == 201
+        # First gets the clean slug; the collision falls back to a random 4-hex suffix.
+        assert first.json()["slug"] == "article-slug-collision-subject"
+        assert re.fullmatch(r"article-slug-collision-subject-[0-9a-f]{4}", second.json()["slug"])
 
     # ------------------------------------------------------------------
     # Create — published_at logic

@@ -21,9 +21,9 @@ from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import BroadcastStatus
 from app.common.cache_keys import BROADCAST_DETAIL_PREFIX, BROADCAST_LIST_PREFIX
-from app.exceptions.exceptions import NotFoundError
+from app.exceptions.exceptions import ConflictError, NotFoundError
 from app.infrastructure.redis.client import RedisClient
-from app.utils.slug import slugify
+from app.utils.slug import slugify, with_random_suffix
 
 
 class BroadcastService:
@@ -58,10 +58,16 @@ class BroadcastService:
         payload = data.model_dump()
         tag_names = payload.pop("tags", [])
 
-        payload["slug"] = slugify(data.title)
+        base = slugify(data.title)
+        payload["slug"] = base
         payload = self._apply_published_at(payload)
 
-        broadcast = await self.repo.create(db, payload, current_user_id=current_user.id)
+        try:
+            async with db.begin_nested():
+                broadcast = await self.repo.create(db, payload, current_user_id=current_user.id)
+        except ConflictError:
+            payload["slug"] = with_random_suffix(base)
+            broadcast = await self.repo.create(db, payload, current_user_id=current_user.id)
         await self._sync_tags(db, broadcast.id, tag_names)
 
         await db.commit()
@@ -140,7 +146,13 @@ class BroadcastService:
         if "status" in payload:
             payload = self._apply_published_at(payload, current_published_at=broadcast.published_at)
 
-        broadcast = await self.repo.update(db, broadcast_id, payload, current_user_id=current_user.id)
+        try:
+            async with db.begin_nested():
+                broadcast = await self.repo.update(db, broadcast_id, payload, current_user_id=current_user.id)
+        except ConflictError:
+            slug_source = payload.get("slug") or payload.get("title", "")
+            payload["slug"] = with_random_suffix(slugify(slug_source))
+            broadcast = await self.repo.update(db, broadcast_id, payload, current_user_id=current_user.id)
 
         if tag_names is not None:
             await self._sync_tags(db, broadcast_id, tag_names)
