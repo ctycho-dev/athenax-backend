@@ -25,6 +25,7 @@ class ProductCreateSchema(CamelModel):
     email: str | None = Field(default=None, max_length=200)
     backers: list[str] = Field(default_factory=list)
     links: list["ProductLinkCreateSchema"] = Field(default_factory=list)
+    team: list["TeamMemberCreateSchema"] = Field(default_factory=list)
     category_ids: list[int] = Field(default_factory=list)
     sub_category_ids: list[int] = Field(default_factory=list)
     other_subcategory_name: str | None = Field(default=None, max_length=100)
@@ -186,6 +187,7 @@ class ReleasePeriodSchema(CamelModel):
     today: int
     this_week: int
     this_month: int
+    recent: int
 
 
 class ProductReleaseStatsSchema(CamelModel):
@@ -198,10 +200,6 @@ class ProductLinkCreateSchema(CamelModel):
     link_type: ProductLinkType
     url: str = Field(max_length=500)
     label: str | None = Field(default=None, max_length=100)
-
-
-ProductCreateSchema.model_rebuild()
-ProductUpdateSchema.model_rebuild()
 
 
 class ProductLinkUpdateSchema(CamelModel):

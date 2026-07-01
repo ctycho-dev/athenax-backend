@@ -229,6 +229,7 @@ class ProductRepository(BaseRepository[Product]):
             func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.TODAY)).label("today"),
             func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.THIS_WEEK)).label("this_week"),
             func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.THIS_MONTH)).label("this_month"),
+            func.count().filter(Product.created_at >= self._period_cutoff(now, ProductDateFilter.RECENT)).label("recent"),
         ).where(
             Product.status == ProductStatus.APPROVED,
             Product.deleted_at.is_(None),
@@ -250,6 +251,8 @@ class ProductRepository(BaseRepository[Product]):
             return now - timedelta(days=14)
         if period == ProductDateFilter.THIS_MONTH:
             return now - timedelta(days=30)
+        if period == ProductDateFilter.RECENT:
+            return now - timedelta(days=60)
         if period == ProductDateFilter.THIS_YEAR:
             return now - timedelta(days=365)
         raise ValueError(f"Unhandled date filter: {period}")
