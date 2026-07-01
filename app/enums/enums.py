@@ -74,6 +74,7 @@ class ProductDateFilter(str, Enum):
     TODAY = "today"
     THIS_WEEK = "this_week"
     THIS_MONTH = "this_month"
+    RECENT = "recent"
     THIS_YEAR = "this_year"
 
 

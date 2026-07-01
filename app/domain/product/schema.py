@@ -187,6 +187,7 @@ class ReleasePeriodSchema(CamelModel):
     today: int
     this_week: int
     this_month: int
+    recent: int
 
 
 class ProductReleaseStatsSchema(CamelModel):
