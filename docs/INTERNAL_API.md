@@ -58,6 +58,7 @@ All field names are **camelCase** in JSON. Only `name` is required; every other 
 | `email` | string or null | no | max 200 chars | Public contact email |
 | `backers` | array of strings | no | — | VC / investor names as plain strings (e.g. `["a16z", "Sequoia"]`) |
 | `links` | array of link objects | no | — | Social and technical links; see link object schema below |
+| `team` | array of team member objects | no | — | Founding / core team members; see team member object schema below |
 | `categoryIds` | array of integers | no | — | Parent-category IDs; resolve first via `GET /internal/categories/by-name` |
 | `subCategoryIds` | array of integers | no | — | Subcategory IDs; resolve first via `GET /internal/subcategories/by-name` |
 | `otherSubcategoryName` | string or null | no | max 100 chars | Free-text subcategory suggestion when no existing one matches |
@@ -100,6 +101,20 @@ Allowed values for `linkType` (case-sensitive):
 | `"discord"` | Discord server |
 | `"other"` | Any other link |
 
+##### Team member object schema (each item in `team`)
+
+| Field | JSON type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `name` | string | **yes** | max 100 chars | Full name of the team member |
+| `roleLabel` | string or null | no | max 150 chars | Title or role (e.g. `"CEO"`, `"CTO"`) |
+| `bioNote` | string or null | no | max 300 chars | Short bio or note about this person |
+| `linkedinUrl` | string or null | no | max 200 chars | LinkedIn profile URL |
+| `twitterUrl` | string or null | no | max 200 chars | Twitter / X profile URL |
+| `githubUrl` | string or null | no | max 200 chars | GitHub profile URL |
+| `otherUrl` | string or null | no | max 200 chars | Any other relevant URL |
+
+Team members are created with status `"pending"` and go through the same admin approval flow as the product itself.
+
 #### BD agent field mapping
 
 | Agent collects | Field to populate | Example |
@@ -132,6 +147,17 @@ Allowed values for `linkType` (case-sensitive):
     { "linkType": "github",  "url": "https://github.com/google-deepmind/alphafold" },
     { "linkType": "twitter", "url": "https://twitter.com/DeepMind" },
     { "linkType": "docs",    "url": "https://alphafold.ebi.ac.uk/faq" }
+  ],
+  "team": [
+    {
+      "name": "Demis Hassabis",
+      "roleLabel": "CEO",
+      "bioNote": "Co-founder of DeepMind, neuroscientist and AI researcher.",
+      "linkedinUrl": null,
+      "twitterUrl": "https://twitter.com/demishassabis",
+      "githubUrl": null,
+      "otherUrl": null
+    }
   ]
 }
 ```
@@ -166,7 +192,7 @@ Allowed values for `linkType` (case-sensitive):
 | `updatedAt` | string (ISO 8601) | Last-updated timestamp |
 | `papers` | array | Always `[]` on creation |
 | `media` | array | Always `[]` on creation |
-| `team` | array | Always `[]` on creation |
+| `team` | array | Team members as submitted with status `"pending"`; each object matches `TeamMemberOutSchema` |
 | `voices` | array | Always `[]` on creation |
 | `bounties` | array | Always `[]` on creation |
 | `founder` | object or null | Always `null` for system-created products |

@@ -175,6 +175,7 @@ class ProductService:
         url = payload.pop("url", None)
         backers = payload.pop("backers", [])
         links = payload.pop("links", [])
+        team = payload.pop("team", [])
 
         if other_subcategory_name:
             if not category_ids:
@@ -223,6 +224,13 @@ class ProductService:
                 current_user_id=current_user.id,
             )
 
+        for member in team:
+            await self.team_repo.create(
+                db,
+                {"product_id": product.id, **member},
+                current_user_id=current_user.id,
+            )
+
         await db.commit()
         await db.refresh(product)
         if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
@@ -232,7 +240,7 @@ class ProductService:
                 )
             except EmailDeliveryError:
                 logger.warning("product_submission_email_failed", extra={"user_id": current_user.id})
-        return await self._to_schema(db, product)
+        return await self._to_schema(db, product, current_user=current_user)
 
     async def list(
         self,
