@@ -249,7 +249,7 @@ class ProductRepository(BaseRepository[Product]):
         if period == ProductDateFilter.THIS_WEEK:
             return now - timedelta(days=14)
         if period == ProductDateFilter.THIS_MONTH:
-            return now - timedelta(days=30)
+            return now - timedelta(days=60)
         if period == ProductDateFilter.THIS_YEAR:
             return now - timedelta(days=365)
         raise ValueError(f"Unhandled date filter: {period}")
