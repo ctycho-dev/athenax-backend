@@ -17,8 +17,8 @@ from app.domain.paper.schema import (
 )
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import PaperStatus, PaperVerificationStatus
-from app.exceptions.exceptions import NotFoundError
-from app.utils.slug import generate_slug
+from app.exceptions.exceptions import ConflictError, NotFoundError
+from app.utils.slug import slugify, with_random_suffix
 
 
 class PaperService:
@@ -36,11 +36,17 @@ class PaperService:
         category_ids = payload.pop("category_ids", [])
 
         payload["created_by_id"] = current_user.id
-        payload["slug"] = generate_slug(data.title)
+        base = slugify(data.title)
+        payload["slug"] = base
         if payload.get("status") == PaperStatus.PUBLISHED:
             payload["published_at"] = datetime.now(timezone.utc)
 
-        paper = await self.repo.create(db, payload, current_user_id=current_user.id)
+        try:
+            async with db.begin_nested():
+                paper = await self.repo.create(db, payload, current_user_id=current_user.id)
+        except ConflictError:
+            payload["slug"] = with_random_suffix(base)
+            paper = await self.repo.create(db, payload, current_user_id=current_user.id)
 
         await sync_categories(db, self.category_repo, PaperCategory.__table__, "paper_id", paper.id, category_ids)
 
@@ -118,7 +124,8 @@ class PaperService:
         category_ids = payload.pop("category_ids", None)
 
         if "title" in payload:
-            payload["slug"] = generate_slug(payload["title"])
+            base = slugify(payload["title"])
+            payload["slug"] = base
 
         if "status" in payload:
             new_status = payload["status"]
@@ -127,7 +134,13 @@ class PaperService:
             elif new_status != PaperStatus.PUBLISHED:
                 payload["published_at"] = None
 
-        paper = await self.repo.update(db, paper_id, payload, current_user_id=current_user.id)
+        try:
+            async with db.begin_nested():
+                paper = await self.repo.update(db, paper_id, payload, current_user_id=current_user.id)
+        except ConflictError:
+            if "title" in payload:
+                payload["slug"] = with_random_suffix(slugify(payload["title"]))
+            paper = await self.repo.update(db, paper_id, payload, current_user_id=current_user.id)
 
         if category_ids is not None:
             await sync_categories(db, self.category_repo, PaperCategory.__table__, "paper_id", paper_id, category_ids)

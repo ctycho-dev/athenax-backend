@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 
 import pytest
@@ -122,6 +123,18 @@ class TestBroadcastAPI:
 
         assert response.status_code == 201
         assert "unique-slug-for-broadcast" in response.json()["slug"]
+
+    async def test_create_broadcast_duplicate_title_gets_unique_slug(self, client: ClientWithEmail):
+        payload = {**BROADCAST_PAYLOAD, "title": "Broadcast Slug Collision Subject"}
+        with _override_admin():
+            first = await client.post("/api/v1/broadcast", json=payload)
+            second = await client.post("/api/v1/broadcast", json=payload)
+
+        assert first.status_code == 201
+        assert second.status_code == 201
+        # First gets the clean slug; the collision falls back to a random 4-hex suffix.
+        assert first.json()["slug"] == "broadcast-slug-collision-subject"
+        assert re.fullmatch(r"broadcast-slug-collision-subject-[0-9a-f]{4}", second.json()["slug"])
 
     async def test_create_broadcast_validation_missing_type(self, client: ClientWithEmail):
         with _override_admin():

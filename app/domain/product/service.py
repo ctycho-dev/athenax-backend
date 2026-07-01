@@ -46,12 +46,12 @@ from fastapi import UploadFile
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
-from app.exceptions.exceptions import NotFoundError, ValidationError
+from app.exceptions.exceptions import ConflictError, NotFoundError, ValidationError
 from app.infrastructure.email.service import EmailDeliveryError, EmailService
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
 from app.infrastructure.redis.client import RedisClient
 from app.core.config import settings
-from app.utils.slug import generate_slug
+from app.utils.slug import slugify, with_random_suffix
 from app.common.cache_keys import PRODUCT_DETAIL_PREFIX, PRODUCT_LIST_PREFIX, PRODUCT_STATS
 from app.core.logger import get_logger
 
@@ -175,6 +175,7 @@ class ProductService:
         url = payload.pop("url", None)
         backers = payload.pop("backers", [])
         links = payload.pop("links", [])
+        team = payload.pop("team", [])
 
         if other_subcategory_name:
             if not category_ids:
@@ -187,9 +188,15 @@ class ProductService:
             sub_category_ids = [new_sub.id]
 
         payload["created_by_id"] = current_user.id
-        payload["slug"] = generate_slug(data.name, max_length=150)
-
-        product = await self.repo.create(db, payload, current_user_id=current_user.id)
+        base = slugify(data.name, max_length=145)
+        payload["slug"] = base
+        try:
+            # SAVEPOINT so a slug collision rolls back only this insert, not the subcategory created above.
+            async with db.begin_nested():
+                product = await self.repo.create(db, payload, current_user_id=current_user.id)
+        except ConflictError:
+            payload["slug"] = with_random_suffix(base)
+            product = await self.repo.create(db, payload, current_user_id=current_user.id)
 
         if sub_category_ids:
             await self.category_repo.assert_are_subcategories(db, sub_category_ids)
@@ -217,6 +224,13 @@ class ProductService:
                 current_user_id=current_user.id,
             )
 
+        for member in team:
+            await self.team_repo.create(
+                db,
+                {"product_id": product.id, **member},
+                current_user_id=current_user.id,
+            )
+
         await db.commit()
         await db.refresh(product)
         if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
@@ -226,7 +240,7 @@ class ProductService:
                 )
             except EmailDeliveryError:
                 logger.warning("product_submission_email_failed", extra={"user_id": current_user.id})
-        return await self._to_schema(db, product)
+        return await self._to_schema(db, product, current_user=current_user)
 
     async def list(
         self,
