@@ -85,7 +85,10 @@ class ProductLinkType(str, Enum):
     DOCS    = "docs"
     DEMO    = "demo"
     DISCORD = "discord"
-    OTHER    = "other"
+    LINKEDIN  = "linkedin"
+    YOUTUBE   = "youtube"
+    INSTAGRAM = "instagram"
+    OTHER     = "other"
 
 
 class ProductMediaType(str, Enum):
