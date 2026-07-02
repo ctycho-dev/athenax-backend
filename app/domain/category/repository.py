@@ -76,3 +76,18 @@ class CategoryRepository(BaseRepository[Category]):
         sub_ids = [row[0] for row in result.all()]
         if sub_ids:
             raise ValidationError(f"Only parent categories are allowed. These are subcategories: {sub_ids}")
+
+    async def assert_subcategories_belong_to_parents(
+        self, db: AsyncSession, sub_category_ids: list[int], parent_ids: list[int]
+    ) -> None:
+        """Raise ValidationError if any subcategory's parent_id is not among parent_ids."""
+        if not sub_category_ids:
+            return
+        unique_ids = list(dict.fromkeys(sub_category_ids))
+        result = await db.execute(
+            select(Category.id).where(Category.id.in_(unique_ids), Category.parent_id.in_(parent_ids))
+        )
+        valid_ids = {row[0] for row in result.all()}
+        mismatched = [cid for cid in unique_ids if cid not in valid_ids]
+        if mismatched:
+            raise ValidationError(f"Sub-category IDs do not belong to the selected parent categories: {mismatched}")
