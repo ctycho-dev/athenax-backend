@@ -182,9 +182,7 @@ Team members are created with status `"pending"` and go through the same admin a
 | `voteCount` | integer | Always `0` on creation |
 | `bookmarkCount` | integer | Always `0` on creation |
 | `investorInterestCount` | integer | Always `0` on creation |
-| `categoryIds` | array of integers | Assigned parent-category IDs |
-| `subCategories` | array of strings | Assigned subcategory names |
-| `pendingSubcategoryName` | string or null | Free-text subcategory suggestion if supplied |
+| `categories` | array of objects | Assigned parent categories, each `{ "id": int, "name": string, "subcategories": [...] }`. Each subcategory is `{ "id": int, "name": string, "status": "approved" \| "pending" }` — a subcategory created via `otherSubcategoryName` appears here with `status: "pending"` until an admin approves it. |
 | `links` | array of link objects | Links as submitted |
 | `backers` | array of objects | Each: `{ "id": int, "productId": int, "name": string }` |
 | `createdById` | integer or null | System user ID |

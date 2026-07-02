@@ -46,6 +46,19 @@ class ProductUpdateSchema(CamelModel):
     links: list["ProductLinkCreateSchema"] | None = None
     category_ids: list[int] | None = None
     sub_category_ids: list[int] | None = None
+    other_subcategory_name: str | None = Field(default=None, max_length=100)
+
+
+class SubcategoryRefSchema(CamelModel):
+    id: int
+    name: str
+    status: VerificationStatus
+
+
+class CategoryRefSchema(CamelModel):
+    id: int
+    name: str
+    subcategories: list[SubcategoryRefSchema] = Field(default_factory=list)
 
 
 class ProductBaseSchema(CamelModel):
@@ -65,9 +78,7 @@ class ProductBaseSchema(CamelModel):
     vote_count: int = 0
     bookmark_count: int = 0
     investor_interest_count: int = 0
-    category_ids: list[int] = Field(default_factory=list)
-    sub_categories: list[str] = Field(default_factory=list)
-    pending_subcategory_name: str | None = None
+    categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     created_by_id: int | None
@@ -80,7 +91,7 @@ class ProductSummarySchema(CamelModel):
     stage: ProductStage | None
     vote_count: int = 0
     bookmark_count: int = 0
-    category_ids: list[int] = Field(default_factory=list)
+    categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -91,7 +102,7 @@ class ProductSimilarSchema(CamelModel):
     short_desc: str | None
     logo: str | None
     stage: ProductStage | None
-    categories: list[str] = Field(default_factory=list)
+    categories: list[CategoryRefSchema] = Field(default_factory=list)
 
 
 class ProductListSchema(CamelModel):
@@ -107,8 +118,7 @@ class ProductListSchema(CamelModel):
     quality_badge: str | None
     logo: str | None
     status: ProductStatus
-    category_ids: list[int] = Field(default_factory=list)
-    sub_categories: list[str] = Field(default_factory=list)
+    categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     bookmarked: bool | None = None
