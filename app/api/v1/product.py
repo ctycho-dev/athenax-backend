@@ -34,6 +34,7 @@ from app.domain.product.schema import (
     ProductMediaCreateSchema, ProductMediaUpdateSchema, ProductMediaOutSchema,
     TeamMemberCreateSchema, TeamMemberUpdateSchema, TeamMemberStatusUpdateSchema, TeamMemberOutSchema,
     ProductBackerCreateSchema, ProductBackerOutSchema,
+    ProductGrantCreateSchema, ProductGrantOutSchema,
     ProductVoiceCreateSchema, ProductVoiceUpdateSchema, ProductVoiceOutSchema,
     BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
@@ -641,6 +642,47 @@ async def delete_backer(
     service: ProductService = Depends(get_product_service),
 ):
     await service.delete_backer(db, product_id=product_id, backer_id=backer_id, current_user=current_user)
+
+
+# -------------------------
+# Product Grants
+# -------------------------
+
+@router.get("/{product_id}/grants", response_model=list[ProductGrantOutSchema])
+@limiter.limit("60/minute")
+async def list_grants(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_grants(db, product_id=product_id)
+
+
+@router.post("/{product_id}/grants", status_code=status.HTTP_201_CREATED, response_model=ProductGrantOutSchema)
+@limiter.limit("30/minute")
+async def create_grant(
+    request: Request,
+    product_id: int,
+    payload: ProductGrantCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_grant(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.delete("/{product_id}/grants/{grant_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_grant(
+    request: Request,
+    product_id: int,
+    grant_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(get_current_user),
+    service: ProductService = Depends(get_product_service),
+):
+    await service.delete_grant(db, product_id=product_id, grant_id=grant_id, current_user=current_user)
 
 
 # -------------------------

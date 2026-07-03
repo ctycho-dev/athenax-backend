@@ -21,7 +21,7 @@ from app.domain.paper.service import PaperService
 from app.domain.product.repository import (
     CommentRepository, ProductRepository,
     ProductLinkRepository, ProductMediaRepository, ProductTeamRepository,
-    ProductBackerRepository, ProductVoiceRepository, BountyRepository,
+    ProductBackerRepository, ProductGrantRepository, ProductVoiceRepository, BountyRepository,
 )
 from app.domain.product.service import ProductService
 from app.domain.article.repository import ArticleRepository
@@ -99,6 +99,10 @@ def get_team_repo() -> ProductTeamRepository:
 
 def get_backer_repo() -> ProductBackerRepository:
     return ProductBackerRepository()
+
+
+def get_grant_repo() -> ProductGrantRepository:
+    return ProductGrantRepository()
 
 
 def get_voice_repo() -> ProductVoiceRepository:
@@ -215,6 +219,7 @@ def get_product_service(
     media_repo: ProductMediaRepository = Depends(get_media_repo),
     team_repo: ProductTeamRepository = Depends(get_team_repo),
     backer_repo: ProductBackerRepository = Depends(get_backer_repo),
+    grant_repo: ProductGrantRepository = Depends(get_grant_repo),
     voice_repo: ProductVoiceRepository = Depends(get_voice_repo),
     bounty_repo: BountyRepository = Depends(get_bounty_repo),
     email_service: EmailService = Depends(get_email_service),
@@ -228,6 +233,7 @@ def get_product_service(
         media_repo=media_repo,
         team_repo=team_repo,
         backer_repo=backer_repo,
+        grant_repo=grant_repo,
         voice_repo=voice_repo,
         bounty_repo=bounty_repo,
         email_service=email_service,

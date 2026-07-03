@@ -12,7 +12,7 @@ from app.domain.product.model import (
     Product, ProductCategory, ProductVote, ProductBookmark,
     ProductInvestorInterest, ProductComment,
     ProductLink, ProductMedia, ProductTeamMember,
-    ProductBacker, ProductVoice, Bounty,
+    ProductBacker, ProductGrant, ProductVoice, Bounty,
 )
 from app.domain.university.model import University
 from app.domain.lab.model import Lab, LabCategory

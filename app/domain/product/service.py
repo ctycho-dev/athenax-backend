@@ -15,7 +15,7 @@ from app.domain.product.model import ProductCategory
 from app.domain.product.repository import (
     CommentRepository, ProductRepository,
     ProductLinkRepository, ProductMediaRepository, ProductTeamRepository,
-    ProductBackerRepository, ProductVoiceRepository, BountyRepository,
+    ProductBackerRepository, ProductGrantRepository, ProductVoiceRepository, BountyRepository,
 )
 from app.domain.paper.schema import PaperSummarySchema
 from app.domain.product.schema import (
@@ -41,6 +41,7 @@ from app.domain.product.schema import (
     ProductMediaCreateSchema, ProductMediaUpdateSchema, ProductMediaOutSchema,
     TeamMemberCreateSchema, TeamMemberUpdateSchema, TeamMemberStatusUpdateSchema, TeamMemberOutSchema,
     ProductBackerCreateSchema, ProductBackerOutSchema,
+    ProductGrantCreateSchema, ProductGrantOutSchema,
     ProductVoiceCreateSchema, ProductVoiceUpdateSchema, ProductVoiceOutSchema,
     BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
@@ -102,6 +103,7 @@ class ProductService:
         media_repo: ProductMediaRepository,
         team_repo: ProductTeamRepository,
         backer_repo: ProductBackerRepository,
+        grant_repo: ProductGrantRepository,
         voice_repo: ProductVoiceRepository,
         bounty_repo: BountyRepository,
         email_service: EmailService | None = None,
@@ -115,6 +117,7 @@ class ProductService:
         self.media_repo = media_repo
         self.team_repo = team_repo
         self.backer_repo = backer_repo
+        self.grant_repo = grant_repo
         self.voice_repo = voice_repo
         self.bounty_repo = bounty_repo
         self.email_service = email_service or EmailService()
@@ -193,6 +196,7 @@ class ProductService:
         other_subcategory_name = payload.pop("other_subcategory_name", None)
         url = payload.pop("url", None)
         backers = payload.pop("backers", [])
+        grants = payload.pop("grants", [])
         links = payload.pop("links", [])
         team = payload.pop("team", [])
 
@@ -239,6 +243,13 @@ class ProductService:
 
         for name in backers:
             await self.backer_repo.create(
+                db,
+                {"product_id": product.id, "name": name},
+                current_user_id=current_user.id,
+            )
+
+        for name in grants:
+            await self.grant_repo.create(
                 db,
                 {"product_id": product.id, "name": name},
                 current_user_id=current_user.id,
@@ -375,6 +386,7 @@ class ProductService:
         other_subcategory_name = payload.pop("other_subcategory_name", None)
         links = payload.pop("links", None)
         backers = payload.pop("backers", None)
+        grants = payload.pop("grants", None)
 
         product = await self.repo.update(db, product_id, payload, current_user_id=current_user.id)
 
@@ -398,6 +410,13 @@ class ProductService:
                 await self.backer_repo.delete_by_id(db, b.id)
             for name in backers:
                 await self.backer_repo.create(db, {"product_id": product_id, "name": name}, current_user_id=current_user.id)
+
+        if grants is not None:
+            existing_grants = await self.grant_repo.get_by_product_id(db, product_id)
+            for g in existing_grants:
+                await self.grant_repo.delete_by_id(db, g.id)
+            for name in grants:
+                await self.grant_repo.create(db, {"product_id": product_id, "name": name}, current_user_id=current_user.id)
 
         if category_ids is not None or sub_category_ids is not None or other_subcategory_name:
             existing_cats = await self.repo.get_categories_for_product(db, product_id)
@@ -952,6 +971,38 @@ class ProductService:
         await db.commit()
 
     # -------------------------
+    # Product Grants
+    # -------------------------
+
+    async def list_grants(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductGrantOutSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        grants = await self.grant_repo.get_by_product_id(db, product_id)
+        return [ProductGrantOutSchema.model_validate(g, from_attributes=True) for g in grants]
+
+    async def create_grant(
+        self, db: AsyncSession, product_id: int, data: ProductGrantCreateSchema, current_user: UserOutSchema
+    ) -> ProductGrantOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        grant = await self.grant_repo.create(db, {**data.model_dump(), "product_id": product_id}, current_user_id=current_user.id)
+        await db.commit()
+        await db.refresh(grant)
+        return ProductGrantOutSchema.model_validate(grant, from_attributes=True)
+
+    async def delete_grant(
+        self, db: AsyncSession, product_id: int, grant_id: int, current_user: UserOutSchema
+    ) -> None:
+        product = await self.repo.get_by_id(db, product_id)
+        assert_can_modify(product, current_user)
+        grant = await self.grant_repo.get_by_id(db, grant_id)
+        if grant.product_id != product_id:
+            raise NotFoundError("Grant not found")
+        await self.grant_repo.delete_by_id(db, grant_id)
+        await db.commit()
+
+    # -------------------------
     # Product Voices
     # -------------------------
 
@@ -1065,7 +1116,7 @@ class ProductService:
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None
     ) -> ProductOutSchema:
         team_status = None if (current_user and (is_admin(current_user) or is_owner(product, current_user))) else VerificationStatus.APPROVED
-        ix, founder_data, (papers, links, media, team, backers, voices, bounties) = await asyncio.gather(
+        ix, founder_data, (papers, links, media, team, backers, grants, voices, bounties) = await asyncio.gather(
             self._fetch_interaction_data(db, [product.id], current_user),
             self.repo.get_founder_summary(db, product.created_by_id),
             asyncio.gather(
@@ -1074,6 +1125,7 @@ class ProductService:
                 self.media_repo.get_by_product_id(db, product.id),
                 self.team_repo.get_by_product_id(db, product.id, status=team_status),
                 self.backer_repo.get_by_product_id(db, product.id),
+                self.grant_repo.get_by_product_id(db, product.id),
                 self.voice_repo.get_by_product_id(db, product.id),
                 self.bounty_repo.get_by_product_id(db, product.id),
             ),
@@ -1091,6 +1143,7 @@ class ProductService:
         result.media = [self._to_media_schema(m) for m in media]
         result.team = [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in team]
         result.backers = [ProductBackerOutSchema.model_validate(b, from_attributes=True) for b in backers]
+        result.grants = [ProductGrantOutSchema.model_validate(g, from_attributes=True) for g in grants]
         result.voices = [ProductVoiceOutSchema.model_validate(v, from_attributes=True) for v in voices]
         result.bounties = [BountyOutSchema.model_validate(b, from_attributes=True) for b in bounties]
         if current_user:

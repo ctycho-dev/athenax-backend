@@ -24,6 +24,7 @@ from app.domain.product.model import (
     ProductMedia,
     ProductTeamMember,
     ProductBacker,
+    ProductGrant,
     ProductVoice,
     Bounty,
 )
@@ -163,6 +164,21 @@ class ProductBackerRepository(BaseRepository[ProductBacker]):
             select(ProductBacker)
             .where(ProductBacker.product_id == product_id)
             .order_by(ProductBacker.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+
+class ProductGrantRepository(BaseRepository[ProductGrant]):
+    def __init__(self) -> None:
+        super().__init__(ProductGrant)
+
+    async def get_by_product_id(
+        self, db: AsyncSession, product_id: int
+    ) -> list[ProductGrant]:
+        result = await db.execute(
+            select(ProductGrant)
+            .where(ProductGrant.product_id == product_id)
+            .order_by(ProductGrant.created_at.asc())
         )
         return list(result.scalars().all())
 
