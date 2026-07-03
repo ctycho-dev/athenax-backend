@@ -19,6 +19,7 @@ from app.domain.product.repository import (
 )
 from app.domain.paper.schema import PaperSummarySchema
 from app.domain.product.schema import (
+    CategoryRefSchema,
     CommentCreateSchema,
     CommentOutSchema,
     CommentPinSchema,
@@ -33,6 +34,7 @@ from app.domain.product.schema import (
     ProductSummarySchema,
     ProductUpdateSchema,
     ReleasePeriodSchema,
+    SubcategoryRefSchema,
     ToggleOutSchema,
     ProductLinkCreateSchema, ProductLinkUpdateSchema, ProductLinkOutSchema,
     ProductLogoOutSchema,
@@ -60,6 +62,23 @@ logger = get_logger(__name__)
 # Helper to determine comment depth based on path (e.g. "1.5.7" -> depth 2)
 def _path_depth(path: str | None) -> int:
     return len(path.split(".")) - 1 if path else 0
+
+
+def _build_category_refs(categories: list) -> list[CategoryRefSchema]:
+    """Group a product's flat category rows into parents with their subcategories nested."""
+    parents = [c for c in categories if c.parent_id is None]
+    return [
+        CategoryRefSchema(
+            id=parent.id,
+            name=parent.name,
+            subcategories=[
+                SubcategoryRefSchema(id=sub.id, name=sub.name, status=sub.status)
+                for sub in categories
+                if sub.parent_id == parent.id
+            ],
+        )
+        for parent in parents
+    ]
 
 
 @dataclass
@@ -200,6 +219,7 @@ class ProductService:
 
         if sub_category_ids:
             await self.category_repo.assert_are_subcategories(db, sub_category_ids)
+            await self.category_repo.assert_subcategories_belong_to_parents(db, sub_category_ids, category_ids)
         all_cat_ids = category_ids + sub_category_ids
         await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product.id, all_cat_ids)
 
@@ -305,9 +325,7 @@ class ProductService:
         for product in products:
             out = ProductListSchema.model_validate(product, from_attributes=True)
             out.logo = self._logo_url(product.logo)
-            all_cats = categories_map[product.id]
-            out.category_ids = [c.id for c in all_cats if c.parent_id is None]
-            out.sub_categories = [c.name for c in all_cats if c.parent_id is not None]
+            out.categories = _build_category_refs(categories_map[product.id])
             if current_user:
                 out.bookmarked = product.id in user_bookmarks
             results.append(out)
@@ -354,6 +372,7 @@ class ProductService:
         payload = data.model_dump(exclude_unset=True)
         category_ids = payload.pop("category_ids", None)
         sub_category_ids = payload.pop("sub_category_ids", None)
+        other_subcategory_name = payload.pop("other_subcategory_name", None)
         links = payload.pop("links", None)
         backers = payload.pop("backers", None)
 
@@ -380,14 +399,26 @@ class ProductService:
             for name in backers:
                 await self.backer_repo.create(db, {"product_id": product_id, "name": name}, current_user_id=current_user.id)
 
-        if category_ids is not None or sub_category_ids is not None:
+        if category_ids is not None or sub_category_ids is not None or other_subcategory_name:
             existing_cats = await self.repo.get_categories_for_product(db, product_id)
             existing_parent_ids = [c.id for c in existing_cats if c.parent_id is None]
             existing_sub_ids = [c.id for c in existing_cats if c.parent_id is not None]
             new_parent_ids = category_ids if category_ids is not None else existing_parent_ids
             new_sub_ids = sub_category_ids if sub_category_ids is not None else existing_sub_ids
+
+            if other_subcategory_name:
+                if not new_parent_ids:
+                    raise ValidationError("A parent category is required when specifying a custom sub-category")
+                new_sub = await self.category_repo.create(
+                    db,
+                    {"name": other_subcategory_name, "parent_id": new_parent_ids[0], "status": VerificationStatus.PENDING.value},
+                    current_user_id=current_user.id,
+                )
+                new_sub_ids = [new_sub.id]
+
             if new_sub_ids:
                 await self.category_repo.assert_are_subcategories(db, new_sub_ids)
+                await self.category_repo.assert_subcategories_belong_to_parents(db, new_sub_ids, new_parent_ids)
             synced_ids = new_parent_ids + new_sub_ids
             await sync_categories(db, self.category_repo, ProductCategory.__table__, "product_id", product_id, synced_ids)
 
@@ -444,7 +475,7 @@ class ProductService:
             out = ProductSummarySchema.model_validate(product, from_attributes=True)
             out.vote_count = vote_counts[product.id]
             out.bookmark_count = bookmark_counts[product.id]
-            out.category_ids = [c.id for c in categories_map[product.id]]
+            out.categories = _build_category_refs(categories_map[product.id])
             results.append(out)
         return results
 
@@ -1026,7 +1057,7 @@ class ProductService:
         for product in products:
             out = ProductSimilarSchema.model_validate(product, from_attributes=True)
             out.logo = self._logo_url(product.logo)
-            out.categories = [c.name for c in categories_map[product.id] if c.parent_id is None]
+            out.categories = _build_category_refs(categories_map[product.id])
             results.append(out)
         return results
 
@@ -1050,11 +1081,7 @@ class ProductService:
 
         result = ProductOutSchema.model_validate(product, from_attributes=True)
         result.logo = self._logo_url(product.logo)
-        all_cats = ix.categories_map[product.id]
-        result.category_ids = [c.id for c in all_cats if c.parent_id is None]
-        result.sub_categories = [c.name for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.APPROVED.value]
-        pending_subs = [c for c in all_cats if c.parent_id is not None and c.status == VerificationStatus.PENDING.value]
-        result.pending_subcategory_name = pending_subs[0].name if pending_subs else None
+        result.categories = _build_category_refs(ix.categories_map[product.id])
         result.vote_count = ix.vote_counts[product.id]
         result.bookmark_count = ix.bookmark_counts[product.id]
         result.investor_interest_count = ix.investor_interest_counts[product.id]

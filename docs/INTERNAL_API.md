@@ -99,6 +99,9 @@ Allowed values for `linkType` (case-sensitive):
 | `"docs"` | Documentation site |
 | `"demo"` | Live demo |
 | `"discord"` | Discord server |
+| `"linkedin"` | LinkedIn company page |
+| `"youtube"` | YouTube channel or video |
+| `"instagram"` | Instagram profile |
 | `"other"` | Any other link |
 
 ##### Team member object schema (each item in `team`)
@@ -122,6 +125,9 @@ Team members are created with status `"pending"` and go through the same admin a
 | GitHub repository URL | `links` — one object with `linkType: "github"` | `{ "linkType": "github", "url": "https://github.com/org/repo" }` |
 | GitHub stars | Embed in `description` — there is no dedicated field | `"description": "... GitHub stars: 12 000+"` |
 | Twitter / X handle | `links` — one object with `linkType: "twitter"` | `{ "linkType": "twitter", "url": "https://twitter.com/handle" }` |
+| LinkedIn company page URL | `links` — one object with `linkType: "linkedin"` | `{ "linkType": "linkedin", "url": "https://linkedin.com/company/org" }` |
+| YouTube channel or video URL | `links` — one object with `linkType: "youtube"` | `{ "linkType": "youtube", "url": "https://youtube.com/@org" }` |
+| Instagram profile URL | `links` — one object with `linkType: "instagram"` | `{ "linkType": "instagram", "url": "https://instagram.com/org" }` |
 | VC / investor names | `backers` array of strings | `["Andreessen Horowitz", "Y Combinator"]` |
 | Funding stage | `stage` string | `"Seed"` |
 | Total funding raised | `funding` number (USD) | `5000000` |
@@ -144,9 +150,11 @@ Team members are created with status `"pending"` and go through the same admin a
   "categoryIds": [3],
   "subCategoryIds": [14],
   "links": [
-    { "linkType": "github",  "url": "https://github.com/google-deepmind/alphafold" },
-    { "linkType": "twitter", "url": "https://twitter.com/DeepMind" },
-    { "linkType": "docs",    "url": "https://alphafold.ebi.ac.uk/faq" }
+    { "linkType": "github",   "url": "https://github.com/google-deepmind/alphafold" },
+    { "linkType": "twitter",  "url": "https://twitter.com/DeepMind" },
+    { "linkType": "docs",     "url": "https://alphafold.ebi.ac.uk/faq" },
+    { "linkType": "linkedin", "url": "https://linkedin.com/company/deepmind" },
+    { "linkType": "youtube",  "url": "https://youtube.com/@GoogleDeepMind" }
   ],
   "team": [
     {
@@ -182,9 +190,7 @@ Team members are created with status `"pending"` and go through the same admin a
 | `voteCount` | integer | Always `0` on creation |
 | `bookmarkCount` | integer | Always `0` on creation |
 | `investorInterestCount` | integer | Always `0` on creation |
-| `categoryIds` | array of integers | Assigned parent-category IDs |
-| `subCategories` | array of strings | Assigned subcategory names |
-| `pendingSubcategoryName` | string or null | Free-text subcategory suggestion if supplied |
+| `categories` | array of objects | Assigned parent categories, each `{ "id": int, "name": string, "subcategories": [...] }`. Each subcategory is `{ "id": int, "name": string, "status": "approved" \| "pending" }` — a subcategory created via `otherSubcategoryName` appears here with `status: "pending"` until an admin approves it. |
 | `links` | array of link objects | Links as submitted |
 | `backers` | array of objects | Each: `{ "id": int, "productId": int, "name": string }` |
 | `createdById` | integer or null | System user ID |

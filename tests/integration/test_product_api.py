@@ -342,6 +342,196 @@ class TestProductAPI:
         assert response.status_code == 200
         assert response.json()["name"] == "Admin updated"
 
+    async def _create_two_parents_with_subcategories(self, db_session) -> dict[str, int]:
+        """Two parent categories, each with one subcategory, for parent/subcategory mismatch tests."""
+        parent_a = (
+            await db_session.execute(insert(Category).values(name="RBAC Parent A").returning(Category.id))
+        ).scalar_one()
+        parent_b = (
+            await db_session.execute(insert(Category).values(name="RBAC Parent B").returning(Category.id))
+        ).scalar_one()
+        sub_a = (
+            await db_session.execute(
+                insert(Category).values(name="RBAC Sub A", parent_id=parent_a).returning(Category.id)
+            )
+        ).scalar_one()
+        sub_b = (
+            await db_session.execute(
+                insert(Category).values(name="RBAC Sub B", parent_id=parent_b).returning(Category.id)
+            )
+        ).scalar_one()
+        await db_session.commit()
+        return {"parent_a": parent_a, "parent_b": parent_b, "sub_a": sub_a, "sub_b": sub_b}
+
+    async def test_admin_changing_parent_category_without_subcategory_rejects_mismatch(
+        self, client: ClientWithEmail, db_session
+    ):
+        cats = await self._create_two_parents_with_subcategories(db_session)
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            setup = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"categoryIds": [cats["parent_a"]], "subCategoryIds": [cats["sub_a"]]},
+            )
+            assert setup.status_code == 200
+
+            # Change parent only — the existing subcategory (child of parent_a) no longer belongs to parent_b.
+            response = await client.patch(
+                f"/api/v1/product/{product_id}", json={"categoryIds": [cats["parent_b"]]}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 400
+
+    async def test_admin_can_update_categories_with_matching_subcategory(
+        self, client: ClientWithEmail, db_session
+    ):
+        cats = await self._create_two_parents_with_subcategories(db_session)
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"categoryIds": [cats["parent_b"]], "subCategoryIds": [cats["sub_b"]]},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["categories"] == [
+            {
+                "id": cats["parent_b"],
+                "name": "RBAC Parent B",
+                "subcategories": [
+                    {"id": cats["sub_b"], "name": "RBAC Sub B", "status": "approved"}
+                ],
+            }
+        ]
+
+    async def test_admin_can_update_subcategory_alone_when_valid_for_current_parent(
+        self, client: ClientWithEmail, db_session
+    ):
+        cats = await self._create_two_parents_with_subcategories(db_session)
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            setup = await client.patch(
+                f"/api/v1/product/{product_id}", json={"categoryIds": [cats["parent_a"]]}
+            )
+            assert setup.status_code == 200
+
+            response = await client.patch(
+                f"/api/v1/product/{product_id}", json={"subCategoryIds": [cats["sub_a"]]}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        assert response.json()["categories"][0]["subcategories"] == [
+            {"id": cats["sub_a"], "name": "RBAC Sub A", "status": "approved"}
+        ]
+
+    async def test_create_product_rejects_mismatched_category_and_subcategory(
+        self, client: ClientWithEmail, db_session
+    ):
+        cats = await self._create_two_parents_with_subcategories(db_session)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_founder():
+            return build_mock_user(UserRole.FOUNDER)
+
+        app.dependency_overrides[get_current_user] = override_founder
+        try:
+            response = await client.post(
+                "/api/v1/product",
+                json={
+                    **PRODUCT_PAYLOAD,
+                    "name": "Mismatched Category Product",
+                    "categoryIds": [cats["parent_a"]],
+                    "subCategoryIds": [cats["sub_b"]],
+                },
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 400
+
+    async def test_admin_can_add_custom_subcategory_on_update(
+        self, client: ClientWithEmail, db_session
+    ):
+        cats = await self._create_two_parents_with_subcategories(db_session)
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            setup = await client.patch(
+                f"/api/v1/product/{product_id}", json={"categoryIds": [cats["parent_a"]]}
+            )
+            assert setup.status_code == 200
+
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"otherSubcategoryName": "Custom Update Sub"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 200
+        # New subcategories start PENDING — status is carried on the nested entry itself.
+        subcategories = response.json()["categories"][0]["subcategories"]
+        assert len(subcategories) == 1
+        assert subcategories[0]["name"] == "Custom Update Sub"
+        assert subcategories[0]["status"] == "pending"
+
+        created = (
+            await db_session.execute(
+                select(Category).where(Category.name == "Custom Update Sub")
+            )
+        ).scalar_one()
+        assert created.parent_id == cats["parent_a"]
+        assert created.status == "pending"
+
+    async def test_update_custom_subcategory_requires_a_parent_category(
+        self, client: ClientWithEmail
+    ):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}",
+                json={"otherSubcategoryName": "Orphan Sub"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 400
+
     async def test_update_product_not_found(self, client: ClientWithEmail):
         original = app.dependency_overrides[get_current_user]
 
