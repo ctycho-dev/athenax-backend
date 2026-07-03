@@ -25,6 +25,7 @@ class ProductCreateSchema(CamelModel):
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
     backers: list[str] = Field(default_factory=list)
+    grants: list[str] = Field(default_factory=list)
     links: list["ProductLinkCreateSchema"] = Field(default_factory=list)
     team: list["TeamMemberCreateSchema"] = Field(default_factory=list)
     category_ids: list[int] = Field(default_factory=list)
@@ -49,6 +50,7 @@ class ProductUpdateSchema(CamelModel):
     logo: str | None = Field(default=None, max_length=500)
     email: str | None = Field(default=None, max_length=200)
     backers: list[str] | None = None
+    grants: list[str] | None = None
     links: list["ProductLinkCreateSchema"] | None = None
     category_ids: list[int] | None = None
     sub_category_ids: list[int] | None = None
@@ -147,6 +149,7 @@ class ProductOutSchema(ProductBaseSchema):
     media: list["ProductMediaOutSchema"] = Field(default_factory=list)
     team: list["TeamMemberOutSchema"] = Field(default_factory=list)
     backers: list["ProductBackerOutSchema"] = Field(default_factory=list)
+    grants: list["ProductGrantOutSchema"] = Field(default_factory=list)
     voices: list["ProductVoiceOutSchema"] = Field(default_factory=list)
     bounties: list["BountyOutSchema"] = Field(default_factory=list)
 
@@ -312,6 +315,18 @@ class ProductBackerCreateSchema(CamelModel):
 
 
 class ProductBackerOutSchema(CamelModel):
+    id: int
+    product_id: int
+    name: str
+
+
+# --- Product Grants ---
+
+class ProductGrantCreateSchema(CamelModel):
+    name: str = Field(max_length=150)
+
+
+class ProductGrantOutSchema(CamelModel):
     id: int
     product_id: int
     name: str

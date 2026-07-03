@@ -227,6 +227,19 @@ class ProductBacker(Base, TimestampMixin, UserAuditMixin):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
 
 
+class ProductGrant(Base, TimestampMixin, UserAuditMixin):
+    __tablename__ = "product_grants"
+    __table_args__ = (
+        Index("ix_product_grants_product_id", "product_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+
+
 class ProductVoice(Base, TimestampMixin, UserAuditMixin):
     __tablename__ = "product_voices"
     __table_args__ = (
