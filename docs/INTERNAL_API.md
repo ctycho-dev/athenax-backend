@@ -102,6 +102,9 @@ Allowed values for `linkType` (case-sensitive):
 | `"linkedin"` | LinkedIn company page |
 | `"youtube"` | YouTube channel or video |
 | `"instagram"` | Instagram profile |
+| `"telegram"` | Telegram channel or group |
+| `"medium"` | Medium blog |
+| `"tiktok"` | TikTok profile |
 | `"other"` | Any other link |
 
 ##### Team member object schema (each item in `team`)
@@ -128,6 +131,9 @@ Team members are created with status `"pending"` and go through the same admin a
 | LinkedIn company page URL | `links` — one object with `linkType: "linkedin"` | `{ "linkType": "linkedin", "url": "https://linkedin.com/company/org" }` |
 | YouTube channel or video URL | `links` — one object with `linkType: "youtube"` | `{ "linkType": "youtube", "url": "https://youtube.com/@org" }` |
 | Instagram profile URL | `links` — one object with `linkType: "instagram"` | `{ "linkType": "instagram", "url": "https://instagram.com/org" }` |
+| Telegram channel or group URL | `links` — one object with `linkType: "telegram"` | `{ "linkType": "telegram", "url": "https://t.me/org" }` |
+| Medium blog URL | `links` — one object with `linkType: "medium"` | `{ "linkType": "medium", "url": "https://medium.com/@org" }` |
+| TikTok profile URL | `links` — one object with `linkType: "tiktok"` | `{ "linkType": "tiktok", "url": "https://tiktok.com/@org" }` |
 | VC / investor names | `backers` array of strings | `["Andreessen Horowitz", "Y Combinator"]` |
 | Funding stage | `stage` string | `"Seed"` |
 | Total funding raised | `funding` number (USD) | `5000000` |

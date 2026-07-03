@@ -1043,6 +1043,25 @@ class TestProductAPI:
         assert data["url"] == "https://github.com/test"
         assert data["productId"] == product_id
 
+    @pytest.mark.parametrize("bad_url", ["not found", "https://not found/", "ftp://example.com", ""])
+    async def test_create_link_rejects_invalid_url(self, client: ClientWithEmail, bad_url):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "github", "url": bad_url},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 422
+
     async def test_non_owner_cannot_create_link(self, client: ClientWithEmail):
         product_id = await self._create_product_as_founder(client, user_id=1)
         original = app.dependency_overrides[get_current_user]

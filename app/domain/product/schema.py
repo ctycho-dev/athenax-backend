@@ -1,9 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.common.schema import CamelModel
+from app.common.validators import validate_url
 from app.domain.paper.schema import PaperSummarySchema
 from app.enums.enums import (
     ProductStage, ProductStatus,
@@ -29,6 +30,11 @@ class ProductCreateSchema(CamelModel):
     category_ids: list[int] = Field(default_factory=list)
     sub_category_ids: list[int] = Field(default_factory=list)
     other_subcategory_name: str | None = Field(default=None, max_length=100)
+
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str | None) -> str | None:
+        return validate_url(v) if v is not None else None
 
 
 class ProductUpdateSchema(CamelModel):
@@ -211,10 +217,20 @@ class ProductLinkCreateSchema(CamelModel):
     url: str = Field(max_length=500)
     label: str | None = Field(default=None, max_length=100)
 
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str) -> str:
+        return validate_url(v)
+
 
 class ProductLinkUpdateSchema(CamelModel):
     url: str | None = Field(default=None, max_length=500)
     label: str | None = Field(default=None, max_length=100)
+
+    @field_validator("url")
+    @classmethod
+    def _check_url(cls, v: str | None) -> str | None:
+        return validate_url(v) if v is not None else None
 
 
 class ProductLinkOutSchema(CamelModel):
