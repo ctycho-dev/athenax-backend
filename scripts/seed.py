@@ -179,12 +179,21 @@ def _load_csv() -> list[dict]:
         return [row for row in csv.DictReader(fh) if row.get("name", "").strip()]
 
 
-def _load_xlsx(path: "Path | None" = None) -> list[dict]:
-    """Read an xlsx file, return rows as list[dict] keyed by header row. Drop blank-name rows."""
+def _load_xlsx(path: "Path | None" = None, sheet_name: str | None = None) -> list[dict]:
+    """Read an xlsx file, return rows as list[dict] keyed by header row. Drop blank-name rows.
+
+    sheet_name selects a specific tab; defaults to the workbook's active sheet.
+    """
     import openpyxl  # optional dep — only required when using xlsx workflow
     target = path or XLSX_PATH
     wb = openpyxl.load_workbook(target, read_only=True, data_only=True)
-    ws = wb.active
+    if sheet_name:
+        if sheet_name not in wb.sheetnames:
+            wb.close()
+            raise ValueError(f"sheet {sheet_name!r} not found — available: {', '.join(wb.sheetnames)}")
+        ws = wb[sheet_name]
+    else:
+        ws = wb.active
     all_rows = list(ws.iter_rows(values_only=True))
     wb.close()
     if not all_rows:

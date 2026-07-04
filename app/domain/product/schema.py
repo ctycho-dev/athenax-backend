@@ -15,7 +15,7 @@ from app.enums.enums import (
 class ProductCreateSchema(CamelModel):
     name: str = Field(max_length=150)
     url: str | None = Field(default=None, max_length=500)
-    short_desc: str | None = Field(default=None, max_length=150)
+    short_desc: str | None = Field(default=None, max_length=250)
     description: str | None = None
     stage: ProductStage | None = None
     funding: float | None = None
@@ -40,7 +40,7 @@ class ProductCreateSchema(CamelModel):
 
 class ProductUpdateSchema(CamelModel):
     name: str | None = Field(default=None, max_length=150)
-    short_desc: str | None = Field(default=None, max_length=150)
+    short_desc: str | None = Field(default=None, max_length=250)
     description: str | None = None
     stage: ProductStage | None = None
     funding: float | None = None

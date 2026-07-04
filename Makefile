@@ -25,8 +25,8 @@ help:
 	@echo "  make seed                   Seed the database with initial data"
 	@echo "  make seed:categories        Seed only parent categories and subcategories from Categories.csv"
 	@echo "  make seed:load              Seed 1000 products/200 articles/200 broadcasts for load testing"
-	@echo "  make validate               Validate Projects.xlsx against Data Specs rules"
-	@echo "  make upload-pending         Import Projects.xlsx as pending (awaiting admin approval)"
+	@echo "  make validate               Validate Projects.xlsx against Data Specs rules (ARGS='file.xlsx sheet_name' to override)"
+	@echo "  make upload-pending         Import Projects.xlsx as pending (ARGS='file.xlsx sheet_name' to override)"
 	@echo "  make load-test-ui           Start the locust web UI at http://localhost:8089 (HOST overridable)"
 	@echo "  make load-test              Headless capacity run: 200 users, 5 min, exports CSV+HTML (HOST overridable)"
 	@echo "  make load-test-smoke        Read-only smoke test: 50 users, 2 min (HOST overridable)"
@@ -128,11 +128,11 @@ seed\:load:
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/seed_load_data.py $(ARGS)
 
 validate:
-	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/validate_xlsx.py
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/validate_xlsx.py $(ARGS)
 
 upload-pending:
 	$(COMPOSE) up -d postgres redis
-	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/upload_pending.py
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/upload_pending.py $(ARGS)
 
 # Load test (locust) — override HOST and USERS on the command line, e.g.
 #   make load-test HOST=http://dev.example.com
