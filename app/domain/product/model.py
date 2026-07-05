@@ -132,7 +132,7 @@ class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     )
     funding: Mapped[float | None] = mapped_column(Float, nullable=True)
     founded: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    short_desc: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    short_desc: Mapped[str | None] = mapped_column(String(250), nullable=True)
     quality_badge: Mapped[str | None] = mapped_column(String(50), nullable=True)
     imported: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     email: Mapped[str | None] = mapped_column(String(200), nullable=True)

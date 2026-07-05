@@ -7,7 +7,7 @@ No stale products are deleted.
 Run validate_xlsx.py first to ensure the file is clean.
 
 Usage:
-    python scripts/upload_pending.py [path/to/file.xlsx]
+    python scripts/upload_pending.py [path/to/file.xlsx] [sheet_name]
 """
 
 import asyncio
@@ -73,13 +73,13 @@ async def _ensure_subcategories(
     log.info("  created %d new subcategories from xlsx", len(new_subs))
 
 
-async def upload_pending(path: Path) -> None:
+async def upload_pending(path: Path, sheet_name: str | None = None) -> None:
     if not path.exists():
         log.error("File not found: %s", path)
         sys.exit(1)
 
-    log.info("Reading %s…", path)
-    rows = _load_xlsx(path)
+    log.info("Reading %s%s…", path, f" [{sheet_name}]" if sheet_name else "")
+    rows = _load_xlsx(path, sheet_name)
     log.info("  %d data rows found\n", len(rows))
 
     db_manager.init_engine()
@@ -139,4 +139,5 @@ async def upload_pending(path: Path) -> None:
 
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else XLSX_PATH
-    asyncio.run(upload_pending(target))
+    sheet = sys.argv[2] if len(sys.argv) > 2 else None
+    asyncio.run(upload_pending(target, sheet))
