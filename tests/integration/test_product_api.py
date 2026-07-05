@@ -1043,6 +1043,25 @@ class TestProductAPI:
         assert data["url"] == "https://github.com/test"
         assert data["productId"] == product_id
 
+    @pytest.mark.parametrize("bad_url", ["not found", "https://not found/", "ftp://example.com", ""])
+    async def test_create_link_rejects_invalid_url(self, client: ClientWithEmail, bad_url):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/links",
+                json={"linkType": "github", "url": bad_url},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 422
+
     async def test_non_owner_cannot_create_link(self, client: ClientWithEmail):
         product_id = await self._create_product_as_founder(client, user_id=1)
         original = app.dependency_overrides[get_current_user]
@@ -1566,6 +1585,97 @@ class TestProductAPI:
 
             await client.delete(f"/api/v1/product/{product_id}/backers/{backer_id}")
             list_resp = await client.get(f"/api/v1/product/{product_id}/backers")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert len(list_resp.json()) == 1
+
+    # ------------------------------------------------------------------
+    # Grants
+    # ------------------------------------------------------------------
+
+    async def test_list_grants_is_public(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+        response = await client.get(f"/api/v1/product/{product_id}/grants")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_owner_can_create_grant(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/grants",
+                json={"name": "NSF SBIR"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 201
+        assert response.json()["name"] == "NSF SBIR"
+
+    async def test_non_owner_cannot_create_grant(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_other():
+            return build_mock_user(UserRole.FOUNDER, user_id=2)
+
+        app.dependency_overrides[get_current_user] = override_other
+        try:
+            response = await client.post(
+                f"/api/v1/product/{product_id}/grants",
+                json={"name": "Sneaky Grant"},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 400
+
+    async def test_owner_can_delete_grant(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/grants",
+                json={"name": "DARPA"},
+            )
+            grant_id = create_resp.json()["id"]
+            response = await client.delete(f"/api/v1/product/{product_id}/grants/{grant_id}")
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert response.status_code == 204
+
+    async def test_grants_list_after_create_and_delete(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, user_id=1)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_owner():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override_owner
+        try:
+            await client.post(f"/api/v1/product/{product_id}/grants", json={"name": "NIH"})
+            create_resp = await client.post(
+                f"/api/v1/product/{product_id}/grants", json={"name": "SBIR"}
+            )
+            grant_id = create_resp.json()["id"]
+            list_resp = await client.get(f"/api/v1/product/{product_id}/grants")
+            assert len(list_resp.json()) == 2
+
+            await client.delete(f"/api/v1/product/{product_id}/grants/{grant_id}")
+            list_resp = await client.get(f"/api/v1/product/{product_id}/grants")
         finally:
             app.dependency_overrides[get_current_user] = original
 

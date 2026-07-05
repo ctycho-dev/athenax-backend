@@ -2,7 +2,7 @@
 Validate Projects.xlsx against the Data Specs rules.
 
 Usage:
-    python scripts/validate_xlsx.py [path/to/file.xlsx]
+    python scripts/validate_xlsx.py [path/to/file.xlsx] [sheet_name]
 
 Exits 0 if clean, 1 if any errors are found.
 """
@@ -28,6 +28,19 @@ PLAIN_TEXT_COLUMNS = {"name", "short_desc", "description", "quality_badge", "cat
 
 # Minimum pipe-separated fields expected per semicolon entry
 PACKED_MIN_FIELDS = {"team": 1, "voices": 4, "bounties": 4}
+
+# Max length must match the DB column (VARCHAR) it's imported into
+MAX_LENGTH = {
+    "name": 150,
+    "short_desc": 250,
+    "quality_badge": 50,
+    "email": 200,
+    "logo": 500,
+    "category": 100,
+}
+
+# Same as MAX_LENGTH but applied per ";"-separated entry (e.g. multiple subcategories)
+MULTI_MAX_LENGTH = {"subcategory": 100}
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 YEAR_RE = re.compile(r"^\d{4}$")
@@ -65,6 +78,16 @@ def _check_row(row_num: int, name: str, row: dict) -> tuple[list[str], list[str]
         if col in URL_COLUMNS:
             if not val.startswith("https://"):
                 err(col, f"must start with https://, got {val!r}")
+
+        # Length limits (must match DB column size)
+        if col in MAX_LENGTH and len(val) > MAX_LENGTH[col]:
+            err(col, f"exceeds {MAX_LENGTH[col]} chars (got {len(val)})")
+
+        if col in MULTI_MAX_LENGTH:
+            limit = MULTI_MAX_LENGTH[col]
+            for entry in (e.strip() for e in val.split(";")):
+                if entry and len(entry) > limit:
+                    err(col, f"entry {entry[:40]!r}… exceeds {limit} chars (got {len(entry)})")
 
         # Field-specific rules
         if col == "funding" and val:
@@ -109,13 +132,20 @@ def _cell(v) -> str:
     return str(v).strip()
 
 
-def validate(path: Path) -> int:
+def validate(path: Path, sheet_name: str | None = None) -> int:
     if not path.exists():
         print(f"ERROR: file not found: {path}")
         return 1
 
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    ws = wb.active
+    if sheet_name:
+        if sheet_name not in wb.sheetnames:
+            wb.close()
+            print(f"ERROR: sheet {sheet_name!r} not found — available: {', '.join(wb.sheetnames)}")
+            return 1
+        ws = wb[sheet_name]
+    else:
+        ws = wb.active
     all_rows = list(ws.iter_rows(values_only=True))
     wb.close()
 
@@ -166,7 +196,8 @@ def validate(path: Path) -> int:
             seen_slugs[slug] = row_num
 
     # Report
-    print(f"\nValidated {data_rows} rows from {path.name}\n")
+    sheet_label = f"{path.name} [{ws.title}]"
+    print(f"\nValidated {data_rows} rows from {sheet_label}\n")
 
     if all_errors:
         print("--- ERRORS ---")
@@ -191,4 +222,5 @@ def validate(path: Path) -> int:
 
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else XLSX_PATH
-    sys.exit(validate(target))
+    sheet = sys.argv[2] if len(sys.argv) > 2 else None
+    sys.exit(validate(target, sheet))

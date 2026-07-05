@@ -132,7 +132,7 @@ class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     )
     funding: Mapped[float | None] = mapped_column(Float, nullable=True)
     founded: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    short_desc: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    short_desc: Mapped[str | None] = mapped_column(String(250), nullable=True)
     quality_badge: Mapped[str | None] = mapped_column(String(50), nullable=True)
     imported: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     email: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -218,6 +218,19 @@ class ProductBacker(Base, TimestampMixin, UserAuditMixin):
     __tablename__ = "product_backers"
     __table_args__ = (
         Index("ix_product_backers_product_id", "product_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+
+
+class ProductGrant(Base, TimestampMixin, UserAuditMixin):
+    __tablename__ = "product_grants"
+    __table_args__ = (
+        Index("ix_product_grants_product_id", "product_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

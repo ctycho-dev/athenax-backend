@@ -57,6 +57,7 @@ All field names are **camelCase** in JSON. Only `name` is required; every other 
 | `logo` | string or null | no | max 500 chars | Absolute URL to a logo image |
 | `email` | string or null | no | max 200 chars | Public contact email |
 | `backers` | array of strings | no | — | VC / investor names as plain strings (e.g. `["a16z", "Sequoia"]`) |
+| `grants` | array of strings | no | — | Grant names as plain strings (e.g. `["NSF SBIR", "DARPA"]`) |
 | `links` | array of link objects | no | — | Social and technical links; see link object schema below |
 | `team` | array of team member objects | no | — | Founding / core team members; see team member object schema below |
 | `categoryIds` | array of integers | no | — | Parent-category IDs; resolve first via `GET /internal/categories/by-name` |
@@ -102,6 +103,9 @@ Allowed values for `linkType` (case-sensitive):
 | `"linkedin"` | LinkedIn company page |
 | `"youtube"` | YouTube channel or video |
 | `"instagram"` | Instagram profile |
+| `"telegram"` | Telegram channel or group |
+| `"medium"` | Medium blog |
+| `"tiktok"` | TikTok profile |
 | `"other"` | Any other link |
 
 ##### Team member object schema (each item in `team`)
@@ -128,7 +132,11 @@ Team members are created with status `"pending"` and go through the same admin a
 | LinkedIn company page URL | `links` — one object with `linkType: "linkedin"` | `{ "linkType": "linkedin", "url": "https://linkedin.com/company/org" }` |
 | YouTube channel or video URL | `links` — one object with `linkType: "youtube"` | `{ "linkType": "youtube", "url": "https://youtube.com/@org" }` |
 | Instagram profile URL | `links` — one object with `linkType: "instagram"` | `{ "linkType": "instagram", "url": "https://instagram.com/org" }` |
+| Telegram channel or group URL | `links` — one object with `linkType: "telegram"` | `{ "linkType": "telegram", "url": "https://t.me/org" }` |
+| Medium blog URL | `links` — one object with `linkType: "medium"` | `{ "linkType": "medium", "url": "https://medium.com/@org" }` |
+| TikTok profile URL | `links` — one object with `linkType: "tiktok"` | `{ "linkType": "tiktok", "url": "https://tiktok.com/@org" }` |
 | VC / investor names | `backers` array of strings | `["Andreessen Horowitz", "Y Combinator"]` |
+| Grant / government funding names | `grants` array of strings | `["NSF SBIR", "DARPA"]` |
 | Funding stage | `stage` string | `"Seed"` |
 | Total funding raised | `funding` number (USD) | `5000000` |
 
@@ -146,6 +154,7 @@ Team members are created with status `"pending"` and go through the same admin a
   "logo": "https://cdn.example.com/logos/alphafold.png",
   "email": "contact@deepmind.com",
   "backers": ["Google DeepMind"],
+  "grants": ["NSF SBIR"],
   "imported": true,
   "categoryIds": [3],
   "subCategoryIds": [14],
@@ -193,6 +202,7 @@ Team members are created with status `"pending"` and go through the same admin a
 | `categories` | array of objects | Assigned parent categories, each `{ "id": int, "name": string, "subcategories": [...] }`. Each subcategory is `{ "id": int, "name": string, "status": "approved" \| "pending" }` — a subcategory created via `otherSubcategoryName` appears here with `status: "pending"` until an admin approves it. |
 | `links` | array of link objects | Links as submitted |
 | `backers` | array of objects | Each: `{ "id": int, "productId": int, "name": string }` |
+| `grants` | array of objects | Each: `{ "id": int, "productId": int, "name": string }` |
 | `createdById` | integer or null | System user ID |
 | `createdAt` | string (ISO 8601) | Creation timestamp |
 | `updatedAt` | string (ISO 8601) | Last-updated timestamp |
