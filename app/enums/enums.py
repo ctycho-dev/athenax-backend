@@ -38,6 +38,8 @@ class ProductStage(str, Enum):
     SEED              = "Seed"
     SERIES_A          = "Series A"
     SERIES_B          = "Series B"
+    SERIES_C          = "Series C"
+    SERIES_D          = "Series D"
     LAUNCHED           = "Launched"
     BETA               = "Beta"
     ACTIVE             = "Active"
