@@ -89,6 +89,7 @@ class ProductBaseSchema(CamelModel):
     categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    approved_at: datetime | None
     created_by_id: int | None
 
 
@@ -129,6 +130,7 @@ class ProductListSchema(CamelModel):
     categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    approved_at: datetime | None
     bookmarked: bool | None = None
 
 

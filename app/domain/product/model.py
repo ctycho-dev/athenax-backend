@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint, cast
+from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, DateTime, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint, cast
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -118,6 +119,8 @@ class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     __table_args__ = (
         # Dominant browse path: filter by status, order by created_at (btree scanned backward for DESC).
         Index("ix_products_status_created", "status", "created_at"),
+        # Approved-product browse path sorts by approved_at; mirrors the above for that query shape.
+        Index("ix_products_status_approved", "status", "approved_at"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -142,6 +145,7 @@ class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
         nullable=False,
         server_default="pending",
     )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ProductLink(Base, TimestampMixin, UserAuditMixin):

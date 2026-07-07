@@ -4,6 +4,7 @@ import asyncio
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -662,7 +663,10 @@ class ProductService:
             ]
             # Single bulk UPDATE instead of one query per pending sub-category.
             await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
-        product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
+        update_data: dict = {"status": data.status}
+        if data.status == ProductStatus.APPROVED:
+            update_data["approved_at"] = datetime.now(timezone.utc)
+        product = await self.repo.update(db, product_id, update_data, current_user_id=current_user.id)
         if data.status == ProductStatus.APPROVED:
             ghost_user_ids = await self.user_repo.get_ghost_user_ids(db)
             if ghost_user_ids:

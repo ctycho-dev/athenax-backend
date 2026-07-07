@@ -898,6 +898,74 @@ class TestProductAPI:
         public_response = await client.get(f"/api/v1/product/{product_id}")
         assert public_response.status_code == 200
 
+    async def test_approve_sets_approved_at_and_refreshes_on_reapproval(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client, approve=False)
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            approve_resp = await client.patch(
+                f"/api/v1/product/{product_id}/status", json={"status": "approved"}
+            )
+            assert approve_resp.status_code == 200
+            first_approved_at = approve_resp.json()["approvedAt"]
+            assert first_approved_at is not None
+
+            reject_resp = await client.patch(
+                f"/api/v1/product/{product_id}/status", json={"status": "rejected"}
+            )
+            assert reject_resp.status_code == 200
+
+            reapprove_resp = await client.patch(
+                f"/api/v1/product/{product_id}/status", json={"status": "approved"}
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        assert reapprove_resp.status_code == 200
+        second_approved_at = reapprove_resp.json()["approvedAt"]
+        assert second_approved_at is not None
+        assert second_approved_at > first_approved_at
+
+    async def test_default_and_oldest_sort_follow_approval_order_not_creation_order(
+        self, client: ClientWithEmail
+    ):
+        # created first, but will be approved second
+        older_created_id = await self._create_product_as_founder(client, approve=False)
+        # created second, but will be approved first
+        newer_created_id = await self._create_product_as_founder(client, approve=False)
+
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            first_approve = await client.patch(
+                f"/api/v1/product/{newer_created_id}/status", json={"status": "approved"}
+            )
+            assert first_approve.status_code == 200
+            second_approve = await client.patch(
+                f"/api/v1/product/{older_created_id}/status", json={"status": "approved"}
+            )
+            assert second_approve.status_code == 200
+        finally:
+            app.dependency_overrides[get_current_user] = original
+
+        default_resp = await client.get("/api/v1/product")
+        assert default_resp.status_code == 200
+        default_ids = [p["id"] for p in default_resp.json()["items"]]
+        assert default_ids.index(older_created_id) < default_ids.index(newer_created_id)
+
+        oldest_resp = await client.get("/api/v1/product?sort_by=oldest")
+        assert oldest_resp.status_code == 200
+        oldest_ids = [p["id"] for p in oldest_resp.json()["items"]]
+        assert oldest_ids.index(newer_created_id) < oldest_ids.index(older_created_id)
+
     async def test_admin_can_reject_product(self, client: ClientWithEmail):
         product_id = await self._create_product_as_founder(client, approve=False)
         original = app.dependency_overrides[get_current_user]
