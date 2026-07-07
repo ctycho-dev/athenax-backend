@@ -529,6 +529,17 @@ class ProductRepository(BaseRepository[Product]):
             .on_conflict_do_nothing()
         )
 
+    async def add_votes_bulk(
+        self, db: AsyncSession, product_id: int, user_ids: list[int]
+    ) -> None:
+        if not user_ids:
+            return
+        await db.execute(
+            pg_insert(ProductVote)
+            .values([{"product_id": product_id, "user_id": uid} for uid in user_ids])
+            .on_conflict_do_nothing()
+        )
+
     async def remove_vote(self, db: AsyncSession, product_id: int, user_id: int) -> None:
         await db.execute(
             delete(ProductVote).where(

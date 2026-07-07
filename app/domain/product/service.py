@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -662,6 +663,11 @@ class ProductService:
             # Single bulk UPDATE instead of one query per pending sub-category.
             await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
         product = await self.repo.update(db, product_id, {"status": data.status}, current_user_id=current_user.id)
+        if data.status == ProductStatus.APPROVED:
+            ghost_user_ids = await self.user_repo.get_ghost_user_ids(db)
+            if ghost_user_ids:
+                sample_size = min(random.randint(80, 100), len(ghost_user_ids))
+                await self.repo.add_votes_bulk(db, product_id, random.sample(ghost_user_ids, sample_size))
         await db.commit()
         await db.refresh(product)
         await asyncio.gather(

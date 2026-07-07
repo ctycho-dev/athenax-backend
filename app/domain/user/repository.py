@@ -94,6 +94,12 @@ class UserRepository(BaseRepository[User]):
         except Exception as e:  # pragma: no cover
             raise DatabaseError(f"Failed to fetch users by ids: {e}") from e
 
+    async def get_ghost_user_ids(self, db: AsyncSession) -> list[int]:
+        result = await db.execute(
+            select(User.id).where(User.email.like("ghost%@fake.mail"))
+        )
+        return list(result.scalars().all())
+
     async def get_by_token_hash(
         self, db: AsyncSession, token_hash: str, token_type: TokenType
     ) -> User | None:
