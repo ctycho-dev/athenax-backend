@@ -89,6 +89,7 @@ class ProductBaseSchema(CamelModel):
     categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    approved_at: datetime | None
     created_by_id: int | None
 
 
@@ -129,6 +130,7 @@ class ProductListSchema(CamelModel):
     categories: list[CategoryRefSchema] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    approved_at: datetime | None
     bookmarked: bool | None = None
 
 
@@ -336,17 +338,15 @@ class ProductGrantOutSchema(CamelModel):
 
 class ProductVoiceCreateSchema(CamelModel):
     quote: str
-    author_handle: str = Field(max_length=100)
+    source_url: str = Field(max_length=500)
     author_name: str | None = Field(default=None, max_length=150)
-    source_url: str | None = Field(default=None, max_length=500)
     sort_order: int = 0
 
 
 class ProductVoiceUpdateSchema(CamelModel):
     quote: str | None = None
-    author_handle: str | None = Field(default=None, max_length=100)
-    author_name: str | None = Field(default=None, max_length=150)
     source_url: str | None = Field(default=None, max_length=500)
+    author_name: str | None = Field(default=None, max_length=150)
     sort_order: int | None = None
 
 
@@ -354,9 +354,8 @@ class ProductVoiceOutSchema(CamelModel):
     id: int
     product_id: int
     quote: str
-    author_handle: str
+    source_url: str
     author_name: str | None
-    source_url: str | None
     sort_order: int
 
 

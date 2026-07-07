@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint, cast
+from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, DateTime, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint, cast
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -118,6 +119,8 @@ class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
     __table_args__ = (
         # Dominant browse path: filter by status, order by created_at (btree scanned backward for DESC).
         Index("ix_products_status_created", "status", "created_at"),
+        # Approved-product browse path sorts by approved_at; mirrors the above for that query shape.
+        Index("ix_products_status_approved", "status", "approved_at"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -142,6 +145,7 @@ class Product(Base, TimestampMixin, UserAuditMixin, SoftDeleteMixin):
         nullable=False,
         server_default="pending",
     )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ProductLink(Base, TimestampMixin, UserAuditMixin):
@@ -252,9 +256,8 @@ class ProductVoice(Base, TimestampMixin, UserAuditMixin):
         Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
     quote: Mapped[str] = mapped_column(Text, nullable=False)
-    author_handle: Mapped[str] = mapped_column(String(100), nullable=False)
     author_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source_url: Mapped[str] = mapped_column(String(500), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 

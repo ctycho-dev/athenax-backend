@@ -334,12 +334,15 @@ class ProductRepository(BaseRepository[Product]):
 
         q = q.where(Product.deleted_at.is_(None))
 
+        # Products launch (become publicly visible) when approved, not when submitted —
+        # sort by that recency, falling back to created_at for never-approved rows.
+        approved_or_created = func.coalesce(Product.approved_at, Product.created_at)
         if vote_subq is not None:
-            q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), Product.created_at.desc())
+            q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), approved_or_created.desc())
         elif sort_by == ProductSortBy.OLDEST:
-            q = q.order_by(Product.created_at.asc())
+            q = q.order_by(approved_or_created.asc())
         else:
-            q = q.order_by(Product.created_at.desc())
+            q = q.order_by(approved_or_created.desc())
 
         return q, vote_subq
 
@@ -364,6 +367,7 @@ class ProductRepository(BaseRepository[Product]):
                 Product.slug, Product.name, Product.short_desc, Product.stage,
                 Product.funding, Product.founded, Product.quality_badge,
                 Product.logo, Product.status, Product.created_at, Product.updated_at,
+                Product.approved_at,
             )
         ).limit(limit).offset(offset)
         result = await db.execute(q)
@@ -435,6 +439,7 @@ class ProductRepository(BaseRepository[Product]):
     async def get_product_ids_by_category_ids(
         self, db: AsyncSession, category_ids: list[int], exclude_id: int, limit: int
     ) -> list[int]:
+        approved_or_created = func.coalesce(Product.approved_at, Product.created_at)
         result = await db.execute(
             select(ProductCategory.product_id)
             .join(Product, Product.id == ProductCategory.product_id)
@@ -444,8 +449,8 @@ class ProductRepository(BaseRepository[Product]):
                 Product.status == ProductStatus.APPROVED,
                 Product.deleted_at.is_(None),
             )
-            .group_by(ProductCategory.product_id, Product.created_at, Product.id)
-            .order_by(Product.created_at.desc(), Product.id.desc())
+            .group_by(ProductCategory.product_id, approved_or_created, Product.id)
+            .order_by(approved_or_created.desc(), Product.id.desc())
             .limit(limit)
         )
         return [row.product_id for row in result]
@@ -526,6 +531,17 @@ class ProductRepository(BaseRepository[Product]):
         await db.execute(
             pg_insert(ProductVote)
             .values(product_id=product_id, user_id=user_id)
+            .on_conflict_do_nothing()
+        )
+
+    async def add_votes_bulk(
+        self, db: AsyncSession, product_id: int, user_ids: list[int]
+    ) -> None:
+        if not user_ids:
+            return
+        await db.execute(
+            pg_insert(ProductVote)
+            .values([{"product_id": product_id, "user_id": uid} for uid in user_ids])
             .on_conflict_do_nothing()
         )
 
