@@ -252,9 +252,8 @@ class ProductVoice(Base, TimestampMixin, UserAuditMixin):
         Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
     quote: Mapped[str] = mapped_column(Text, nullable=False)
-    author_handle: Mapped[str] = mapped_column(String(100), nullable=False)
     author_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source_url: Mapped[str] = mapped_column(String(500), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 

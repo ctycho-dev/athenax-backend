@@ -65,7 +65,7 @@ class AdminUser(HttpUser):
             f"/api/v1/product/{pid}/voices",
             json={
                 "quote": f"Load test voice {_rand()}",
-                "authorHandle": f"@tester_{_rand(4)}",
+                "sourceUrl": f"https://x.com/tester_{_rand(4)}",
                 "sortOrder": 0,
             },
             catch_response=True,

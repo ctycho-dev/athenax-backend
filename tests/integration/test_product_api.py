@@ -1702,7 +1702,7 @@ class TestProductAPI:
         try:
             response = await client.post(
                 f"/api/v1/product/{product_id}/voices",
-                json={"quote": "Amazing product!", "authorHandle": "@user123"},
+                json={"quote": "Amazing product!", "sourceUrl": "https://x.com/user123"},
             )
         finally:
             app.dependency_overrides[get_current_user] = original
@@ -1710,7 +1710,7 @@ class TestProductAPI:
         assert response.status_code == 201
         data = response.json()
         assert data["quote"] == "Amazing product!"
-        assert data["authorHandle"] == "@user123"
+        assert data["sourceUrl"] == "https://x.com/user123"
 
     async def test_non_admin_cannot_create_voice(self, client: ClientWithEmail):
         product_id = await self._create_product_as_founder(client, user_id=1)
@@ -1723,7 +1723,7 @@ class TestProductAPI:
         try:
             response = await client.post(
                 f"/api/v1/product/{product_id}/voices",
-                json={"quote": "Sneaky testimonial", "authorHandle": "@sneaky"},
+                json={"quote": "Sneaky testimonial", "sourceUrl": "https://x.com/sneaky"},
             )
         finally:
             app.dependency_overrides[get_current_user] = original
@@ -1741,7 +1741,7 @@ class TestProductAPI:
         try:
             create_resp = await client.post(
                 f"/api/v1/product/{product_id}/voices",
-                json={"quote": "Old quote", "authorHandle": "@author"},
+                json={"quote": "Old quote", "sourceUrl": "https://x.com/author"},
             )
             voice_id = create_resp.json()["id"]
             response = await client.patch(
@@ -1765,7 +1765,7 @@ class TestProductAPI:
         try:
             create_resp = await client.post(
                 f"/api/v1/product/{product_id}/voices",
-                json={"quote": "Delete me", "authorHandle": "@gone"},
+                json={"quote": "Delete me", "sourceUrl": "https://x.com/gone"},
             )
             voice_id = create_resp.json()["id"]
             response = await client.delete(f"/api/v1/product/{product_id}/voices/{voice_id}")
