@@ -162,8 +162,6 @@ class ProductStatusUpdateSchema(CamelModel):
 
 
 class ProductSimilarUpdateSchema(CamelModel):
-    # Capped to match the default /similar display limit, so a single fetch at that
-    # limit always captures the full curated set (curated entries occupy the front).
     similar_product_ids: list[int] = Field(default_factory=list, max_length=3)
 
 
