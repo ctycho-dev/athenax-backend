@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, insert, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
@@ -12,13 +12,14 @@ from app.domain.paper.model import Paper
 from app.domain.university.model import University
 from app.domain.user.model import ResearcherProfile, User
 from app.enums.enums import PaperStatus, ProductDateFilter, ProductSortBy, ProductStatus
-from app.exceptions.exceptions import NotFoundError
+from app.exceptions.exceptions import NotFoundError, ValidationError
 from app.domain.product.model import (
     Product,
     ProductBookmark,
     ProductCategory,
     ProductComment,
     ProductInvestorInterest,
+    ProductSimilar,
     ProductVote,
     ProductLink,
     ProductMedia,
@@ -437,7 +438,7 @@ class ProductRepository(BaseRepository[Product]):
         return (await self.get_categories_for_products(db, [product_id]))[product_id]
 
     async def get_product_ids_by_category_ids(
-        self, db: AsyncSession, category_ids: list[int], exclude_id: int, limit: int
+        self, db: AsyncSession, category_ids: list[int], exclude_ids: list[int], limit: int
     ) -> list[int]:
         approved_or_created = func.coalesce(Product.approved_at, Product.created_at)
         result = await db.execute(
@@ -445,7 +446,7 @@ class ProductRepository(BaseRepository[Product]):
             .join(Product, Product.id == ProductCategory.product_id)
             .where(
                 ProductCategory.category_id.in_(category_ids),
-                ProductCategory.product_id != exclude_id,
+                ProductCategory.product_id.notin_(exclude_ids),
                 Product.status == ProductStatus.APPROVED,
                 Product.deleted_at.is_(None),
             )
@@ -454,6 +455,49 @@ class ProductRepository(BaseRepository[Product]):
             .limit(limit)
         )
         return [row.product_id for row in result]
+
+    # -------------------------
+    # Similar products (admin-curated, symmetric)
+    # -------------------------
+    async def get_curated_product_ids(self, db: AsyncSession, product_id: int) -> list[int]:
+        """Both directions of the symmetric relation, oldest-curated first."""
+        result = await db.execute(
+            select(ProductSimilar.product_id, ProductSimilar.similar_product_id)
+            .where(or_(ProductSimilar.product_id == product_id, ProductSimilar.similar_product_id == product_id))
+            .order_by(ProductSimilar.created_at)
+        )
+        return [
+            row.similar_product_id if row.product_id == product_id else row.product_id
+            for row in result
+        ]
+
+    async def assert_similar_ids_valid(self, db: AsyncSession, product_id: int, similar_ids: list[int]) -> None:
+        if product_id in similar_ids:
+            raise ValidationError("A product cannot be marked similar to itself")
+        if not similar_ids:
+            return
+        existing = await self.get_by_ids(db, similar_ids)
+        if len(existing) != len(set(similar_ids)):
+            raise NotFoundError("One or more similar products not found")
+
+    async def sync_similar_products(self, db: AsyncSession, product_id: int, similar_ids: list[int]) -> None:
+        """Replace product_id's full curated set. Each pair is normalized to canonical (min, max) order."""
+        existing = set(await self.get_curated_product_ids(db, product_id))
+        new_ids = set(similar_ids)
+        to_add = new_ids - existing
+        to_remove = existing - new_ids
+
+        for rid in to_remove:
+            lo, hi = min(product_id, rid), max(product_id, rid)
+            await db.execute(
+                delete(ProductSimilar).where(
+                    ProductSimilar.product_id == lo, ProductSimilar.similar_product_id == hi
+                )
+            )
+        for rid in to_add:
+            lo, hi = min(product_id, rid), max(product_id, rid)
+            await db.execute(insert(ProductSimilar).values(product_id=lo, similar_product_id=hi))
+        await db.flush()
 
     async def get_papers_for_product(self, db: AsyncSession, product_id: int) -> list[Paper]:
         result = await db.execute(

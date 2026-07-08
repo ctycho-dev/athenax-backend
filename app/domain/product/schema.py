@@ -112,6 +112,7 @@ class ProductSimilarSchema(CamelModel):
     logo: str | None
     stage: ProductStage | None
     categories: list[CategoryRefSchema] = Field(default_factory=list)
+    curated: bool = False
 
 
 class ProductListSchema(CamelModel):
@@ -158,6 +159,12 @@ class ProductOutSchema(ProductBaseSchema):
 
 class ProductStatusUpdateSchema(CamelModel):
     status: ProductStatus
+
+
+class ProductSimilarUpdateSchema(CamelModel):
+    # Capped to match the default /similar display limit, so a single fetch at that
+    # limit always captures the full curated set (curated entries occupy the front).
+    similar_product_ids: list[int] = Field(default_factory=list, max_length=3)
 
 
 class VoteSchema(CamelModel):
