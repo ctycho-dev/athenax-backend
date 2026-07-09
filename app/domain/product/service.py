@@ -31,6 +31,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductReleaseStatsSchema,
+    ProductSimilarUpdateSchema,
     ProductSimilarSchema,
     ProductStatusUpdateSchema,
     ProductSummarySchema,
@@ -1093,34 +1094,61 @@ class ProductService:
         await db.commit()
 
     async def list_similar(
-        self, db: AsyncSession, product_id: int, limit: int = 5
+        self, db: AsyncSession, product_id: int, limit: int = 3
     ) -> list[ProductSimilarSchema]:
         await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
 
-        all_cats = await self.repo.get_categories_for_product(db, product_id)
-        sub_ids = [c.id for c in all_cats if c.parent_id is not None]
-        parent_ids = [c.id for c in all_cats if c.parent_id is None]
+        # Admin-curated relations always occupy the front of the list; category-based
+        # fallback only ever fills the remaining slots, never reorders or displaces them.
+        curated_ids = (await self.repo.get_curated_product_ids(db, product_id))[:limit]
+        similar_ids = list(curated_ids)
 
-        similar_ids: list[int] = []
-        if sub_ids:
-            similar_ids = await self.repo.get_product_ids_by_category_ids(db, sub_ids, product_id, limit)
-        if not similar_ids and parent_ids:
-            similar_ids = await self.repo.get_product_ids_by_category_ids(db, parent_ids, product_id, limit)
+        if len(similar_ids) < limit:
+            remaining = limit - len(similar_ids)
+            exclude_ids = similar_ids + [product_id]
+            all_cats = await self.repo.get_categories_for_product(db, product_id)
+            sub_ids = [c.id for c in all_cats if c.parent_id is not None]
+            parent_ids = [c.id for c in all_cats if c.parent_id is None]
+
+            fallback_ids: list[int] = []
+            if sub_ids:
+                fallback_ids = await self.repo.get_product_ids_by_category_ids(db, sub_ids, exclude_ids, remaining)
+            if not fallback_ids and parent_ids:
+                fallback_ids = await self.repo.get_product_ids_by_category_ids(db, parent_ids, exclude_ids, remaining)
+            similar_ids += fallback_ids
+
         if not similar_ids:
             return []
 
+        curated_set = set(curated_ids)
         products, categories_map = await asyncio.gather(
             self.repo.get_by_ids(db, similar_ids),
             self.repo.get_categories_for_products(db, similar_ids),
         )
-
+        # get_by_ids already preserves the requested order, so curated entries stay first.
         results = []
         for product in products:
             out = ProductSimilarSchema.model_validate(product, from_attributes=True)
             out.logo = self._logo_url(product.logo)
             out.categories = _build_category_refs(categories_map[product.id])
+            out.curated = product.id in curated_set
             results.append(out)
         return results
+
+    async def update_similar(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        data: ProductSimilarUpdateSchema,
+        current_user: UserOutSchema,
+    ) -> ProductOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_similar_ids_valid(db, product_id, data.similar_product_ids)
+        await self.repo.sync_similar_products(db, product_id, data.similar_product_ids)
+        await db.commit()
+        await db.refresh(product)
+        await self._invalidate_detail_cache(product.slug)
+        return await self._to_schema(db, product)
 
     async def _to_schema(
         self, db: AsyncSession, product, current_user: UserOutSchema | None = None

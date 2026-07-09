@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, DateTime, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, Index, UniqueConstraint, cast
+from sqlalchemy import String, Integer, Float, Numeric, Text, Boolean, DateTime, ForeignKey, Enum as SQLEnum, PrimaryKeyConstraint, CheckConstraint, Index, UniqueConstraint, cast
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,6 +47,22 @@ class ProductCategory(Base, TimestampMixin):
     )
     category_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False
+    )
+
+
+class ProductSimilar(Base, TimestampMixin, UserAuditMixin):
+    __tablename__ = "product_similar"
+    __table_args__ = (
+        PrimaryKeyConstraint("product_id", "similar_product_id"),
+        # Canonical (smaller id first) so each pair is stored exactly once for this symmetric relation.
+        CheckConstraint("product_id < similar_product_id", name="ck_product_similar_ordering"),
+    )
+
+    product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    similar_product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
     )
 
 

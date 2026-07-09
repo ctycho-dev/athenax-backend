@@ -2114,3 +2114,94 @@ class TestProductAPI:
         assert data["name"] == "Renamed Product"
         link_types = [l["linkType"] for l in data["links"]]
         assert "github" in link_types
+
+    # ------------------------------------------------------------------
+    # Related products (admin-curated, symmetric)
+    # ------------------------------------------------------------------
+
+    async def _set_related(self, client: ClientWithEmail, product_id: int, related_ids: list[int]):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/similar",
+                json={"similarProductIds": related_ids},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+        return response
+
+    async def test_admin_curates_related_products_shows_symmetrically(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+
+        response = await self._set_related(client, product_a, [product_b])
+        assert response.status_code == 200
+
+        similar_a = await client.get(f"/api/v1/product/{product_a}/similar")
+        similar_b = await client.get(f"/api/v1/product/{product_b}/similar")
+
+        assert product_b in [p["id"] for p in similar_a.json()]
+        assert product_a in [p["id"] for p in similar_b.json()]
+
+    async def test_related_products_curated_entries_come_before_fallback(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+        # Products created via the same helper share no categories, so with nothing curated
+        # there is no category-based fallback to fill the list either.
+        response = await self._set_related(client, product_a, [product_b])
+        assert response.status_code == 200
+
+        similar_a = await client.get(f"/api/v1/product/{product_a}/similar")
+        ids = [p["id"] for p in similar_a.json()]
+        assert ids[0] == product_b
+
+    async def test_related_products_rejects_more_than_three(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        others = [await self._create_product_as_founder(client) for _ in range(4)]
+
+        response = await self._set_related(client, product_a, others)
+        assert response.status_code == 422
+
+    async def test_related_products_rejects_self_reference(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+
+        response = await self._set_related(client, product_a, [product_a])
+        assert response.status_code == 400
+
+    async def test_related_products_rejects_unknown_id(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+
+        response = await self._set_related(client, product_a, [999999])
+        assert response.status_code == 404
+
+    async def test_non_admin_cannot_set_related_products(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+
+        response = await client.patch(
+            f"/api/v1/product/{product_a}/similar",
+            json={"similarProductIds": [product_b]},
+        )
+        assert response.status_code == 403
+
+    async def test_similar_products_empty_when_nothing_curated_or_categorized(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+
+        response = await client.get(f"/api/v1/product/{product_id}/similar")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_similar_products_flags_curated_entries(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+        await self._set_related(client, product_a, [product_b])
+
+        response = await client.get(f"/api/v1/product/{product_a}/similar")
+        assert response.status_code == 200
+        by_id = {p["id"]: p["curated"] for p in response.json()}
+        assert by_id[product_b] is True
