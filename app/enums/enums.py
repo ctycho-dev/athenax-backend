@@ -93,7 +93,6 @@ class ProductLinkType(str, Enum):
     TELEGRAM  = "telegram"
     MEDIUM    = "medium"
     TIKTOK    = "tiktok"
-    FACEBOOK  = "facebook"
     OTHER     = "other"
 
 
