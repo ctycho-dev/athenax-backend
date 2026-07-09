@@ -23,6 +23,7 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductReleaseStatsSchema,
+    ProductSimilarUpdateSchema,
     ProductSimilarSchema,
     ProductStatusUpdateSchema,
     ProductSummarySchema,
@@ -222,7 +223,7 @@ async def get_product(
 async def list_similar_products(
     request: Request,
     product_id: int,
-    limit: int = 5,
+    limit: int = 3,
     db: AsyncSession = Depends(get_db),
     service: ProductService = Depends(get_product_service),
 ):
@@ -265,6 +266,19 @@ async def update_product_status(
     service: ProductService = Depends(get_product_service),
 ):
     return await service.update_status(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/similar", response_model=ProductOutSchema)
+@limiter.limit("30/minute")
+async def update_product_similar(
+    request: Request,
+    product_id: int,
+    payload: ProductSimilarUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_similar(db, product_id=product_id, data=payload, current_user=current_user)
 
 
 @router.put("/{product_id}/vote", response_model=ToggleOutSchema)

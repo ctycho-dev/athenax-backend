@@ -9,7 +9,7 @@ from app.core.config import settings
 
 from app.domain.user.model import User, InvestorProfile, ResearcherProfile, SponsorProfile, UserCategory
 from app.domain.product.model import (
-    Product, ProductCategory, ProductVote, ProductBookmark,
+    Product, ProductCategory, ProductSimilar, ProductVote, ProductBookmark,
     ProductInvestorInterest, ProductComment,
     ProductLink, ProductMedia, ProductTeamMember,
     ProductBacker, ProductGrant, ProductVoice, Bounty,
