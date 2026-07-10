@@ -31,6 +31,8 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductReleaseStatsSchema,
+    ProductRelatedUpdateSchema,
+    ProductRelatedSchema,
     ProductSimilarUpdateSchema,
     ProductSimilarSchema,
     ProductStatusUpdateSchema,
@@ -1145,6 +1147,37 @@ class ProductService:
         product = await self.repo.get_by_id(db, product_id)
         await self.repo.assert_similar_ids_valid(db, product_id, data.similar_product_ids)
         await self.repo.sync_similar_products(db, product_id, data.similar_product_ids)
+        await db.commit()
+        await db.refresh(product)
+        await self._invalidate_detail_cache(product.slug)
+        return await self._to_schema(db, product)
+
+    async def list_related(
+        self, db: AsyncSession, product_id: int, limit: int = 3
+    ) -> list[ProductRelatedSchema]:
+        await self.repo.get_by_id_with_status_check(db, product_id, required_status=ProductStatus.APPROVED)
+        related_ids = (await self.repo.get_curated_related_ids(db, product_id))[:limit]
+        if not related_ids:
+            return []
+
+        products = await self.repo.get_by_ids(db, related_ids)
+        results = []
+        for product in products:
+            out = ProductRelatedSchema.model_validate(product, from_attributes=True)
+            out.logo = self._logo_url(product.logo)
+            results.append(out)
+        return results
+
+    async def update_related(
+        self,
+        db: AsyncSession,
+        product_id: int,
+        data: ProductRelatedUpdateSchema,
+        current_user: UserOutSchema,
+    ) -> ProductOutSchema:
+        product = await self.repo.get_by_id(db, product_id)
+        await self.repo.assert_related_ids_valid(db, product_id, data.related_product_ids)
+        await self.repo.sync_related_products(db, product_id, data.related_product_ids)
         await db.commit()
         await db.refresh(product)
         await self._invalidate_detail_cache(product.slug)

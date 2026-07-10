@@ -66,6 +66,22 @@ class ProductSimilar(Base, TimestampMixin, UserAuditMixin):
     )
 
 
+class ProductRelated(Base, TimestampMixin, UserAuditMixin):
+    __tablename__ = "product_related"
+    __table_args__ = (
+        PrimaryKeyConstraint("product_id", "related_product_id"),
+        # Canonical (smaller id first) so each pair is stored exactly once for this symmetric relation.
+        CheckConstraint("product_id < related_product_id", name="ck_product_related_ordering"),
+    )
+
+    product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    related_product_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+
+
 class ProductVote(Base, TimestampMixin):
     __tablename__ = "product_votes"
     __table_args__ = (
