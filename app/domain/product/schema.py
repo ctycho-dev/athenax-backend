@@ -115,9 +115,15 @@ class ProductSimilarSchema(CamelModel):
     curated: bool = False
 
 
+class ProductRelatedSchema(CamelModel):
+    id: int
+    slug: str
+    name: str
+    logo: str | None
+
+
 class ProductListSchema(CamelModel):
     """Browse/list summary — omits the `description` body, counts, and internal fields."""
-
     id: int
     slug: str
     name: str
@@ -163,6 +169,10 @@ class ProductStatusUpdateSchema(CamelModel):
 
 class ProductSimilarUpdateSchema(CamelModel):
     similar_product_ids: list[int] = Field(default_factory=list, max_length=3)
+
+
+class ProductRelatedUpdateSchema(CamelModel):
+    related_product_ids: list[int] = Field(default_factory=list, max_length=3)
 
 
 class VoteSchema(CamelModel):
