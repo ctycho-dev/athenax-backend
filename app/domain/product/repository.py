@@ -19,6 +19,7 @@ from app.domain.product.model import (
     ProductCategory,
     ProductComment,
     ProductInvestorInterest,
+    ProductRelated,
     ProductSimilar,
     ProductVote,
     ProductLink,
@@ -497,6 +498,49 @@ class ProductRepository(BaseRepository[Product]):
         for rid in to_add:
             lo, hi = min(product_id, rid), max(product_id, rid)
             await db.execute(insert(ProductSimilar).values(product_id=lo, similar_product_id=hi))
+        await db.flush()
+
+    # -------------------------
+    # Related products (admin-curated, symmetric)
+    # -------------------------
+    async def get_curated_related_ids(self, db: AsyncSession, product_id: int) -> list[int]:
+        """Both directions of the symmetric relation, oldest-curated first."""
+        result = await db.execute(
+            select(ProductRelated.product_id, ProductRelated.related_product_id)
+            .where(or_(ProductRelated.product_id == product_id, ProductRelated.related_product_id == product_id))
+            .order_by(ProductRelated.created_at)
+        )
+        return [
+            row.related_product_id if row.product_id == product_id else row.product_id
+            for row in result
+        ]
+
+    async def assert_related_ids_valid(self, db: AsyncSession, product_id: int, related_ids: list[int]) -> None:
+        if product_id in related_ids:
+            raise ValidationError("A product cannot be marked related to itself")
+        if not related_ids:
+            return
+        existing = await self.get_by_ids(db, related_ids)
+        if len(existing) != len(set(related_ids)):
+            raise NotFoundError("One or more related products not found")
+
+    async def sync_related_products(self, db: AsyncSession, product_id: int, related_ids: list[int]) -> None:
+        """Replace product_id's full curated set. Each pair is normalized to canonical (min, max) order."""
+        existing = set(await self.get_curated_related_ids(db, product_id))
+        new_ids = set(related_ids)
+        to_add = new_ids - existing
+        to_remove = existing - new_ids
+
+        for rid in to_remove:
+            lo, hi = min(product_id, rid), max(product_id, rid)
+            await db.execute(
+                delete(ProductRelated).where(
+                    ProductRelated.product_id == lo, ProductRelated.related_product_id == hi
+                )
+            )
+        for rid in to_add:
+            lo, hi = min(product_id, rid), max(product_id, rid)
+            await db.execute(insert(ProductRelated).values(product_id=lo, related_product_id=hi))
         await db.flush()
 
     async def get_papers_for_product(self, db: AsyncSession, product_id: int) -> list[Paper]:

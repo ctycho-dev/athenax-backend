@@ -2205,3 +2205,108 @@ class TestProductAPI:
         assert response.status_code == 200
         by_id = {p["id"]: p["curated"] for p in response.json()}
         assert by_id[product_b] is True
+
+    # ------------------------------------------------------------------
+    # Related products v2 (admin-curated, symmetric, separate table)
+    # ------------------------------------------------------------------
+
+    async def _set_related_v2(self, client: ClientWithEmail, product_id: int, related_ids: list[int]):
+        original = app.dependency_overrides[get_current_user]
+
+        async def override_admin():
+            return build_mock_user(UserRole.ADMIN, user_id=99)
+
+        app.dependency_overrides[get_current_user] = override_admin
+        try:
+            response = await client.patch(
+                f"/api/v1/product/{product_id}/related",
+                json={"relatedProductIds": related_ids},
+            )
+        finally:
+            app.dependency_overrides[get_current_user] = original
+        return response
+
+    async def test_admin_curates_related_v2_products_shows_symmetrically(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+
+        response = await self._set_related_v2(client, product_a, [product_b])
+        assert response.status_code == 200
+
+        related_a = await client.get(f"/api/v1/product/{product_a}/related")
+        related_b = await client.get(f"/api/v1/product/{product_b}/related")
+
+        assert product_b in [p["id"] for p in related_a.json()]
+        assert product_a in [p["id"] for p in related_b.json()]
+
+    async def test_related_v2_products_respects_curated_order(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+        product_c = await self._create_product_as_founder(client)
+        await self._set_related_v2(client, product_a, [product_b])
+        response = await self._set_related_v2(client, product_a, [product_b, product_c])
+        assert response.status_code == 200
+
+        related_a = await client.get(f"/api/v1/product/{product_a}/related")
+        ids = [p["id"] for p in related_a.json()]
+        assert ids == [product_b, product_c]
+
+    async def test_related_v2_products_rejects_more_than_three(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        others = [await self._create_product_as_founder(client) for _ in range(4)]
+
+        response = await self._set_related_v2(client, product_a, others)
+        assert response.status_code == 422
+
+    async def test_related_v2_products_rejects_self_reference(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+
+        response = await self._set_related_v2(client, product_a, [product_a])
+        assert response.status_code == 400
+
+    async def test_related_v2_products_rejects_unknown_id(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+
+        response = await self._set_related_v2(client, product_a, [999999])
+        assert response.status_code == 404
+
+    async def test_non_admin_cannot_set_related_v2_products(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+
+        response = await client.patch(
+            f"/api/v1/product/{product_a}/related",
+            json={"relatedProductIds": [product_b]},
+        )
+        assert response.status_code == 403
+
+    async def test_related_v2_products_empty_when_nothing_curated_or_categorized(self, client: ClientWithEmail):
+        product_id = await self._create_product_as_founder(client)
+
+        response = await client.get(f"/api/v1/product/{product_id}/related")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    async def test_related_v2_products_only_shows_curated_entries(self, client: ClientWithEmail):
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+        await self._set_related_v2(client, product_a, [product_b])
+
+        response = await client.get(f"/api/v1/product/{product_a}/related")
+        assert response.status_code == 200
+        assert [p["id"] for p in response.json()] == [product_b]
+
+    async def test_related_v2_products_independent_of_similar_products(self, client: ClientWithEmail):
+        """product_related and product_similar are separate tables — curating one must not affect the other."""
+        product_a = await self._create_product_as_founder(client)
+        product_b = await self._create_product_as_founder(client)
+        product_c = await self._create_product_as_founder(client)
+
+        await self._set_related(client, product_a, [product_b])
+        await self._set_related_v2(client, product_a, [product_c])
+
+        similar_a = await client.get(f"/api/v1/product/{product_a}/similar")
+        related_a = await client.get(f"/api/v1/product/{product_a}/related")
+
+        assert [p["id"] for p in similar_a.json()] == [product_b]
+        assert [p["id"] for p in related_a.json()] == [product_c]

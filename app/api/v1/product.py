@@ -23,6 +23,8 @@ from app.domain.product.schema import (
     ProductListSchema,
     ProductOutSchema,
     ProductReleaseStatsSchema,
+    ProductRelatedUpdateSchema,
+    ProductRelatedSchema,
     ProductSimilarUpdateSchema,
     ProductSimilarSchema,
     ProductStatusUpdateSchema,
@@ -230,6 +232,18 @@ async def list_similar_products(
     return await service.list_similar(db, product_id=product_id, limit=limit)
 
 
+@router.get("/{product_id}/related", response_model=list[ProductRelatedSchema])
+@limiter.limit("60/minute")
+async def list_related_products(
+    request: Request,
+    product_id: int,
+    limit: int = 3,
+    db: AsyncSession = Depends(get_db),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.list_related(db, product_id=product_id, limit=limit)
+
+
 @router.patch("/{product_id}", response_model=ProductOutSchema)
 @limiter.limit("30/minute")
 async def update_product(
@@ -279,6 +293,19 @@ async def update_product_similar(
     service: ProductService = Depends(get_product_service),
 ):
     return await service.update_similar(db, product_id=product_id, data=payload, current_user=current_user)
+
+
+@router.patch("/{product_id}/related", response_model=ProductOutSchema)
+@limiter.limit("30/minute")
+async def update_product_related(
+    request: Request,
+    product_id: int,
+    payload: ProductRelatedUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.update_related(db, product_id=product_id, data=payload, current_user=current_user)
 
 
 @router.put("/{product_id}/vote", response_model=ToggleOutSchema)
