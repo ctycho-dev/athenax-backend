@@ -340,11 +340,15 @@ class ProductRepository(BaseRepository[Product]):
         # sort by that recency, falling back to created_at for never-approved rows.
         approved_or_created = func.coalesce(Product.approved_at, Product.created_at)
         if vote_subq is not None:
-            q = q.order_by(func.coalesce(vote_subq.c.vote_count, 0).desc(), approved_or_created.desc())
+            q = q.order_by(
+                func.coalesce(vote_subq.c.vote_count, 0).desc(),
+                approved_or_created.desc(),
+                Product.id.desc(),
+            )
         elif sort_by == ProductSortBy.OLDEST:
-            q = q.order_by(approved_or_created.asc())
+            q = q.order_by(approved_or_created.asc(), Product.id.asc())
         else:
-            q = q.order_by(approved_or_created.desc())
+            q = q.order_by(approved_or_created.desc(), Product.id.desc())
 
         return q, vote_subq
 
