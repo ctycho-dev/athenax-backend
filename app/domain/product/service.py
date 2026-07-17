@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.db_utils import sync_categories
 from app.common.permissions import assert_can_modify, is_admin, is_owner
 from app.common.schema import PaginatedSchema
-from app.domain.product.model import ProductComment
+from app.domain.product.model import Product, ProductComment
 from app.domain.category.repository import CategoryRepository
 from app.domain.product.model import ProductCategory
 from app.domain.product.repository import (
@@ -50,13 +50,16 @@ from app.domain.product.schema import (
     ProductVoiceCreateSchema, ProductVoiceUpdateSchema, ProductVoiceOutSchema,
     BountyCreateSchema, BountyUpdateSchema, BountyOutSchema,
 )
-from fastapi import UploadFile
+from fastapi import BackgroundTasks, UploadFile
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
-from app.exceptions.exceptions import ConflictError, NotFoundError, ValidationError
+from app.exceptions.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from app.infrastructure.email.service import EmailDeliveryError, EmailService
+from app.infrastructure.logodev.service import LogoDevService
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
+from app.common.validators import extract_domain
+from app.database.connection import db_manager
 from app.infrastructure.redis.client import RedisClient
 from app.core.config import settings
 from app.utils.slug import slugify, with_random_suffix
@@ -114,6 +117,7 @@ class ProductService:
         email_service: EmailService | None = None,
         user_repo: UserRepository | None = None,
         redis: RedisClient | None = None,
+        logo_dev_service: LogoDevService | None = None,
     ):
         self.repo = repo
         self.category_repo = category_repo
@@ -128,6 +132,7 @@ class ProductService:
         self.email_service = email_service or EmailService()
         self.user_repo = user_repo or UserRepository()
         self.redis = redis
+        self.logo_dev_service = logo_dev_service or LogoDevService()
 
     async def _invalidate_stats_cache(self) -> None:
         if self.redis:
@@ -194,6 +199,8 @@ class ProductService:
         db: AsyncSession,
         data: ProductCreateSchema,
         current_user: UserOutSchema,
+        background_tasks: BackgroundTasks | None = None,
+        storage: R2StorageService | None = None,
     ) -> ProductOutSchema:
         payload = data.model_dump()
         category_ids = payload.pop("category_ids", [])
@@ -269,6 +276,8 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
+        if url and background_tasks is not None and storage is not None:
+            background_tasks.add_task(self._auto_fetch_logo_task, product.id, url, storage)
         if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
             try:
                 await self.email_service.send_product_submission_email(
@@ -836,6 +845,28 @@ class ProductService:
         await db.refresh(media)
         return self._to_media_schema(media)
 
+    async def _store_logo(
+        self,
+        db: AsyncSession,
+        product: Product,
+        filename: str,
+        content_type: str,
+        data: bytes,
+        storage: R2StorageService,
+    ) -> str:
+        old_key = self._logo_storage_key(product.logo)
+        if old_key:
+            try:
+                await storage.delete_file(old_key)
+            except Exception:
+                pass  # best-effort: stale key cleanup must not block the new upload
+        key = storage.build_storage_key(product.slug, filename, subfolder="logo")
+        await storage.upload_file(key=key, data=data, content_type=content_type)
+        await self.repo.update_instance(db, product, {"logo": key})
+        await db.commit()
+        await self._invalidate_detail_cache(product.slug)
+        return key
+
     async def upload_logo(
         self,
         db: AsyncSession,
@@ -856,19 +887,37 @@ class ProductService:
         if len(data) > MAX_FILE_SIZE_BYTES:
             raise ValidationError(f"File too large. Maximum size is {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB.")
 
-        old_key = self._logo_storage_key(product.logo)
-        if old_key:
-            try:
-                await storage.delete_file(old_key)
-            except Exception:
-                pass  # best-effort: log but don't block the upload
-
-        key = storage.build_storage_key(product.slug, file.filename or "logo", subfolder="logo")
-        await storage.upload_file(key=key, data=data, content_type=file.content_type)
-        await self.repo.update_instance(db, product, {"logo": key})
-        await db.commit()
-        await self._invalidate_detail_cache(product.slug)
+        key = await self._store_logo(db, product, file.filename or "logo", file.content_type, data, storage)
         return ProductLogoOutSchema(logo=self._logo_url(key))  # type: ignore[arg-type]
+
+    async def _auto_fetch_logo_task(
+        self, product_id: int, website_url: str, storage: R2StorageService
+    ) -> None:
+        # Runs after the create() response is sent (Starlette background task) — the
+        # request's db session is already closed, so this opens a fresh one.
+        domain = extract_domain(website_url)
+        if not domain:
+            return
+        async with db_manager.session_scope() as db:
+            try:
+                product = await self.repo.get_by_id(db, product_id)
+            except NotFoundError:
+                return
+            if product.logo:
+                return  # a manual upload/edit already raced ahead of us
+            try:
+                result = await self.logo_dev_service.fetch_logo(domain)
+            except ExternalServiceError:
+                logger.info("logo_dev_fetch_failed", extra={"product_id": product_id, "domain": domain})
+                return
+            if result is None:
+                logger.debug("logo_dev_no_logo_found", extra={"product_id": product_id, "domain": domain})
+                return
+            data, content_type = result
+            try:
+                await self._store_logo(db, product, f"{domain}.webp", content_type, data, storage)
+            except ExternalServiceError:
+                logger.warning("logo_dev_r2_upload_failed", extra={"product_id": product_id})
 
     async def delete_logo(
         self,

@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 seed\:load validate upload-pending load-test-ui load-test load-test-smoke load-test-ratelimit
+.PHONY: help dev dev-build local down migrate test revision downgrade current history check-head recreate logs seed seed\:categories seed\:w2 seed\:load validate upload-pending backfill-logos load-test-ui load-test load-test-smoke load-test-ratelimit
 
 COMPOSE ?= docker compose
 APP_SERVICE ?= app
@@ -27,6 +27,7 @@ help:
 	@echo "  make seed:load              Seed 1000 products/200 articles/200 broadcasts for load testing"
 	@echo "  make validate               Validate Projects.xlsx against Data Specs rules (ARGS='file.xlsx sheet_name' to override)"
 	@echo "  make upload-pending         Import Projects.xlsx as pending (ARGS='file.xlsx sheet_name' to override)"
+	@echo "  make backfill-logos         Fetch Logo.dev logos for pending products with a website but no logo (ARGS='--dry-run')"
 	@echo "  make load-test-ui           Start the locust web UI at http://localhost:8089 (HOST overridable)"
 	@echo "  make load-test              Headless capacity run: 200 users, 5 min, exports CSV+HTML (HOST overridable)"
 	@echo "  make load-test-smoke        Read-only smoke test: 50 users, 2 min (HOST overridable)"
@@ -133,6 +134,10 @@ validate:
 upload-pending:
 	$(COMPOSE) up -d postgres redis
 	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/upload_pending.py $(ARGS)
+
+backfill-logos:
+	$(COMPOSE) up -d postgres redis
+	$(COMPOSE) run --rm --no-deps -e PYTHONPATH=/app $(APP_SERVICE) python scripts/backfill_logos.py $(ARGS)
 
 # Load test (locust) — override HOST and USERS on the command line, e.g.
 #   make load-test HOST=http://dev.example.com

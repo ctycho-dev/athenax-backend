@@ -11,7 +11,8 @@ from sqlalchemy.pool import NullPool
 
 from app.api.dependencies import get_current_user
 from app.api.dependencies.auth import get_optional_user
-from app.api.dependencies.services import get_storage_service
+from app.api.dependencies.services import get_storage_service, get_logo_dev_service
+from app.exceptions.exceptions import ExternalServiceError
 from app.domain.category.model import Category
 from app.domain.product.model import ProductCategory
 from app.domain.user.model import User
@@ -2310,3 +2311,116 @@ class TestProductAPI:
 
         assert [p["id"] for p in similar_a.json()] == [product_b]
         assert [p["id"] for p in related_a.json()] == [product_c]
+
+    # ------------------------------------------------------------------
+    # Logo.dev auto-fetch on create
+    # ------------------------------------------------------------------
+
+    class _FakeLogoDevService:
+        def __init__(self, result=(b"fake-logo-bytes", "image/webp")):
+            self.result = result
+            self.calls: list[str] = []
+
+        async def fetch_logo(self, domain: str):
+            self.calls.append(domain)
+            if isinstance(self.result, Exception):
+                raise self.result
+            return self.result
+
+    class _FakeLogoStorage:
+        def __init__(self):
+            self.uploaded: list[dict] = []
+
+        def build_storage_key(self, slug: str, filename: str, subfolder: str | None = None) -> str:
+            return f"products/{slug}/{subfolder}/abc_{filename}" if subfolder else f"products/{slug}/abc_{filename}"
+
+        async def upload_file(self, key: str, data: bytes, content_type: str) -> None:
+            self.uploaded.append({"key": key, "content_type": content_type})
+
+        async def delete_file(self, key: str) -> None:
+            pass
+
+    async def _create_product_with_website(
+        self, client: ClientWithEmail, fake_logo_dev, fake_storage, user_id: int = 1
+    ) -> int:
+        TestProductAPI._slug_counter += 1
+        original = app.dependency_overrides[get_current_user]
+
+        async def override():
+            return build_mock_user(UserRole.FOUNDER, user_id=user_id)
+
+        app.dependency_overrides[get_current_user] = override
+        app.dependency_overrides[get_logo_dev_service] = lambda: fake_logo_dev
+        app.dependency_overrides[get_storage_service] = lambda: fake_storage
+        try:
+            payload = {**PRODUCT_PAYLOAD, "name": f"Product {TestProductAPI._slug_counter}", "url": "https://www.example.com/home"}
+            resp = await client.post("/api/v1/product", json=payload)
+        finally:
+            app.dependency_overrides[get_current_user] = original
+            app.dependency_overrides.pop(get_logo_dev_service, None)
+            app.dependency_overrides.pop(get_storage_service, None)
+
+        assert resp.status_code == 201
+        return resp.json()["id"]
+
+    async def _get_product_as_admin(self, client: ClientWithEmail, product_id: int):
+        # Newly created products start `pending` — only owner/admin can view them.
+        # get_product uses get_optional_user, not get_current_user.
+        app.dependency_overrides[get_optional_user] = lambda: build_mock_user(UserRole.ADMIN, user_id=99)
+        try:
+            return await client.get(f"/api/v1/product/{product_id}")
+        finally:
+            del app.dependency_overrides[get_optional_user]
+
+    async def test_create_product_with_website_link_auto_fetches_logo(self, client: ClientWithEmail):
+        fake_logo_dev = self._FakeLogoDevService()
+        fake_storage = self._FakeLogoStorage()
+
+        product_id = await self._create_product_with_website(client, fake_logo_dev, fake_storage)
+
+        assert fake_logo_dev.calls == ["example.com"]
+        assert len(fake_storage.uploaded) == 1
+        assert "/logo/" in fake_storage.uploaded[0]["key"]
+
+        get_resp = await self._get_product_as_admin(client, product_id)
+        assert get_resp.status_code == 200
+        assert get_resp.json()["logo"] is not None
+
+    async def test_create_product_without_website_link_skips_logo_fetch(self, client: ClientWithEmail):
+        TestProductAPI._slug_counter += 1
+        original = app.dependency_overrides[get_current_user]
+        fake_logo_dev = self._FakeLogoDevService()
+        fake_storage = self._FakeLogoStorage()
+
+        async def override():
+            return build_mock_user(UserRole.FOUNDER, user_id=1)
+
+        app.dependency_overrides[get_current_user] = override
+        app.dependency_overrides[get_logo_dev_service] = lambda: fake_logo_dev
+        app.dependency_overrides[get_storage_service] = lambda: fake_storage
+        try:
+            payload = {**PRODUCT_PAYLOAD, "name": f"Product {TestProductAPI._slug_counter}"}
+            resp = await client.post("/api/v1/product", json=payload)
+        finally:
+            app.dependency_overrides[get_current_user] = original
+            app.dependency_overrides.pop(get_logo_dev_service, None)
+            app.dependency_overrides.pop(get_storage_service, None)
+
+        assert resp.status_code == 201
+        assert fake_logo_dev.calls == []
+        assert fake_storage.uploaded == []
+
+    @pytest.mark.parametrize(
+        "logo_dev_result",
+        [None, ExternalServiceError("logo.dev is down")],
+        ids=["no_logo_for_domain", "logo_dev_unreachable"],
+    )
+    async def test_create_product_logo_dev_failure_does_not_fail_creation(self, client: ClientWithEmail, logo_dev_result):
+        fake_logo_dev = self._FakeLogoDevService(result=logo_dev_result)
+        fake_storage = self._FakeLogoStorage()
+
+        product_id = await self._create_product_with_website(client, fake_logo_dev, fake_storage)
+
+        assert fake_storage.uploaded == []
+        get_resp = await self._get_product_as_admin(client, product_id)
+        assert get_resp.json()["logo"] is None

@@ -24,6 +24,7 @@ from app.domain.product.repository import (
     ProductBackerRepository, ProductGrantRepository, ProductVoiceRepository, BountyRepository,
 )
 from app.domain.product.service import ProductService
+from app.infrastructure.logodev.service import LogoDevService
 from app.domain.article.repository import ArticleRepository
 from app.domain.article.service import ArticleService
 from app.domain.broadcast.repository import BroadcastRepository
@@ -180,6 +181,10 @@ def get_storage_service() -> R2StorageService:
     return R2StorageService()
 
 
+def get_logo_dev_service() -> LogoDevService:
+    return LogoDevService()
+
+
 def get_article_service(
     repo: ArticleRepository = Depends(get_article_repo),
     tag_repo: TagRepository = Depends(get_tag_repo),
@@ -223,6 +228,7 @@ def get_product_service(
     voice_repo: ProductVoiceRepository = Depends(get_voice_repo),
     bounty_repo: BountyRepository = Depends(get_bounty_repo),
     email_service: EmailService = Depends(get_email_service),
+    logo_dev_service: LogoDevService = Depends(get_logo_dev_service),
     redis: RedisClient = Depends(get_redis_client),
 ) -> ProductService:
     return ProductService(
@@ -237,5 +243,6 @@ def get_product_service(
         voice_repo=voice_repo,
         bounty_repo=bounty_repo,
         email_service=email_service,
+        logo_dev_service=logo_dev_service,
         redis=redis,
     )
