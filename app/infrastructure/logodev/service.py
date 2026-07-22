@@ -7,6 +7,34 @@ from app.exceptions.exceptions import ExternalServiceError
 
 logger = get_logger(__name__)
 
+# Bare domains never worth a Logo.dev lookup — the "logo" would be the platform's, not the product's.
+LOGO_SKIP_DOMAINS = {
+    "facebook.com",
+    "instagram.com",
+    "twitter.com",
+    "x.com",
+    "linkedin.com",
+    "tiktok.com",
+    "youtube.com",
+    "reddit.com",
+    "discord.com",
+    "discord.gg",
+    "t.me",
+    "telegram.org",
+    "threads.net",
+    "pinterest.com",
+    "snapchat.com",
+    "github.com",
+    "github.io",
+}
+
+
+def is_logo_skip_domain(domain: str) -> bool:
+    """True if `domain` is (or is a subdomain of) a platform we never look up a logo for."""
+    return domain in LOGO_SKIP_DOMAINS or any(
+        domain.endswith(f".{platform}") for platform in LOGO_SKIP_DOMAINS
+    )
+
 
 class LogoDevService:
     """Fetches company logos from Logo.dev (https://logo.dev) by domain."""

@@ -56,7 +56,7 @@ from app.domain.user.schema import UserOutSchema
 from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
 from app.exceptions.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from app.infrastructure.email.service import EmailDeliveryError, EmailService
-from app.infrastructure.logodev.service import LogoDevService
+from app.infrastructure.logodev.service import LogoDevService, is_logo_skip_domain
 from app.common.storage import R2StorageService, ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
 from app.common.validators import extract_domain
 from app.database.connection import db_manager
@@ -896,7 +896,7 @@ class ProductService:
         # Runs after the create() response is sent (Starlette background task) — the
         # request's db session is already closed, so this opens a fresh one.
         domain = extract_domain(website_url)
-        if not domain:
+        if not domain or is_logo_skip_domain(domain):
             return
         async with db_manager.session_scope() as db:
             try:

@@ -19,7 +19,7 @@ from app.domain.product.model import Product, ProductLink
 from app.domain.user.model import User  # noqa: F401 — registers 'users' table in metadata
 from app.enums.enums import ProductLinkType, ProductStatus
 from app.exceptions.exceptions import ExternalServiceError
-from app.infrastructure.logodev.service import LogoDevService
+from app.infrastructure.logodev.service import LogoDevService, is_logo_skip_domain
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -50,11 +50,14 @@ async def _process_one(
     storage: R2StorageService,
     dry_run: bool,
 ) -> str:
-    """Returns one of: 'set', 'no_logo', 'invalid_domain', 'error'."""
+    """Returns one of: 'set', 'no_logo', 'invalid_domain', 'skipped_domain', 'error'."""
     domain = extract_domain(website_url)
     if not domain:
         log.info("  SKIP    %-30s invalid website URL: %s", slug, website_url)
         return "invalid_domain"
+    if is_logo_skip_domain(domain):
+        log.info("  SKIP    %-30s skipped platform domain: %s", slug, domain)
+        return "skipped_domain"
 
     try:
         result = await logo_dev.fetch_logo(domain)
@@ -111,10 +114,11 @@ async def backfill_logos(dry_run: bool, concurrency: int) -> None:
 
     counts = {outcome: results.count(outcome) for outcome in set(results)}
     log.info(
-        "\nDone — set: %d  no_logo: %d  invalid_domain: %d  error: %d",
+        "\nDone — set: %d  no_logo: %d  invalid_domain: %d  skipped_domain: %d  error: %d",
         counts.get("set", 0),
         counts.get("no_logo", 0),
         counts.get("invalid_domain", 0),
+        counts.get("skipped_domain", 0),
         counts.get("error", 0),
     )
 
