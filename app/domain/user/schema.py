@@ -1,10 +1,17 @@
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr
 
 from app.common.schema import CamelModel
 from app.enums.enums import InvestorType, TokenType, UserRole
+
+
+def _normalize_email(value: str) -> str:
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+NormalizedEmail = Annotated[EmailStr, BeforeValidator(_normalize_email)]
 
 
 # ---------------------------------------------------------------------------
@@ -13,7 +20,7 @@ from app.enums.enums import InvestorType, TokenType, UserRole
 
 class UserBaseSchema(CamelModel):
     name: str
-    email: EmailStr
+    email: NormalizedEmail
     role: UserRole = UserRole.USER
     external_id: str | None = None
 
@@ -138,7 +145,7 @@ class EmailTokenSchema(CamelModel):
 
 
 class EmailRequestSchema(CamelModel):
-    email: EmailStr
+    email: NormalizedEmail
 
 
 class PasswordResetSchema(CamelModel):

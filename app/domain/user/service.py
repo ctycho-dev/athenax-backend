@@ -217,7 +217,7 @@ class UserService:
     async def ensure_login_allowed(
         self, db: AsyncSession, email: str, password: str
     ) -> UserCredsSchema:
-        user = await self.repo.get_by_email(db, email)
+        user = await self.repo.get_by_email(db, email.strip().lower())
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
