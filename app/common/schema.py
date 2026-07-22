@@ -1,9 +1,16 @@
-from typing import Generic, TypeVar
+from typing import Annotated, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T")
+
+
+def normalize_email(value: str) -> str:
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+NormalizedEmail = Annotated[EmailStr, BeforeValidator(normalize_email)]
 
 
 class CamelModel(BaseModel):

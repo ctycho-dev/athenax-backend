@@ -1,17 +1,10 @@
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Optional
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
-from app.common.schema import CamelModel
+from app.common.schema import CamelModel, NormalizedEmail
 from app.enums.enums import InvestorType, TokenType, UserRole
-
-
-def _normalize_email(value: str) -> str:
-    return value.strip().lower() if isinstance(value, str) else value
-
-
-NormalizedEmail = Annotated[EmailStr, BeforeValidator(_normalize_email)]
 
 
 # ---------------------------------------------------------------------------

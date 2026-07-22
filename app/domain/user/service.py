@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import sync_categories
+from app.common.schema import normalize_email
 from typing import Any, Type, TypeVar
 
 from app.domain.user.model import User, UserCategory
@@ -217,7 +218,7 @@ class UserService:
     async def ensure_login_allowed(
         self, db: AsyncSession, email: str, password: str
     ) -> UserCredsSchema:
-        user = await self.repo.get_by_email(db, email.strip().lower())
+        user = await self.repo.get_by_email(db, normalize_email(email))
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
