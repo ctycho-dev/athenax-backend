@@ -9,6 +9,7 @@ logger = get_logger(__name__)
 
 # Bare domains never worth a Logo.dev lookup — the "logo" would be the platform's, not the product's.
 LOGO_SKIP_DOMAINS = {
+    # social media
     "facebook.com",
     "instagram.com",
     "twitter.com",
@@ -24,8 +25,33 @@ LOGO_SKIP_DOMAINS = {
     "threads.net",
     "pinterest.com",
     "snapchat.com",
+    # code hosting / free PaaS subdomains — product sites deployed under these
+    # get the platform's logo, not the product's, since the domain is shared
     "github.com",
     "github.io",
+    "gitlab.io",
+    "bitbucket.io",
+    "vercel.app",
+    "vercel.dev",
+    "netlify.app",
+    "herokuapp.com",
+    "onrender.com",
+    "railway.app",
+    "pages.dev",
+    "web.app",
+    "firebaseapp.com",
+    "repl.co",
+    "replit.app",
+    "replit.dev",
+    "glitch.me",
+    "surge.sh",
+    "webflow.io",
+    "wixsite.com",
+    "carrd.co",
+    "notion.site",
+    "framer.app",
+    "framer.website",
+    "linktr.ee",
 }
 
 
