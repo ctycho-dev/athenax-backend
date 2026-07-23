@@ -150,10 +150,13 @@ class ArticleService:
         if payload.get("broadcast_id"):
             await self.broadcast_repo.get_by_id(db, payload["broadcast_id"])
 
+        # Slug is a stable URL identity: only change it on an explicit slug edit, never on a title change.
         if "slug" in payload:
-            payload["slug"] = slugify(payload["slug"])
-        elif "title" in payload:
-            payload["slug"] = slugify(payload["title"])
+            new_slug = slugify(payload["slug"])
+            if new_slug == article.slug:
+                payload.pop("slug")
+            else:
+                payload["slug"] = new_slug
 
         if "status" in payload:
             payload = self._apply_published_at(payload, current_published_at=article.published_at)
@@ -162,8 +165,8 @@ class ArticleService:
             async with db.begin_nested():
                 article = await self.repo.update(db, article_id, payload, current_user_id=current_user.id)
         except ConflictError:
-            slug_source = payload.get("slug") or payload.get("title", "")
-            payload["slug"] = with_random_suffix(slugify(slug_source))
+            # Explicit slug collided with another article — disambiguate with a suffix.
+            payload["slug"] = with_random_suffix(article.slug if "slug" not in payload else payload["slug"])
             article = await self.repo.update(db, article_id, payload, current_user_id=current_user.id)
 
         if tag_names is not None:

@@ -73,6 +73,12 @@ class R2Config(BaseSettings):
     model_config = _cfg("R2_")
 
 
+class LogoDevConfig(BaseSettings):
+    publishable_key: str = ""
+
+    model_config = _cfg("LOGO_DEV_")
+
+
 class Settings(BaseSettings):
     model_config = _cfg("")
 
@@ -87,6 +93,7 @@ class Settings(BaseSettings):
     auth: AuthConfig = AuthConfig()  # pyright: ignore[reportCallIssue]
     resend: ResendConfig = ResendConfig()  # pyright: ignore[reportCallIssue]
     r2: R2Config = R2Config()  # pyright: ignore[reportCallIssue]
+    logo_dev: LogoDevConfig = LogoDevConfig()  # pyright: ignore[reportCallIssue]
 
     @property
     def subscriber_unsubscribe_url(self) -> str:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -62,11 +62,15 @@ router = APIRouter(prefix=settings.api.v1.product, tags=["Product"])
 async def create_product(
     request: Request,
     payload: ProductCreateSchema,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: UserOutSchema = Depends(get_current_user),
     service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
 ):
-    return await service.create(db, payload, current_user=current_user)
+    return await service.create(
+        db, payload, current_user=current_user, background_tasks=background_tasks, storage=storage
+    )
 
 
 @router.get("", response_model=PaginatedSchema[ProductListSchema])

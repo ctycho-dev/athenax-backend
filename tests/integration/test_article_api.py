@@ -434,7 +434,7 @@ class TestArticleAPI:
         assert response.status_code == 200
         assert response.json()["content"] == "Updated content"
 
-    async def test_update_title_regenerates_slug(self, client: ClientWithEmail):
+    async def test_update_title_keeps_slug_stable(self, client: ClientWithEmail):
         article = await self._create_article_as_admin(client)
         original_slug = article["slug"]
 
@@ -444,9 +444,34 @@ class TestArticleAPI:
             )
 
         assert response.status_code == 200
+        assert response.json()["slug"] == original_slug
+
+    async def test_update_explicit_slug_changes_slug(self, client: ClientWithEmail):
+        article = await self._create_article_as_admin(client)
+        original_slug = article["slug"]
+
+        with _override_admin():
+            response = await client.patch(
+                f"/api/v1/article/{article['id']}", json={"slug": "brand-new-slug"}
+            )
+
+        assert response.status_code == 200
+        assert response.json()["slug"] == "brand-new-slug"
+        assert response.json()["slug"] != original_slug
+
+    async def test_update_slug_collision_gets_random_suffix(self, client: ClientWithEmail):
+        first = await self._create_article_as_admin(client)
+        second = await self._create_article_as_admin(client)
+
+        with _override_admin():
+            response = await client.patch(
+                f"/api/v1/article/{second['id']}", json={"slug": first["slug"]}
+            )
+
+        assert response.status_code == 200
         new_slug = response.json()["slug"]
-        assert new_slug != original_slug
-        assert "completely-new-title-here" in new_slug
+        assert new_slug != first["slug"]
+        assert re.fullmatch(rf"{re.escape(first['slug'])}-[0-9a-f]{{4}}", new_slug)
 
     async def test_update_status_to_published_sets_published_at(self, client: ClientWithEmail):
         article = await self._create_article_as_admin(client)

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 from app.main import app
-from app.database.connection import Base
+from app.database.connection import Base, db_manager
 from app.api.dependencies import get_db, get_current_user, get_email_service
 from app.api.dependencies.integrations import get_redis_client
 from app.domain.user.schema import UserOutSchema
@@ -94,11 +94,18 @@ async def test_engine():
 @pytest.fixture(scope="session")
 def session_factory(test_engine):
     """Create session factory once per session."""
-    return async_sessionmaker(
+    factory = async_sessionmaker(
         test_engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
+    # Lifespan (and its db_manager.init_engine() call) doesn't run under ASGITransport,
+    # but db_manager.session_scope() is used directly by background tasks (e.g. Logo.dev
+    # auto-fetch) that can't depend on the request's get_db override — point it at the
+    # same test engine so those code paths hit the test DB instead of erroring out.
+    db_manager.engine = test_engine
+    db_manager.async_session = factory
+    return factory
 
 
 @pytest_asyncio.fixture(loop_scope="function")

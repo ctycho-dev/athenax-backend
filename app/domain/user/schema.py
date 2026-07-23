@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-from app.common.schema import CamelModel
+from app.common.schema import CamelModel, NormalizedEmail
 from app.enums.enums import InvestorType, TokenType, UserRole
 
 
@@ -13,7 +13,7 @@ from app.enums.enums import InvestorType, TokenType, UserRole
 
 class UserBaseSchema(CamelModel):
     name: str
-    email: EmailStr
+    email: NormalizedEmail
     role: UserRole = UserRole.USER
     external_id: str | None = None
 
@@ -138,7 +138,7 @@ class EmailTokenSchema(CamelModel):
 
 
 class EmailRequestSchema(CamelModel):
-    email: EmailStr
+    email: NormalizedEmail
 
 
 class PasswordResetSchema(CamelModel):
