@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 
 from app.core.config import settings
@@ -6,6 +8,10 @@ from app.common.storage import ALLOWED_CONTENT_TYPES
 from app.exceptions.exceptions import ExternalServiceError
 
 logger = get_logger(__name__)
+
+# Logo.dev returns 202 on a cache-miss while it generates the logo in the background;
+# a short retry usually resolves to 200 without waiting for a separate backfill run.
+_ACCEPTED_RETRY_DELAYS = (1.0, 2.0)
 
 # Bare domains never worth a Logo.dev lookup — the "logo" would be the platform's, not the product's.
 LOGO_SKIP_DOMAINS = {
@@ -77,11 +83,20 @@ class LogoDevService:
     async def fetch_logo(self, domain: str) -> tuple[bytes, str] | None:
         """Returns (bytes, content_type), or None if Logo.dev has no logo for this domain."""
         url = self.build_logo_url(domain)
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.get(url)
-        except httpx.HTTPError as exc:
-            raise ExternalServiceError(f"Logo.dev request failed: {exc}") from exc
+
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            for attempt, delay in enumerate((0.0, *_ACCEPTED_RETRY_DELAYS)):
+                if delay:
+                    await asyncio.sleep(delay)
+                try:
+                    resp = await client.get(url)
+                except httpx.HTTPError as exc:
+                    raise ExternalServiceError(f"Logo.dev request failed: {exc}") from exc
+
+                if resp.status_code == 202:
+                    logger.info("Logo.dev still generating logo for %s (attempt %d)", domain, attempt + 1)
+                    continue
+                break
 
         if resp.status_code == 404:
             return None
