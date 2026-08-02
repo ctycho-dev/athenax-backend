@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 # Logo.dev returns 202 on a cache-miss while it generates the logo in the background;
 # a short retry usually resolves to 200 without waiting for a separate backfill run.
-_ACCEPTED_RETRY_DELAYS = (1.0, 2.0)
+_ACCEPTED_RETRY_DELAYS = (2.0, 4.0, 6.0)
 
 # Bare domains never worth a Logo.dev lookup — the "logo" would be the platform's, not the product's.
 LOGO_SKIP_DOMAINS = {
