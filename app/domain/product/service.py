@@ -53,7 +53,7 @@ from app.domain.product.schema import (
 from fastapi import BackgroundTasks, UploadFile
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
+from app.enums.enums import ProductDateFilter, ProductLinkType, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
 from app.exceptions.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from app.infrastructure.email.service import EmailDeliveryError, EmailService
 from app.infrastructure.logodev.service import LogoDevService, is_logo_skip_domain
@@ -276,8 +276,11 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
-        if url and background_tasks is not None and storage is not None:
-            background_tasks.add_task(self._auto_fetch_logo_task, product.id, url, storage)
+        website_url = url or next(
+            (link["url"] for link in links if link.get("link_type") == ProductLinkType.WEBSITE), None
+        )
+        if website_url and background_tasks is not None and storage is not None:
+            background_tasks.add_task(self._auto_fetch_logo_task, product.id, website_url, storage)
         if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
             try:
                 await self.email_service.send_product_submission_email(

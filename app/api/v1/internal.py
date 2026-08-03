@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -8,6 +8,8 @@ from app.api.dependencies import (
     get_system_user,
     verify_internal_key,
 )
+from app.api.dependencies.services import get_storage_service
+from app.common.storage import R2StorageService
 from app.core.config import settings
 from app.domain.category.schema import CategoryOutSchema
 from app.domain.category.service import CategoryService
@@ -30,12 +32,16 @@ router = APIRouter(
 async def create_product(
     request: Request,
     payload: ProductCreateSchema,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     system_user: UserOutSchema = Depends(get_system_user),
     service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
 ):
     # Reuses the exact user-submit flow; created_by_id = system user, status PENDING.
-    return await service.create(db, payload, current_user=system_user)
+    return await service.create(
+        db, payload, current_user=system_user, background_tasks=background_tasks, storage=storage
+    )
 
 
 @router.get("/categories/by-name", response_model=CategoryOutSchema)
