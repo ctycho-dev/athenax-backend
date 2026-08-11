@@ -79,3 +79,4 @@ alembic/versions/*.pyc
 
 
 /scripts/seed_ghost_votes.py
+/logos
