@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, insert, or_, select, text
+from sqlalchemy import delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
@@ -153,6 +153,21 @@ class ProductTeamRepository(BaseRepository[ProductTeamMember]):
         q = q.order_by(ProductTeamMember.created_at.asc())
         result = await db.execute(q)
         return list(result.scalars().all())
+
+    async def set_status_by_ids(
+        self, db: AsyncSession, member_ids: list[int], status: str, reviewed_by_id: int | None = None
+    ) -> None:
+        """Bulk status update — one set-based UPDATE instead of a per-row loop."""
+        if not member_ids:
+            return
+        values: dict = {"status": status}
+        if reviewed_by_id is not None:
+            values["reviewed_by_id"] = reviewed_by_id
+        await db.execute(
+            update(ProductTeamMember)
+            .where(ProductTeamMember.id.in_(member_ids))
+            .values(**values)
+        )
 
 
 class ProductBackerRepository(BaseRepository[ProductBacker]):

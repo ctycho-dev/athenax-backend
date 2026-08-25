@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -8,10 +8,18 @@ from app.api.dependencies import (
     get_system_user,
     verify_internal_key,
 )
+from app.api.dependencies.services import get_storage_service
+from app.common.storage import R2StorageService
 from app.core.config import settings
 from app.domain.category.schema import CategoryOutSchema
 from app.domain.category.service import CategoryService
-from app.domain.product.schema import ProductCreateSchema, ProductOutSchema
+from app.domain.product.schema import (
+    ProductCreateSchema,
+    ProductMediaCreateSchema,
+    ProductMediaOutSchema,
+    ProductOutSchema,
+    ProductUpdateSchema,
+)
 from app.domain.product.service import ProductService
 from app.domain.user.schema import UserOutSchema
 from app.middleware.rate_limiter import limiter
@@ -30,12 +38,72 @@ router = APIRouter(
 async def create_product(
     request: Request,
     payload: ProductCreateSchema,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    system_user: UserOutSchema = Depends(get_system_user),
+    service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
+):
+    # Reuses the exact user-submit flow; created_by_id = system user, status PENDING.
+    return await service.create(
+        db, payload, current_user=system_user, background_tasks=background_tasks, storage=storage
+    )
+
+
+@router.patch("/products/{product_id}", response_model=ProductOutSchema)
+@limiter.limit("60/minute")
+async def update_product(
+    request: Request,
+    product_id: int,
+    payload: ProductUpdateSchema,
     db: AsyncSession = Depends(get_db),
     system_user: UserOutSchema = Depends(get_system_user),
     service: ProductService = Depends(get_product_service),
 ):
-    # Reuses the exact user-submit flow; created_by_id = system user, status PENDING.
-    return await service.create(db, payload, current_user=system_user)
+    return await service.update(db, product_id=product_id, data=payload, current_user=system_user)
+
+
+@router.post(
+    "/products/{product_id}/media",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProductMediaOutSchema,
+)
+@limiter.limit("60/minute")
+async def create_media(
+    request: Request,
+    product_id: int,
+    payload: ProductMediaCreateSchema,
+    db: AsyncSession = Depends(get_db),
+    system_user: UserOutSchema = Depends(get_system_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.create_media(db, product_id=product_id, data=payload, current_user=system_user)
+
+
+@router.post(
+    "/products/{product_id}/media/upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProductMediaOutSchema,
+)
+@limiter.limit("10/minute")
+async def upload_media(
+    request: Request,
+    product_id: int,
+    file: UploadFile = File(...),
+    sort_order: int | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+    system_user: UserOutSchema = Depends(get_system_user),
+    service: ProductService = Depends(get_product_service),
+    storage: R2StorageService = Depends(get_storage_service),
+):
+    return await service.upload_media(
+        db,
+        product_id=product_id,
+        file=file,
+        sort_order=sort_order,
+        current_user=system_user,
+        storage=storage,
+    )
 
 
 @router.get("/categories/by-name", response_model=CategoryOutSchema)

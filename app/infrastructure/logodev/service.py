@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 
 from app.core.config import settings
@@ -7,8 +9,13 @@ from app.exceptions.exceptions import ExternalServiceError
 
 logger = get_logger(__name__)
 
+# Logo.dev returns 202 on a cache-miss while it generates the logo in the background;
+# a short retry usually resolves to 200 without waiting for a separate backfill run.
+_ACCEPTED_RETRY_DELAYS = (2.0, 4.0, 6.0)
+
 # Bare domains never worth a Logo.dev lookup — the "logo" would be the platform's, not the product's.
 LOGO_SKIP_DOMAINS = {
+    # social media
     "facebook.com",
     "instagram.com",
     "twitter.com",
@@ -24,8 +31,33 @@ LOGO_SKIP_DOMAINS = {
     "threads.net",
     "pinterest.com",
     "snapchat.com",
+    # code hosting / free PaaS subdomains — product sites deployed under these
+    # get the platform's logo, not the product's, since the domain is shared
     "github.com",
     "github.io",
+    "gitlab.io",
+    "bitbucket.io",
+    "vercel.app",
+    "vercel.dev",
+    "netlify.app",
+    "herokuapp.com",
+    "onrender.com",
+    "railway.app",
+    "pages.dev",
+    "web.app",
+    "firebaseapp.com",
+    "repl.co",
+    "replit.app",
+    "replit.dev",
+    "glitch.me",
+    "surge.sh",
+    "webflow.io",
+    "wixsite.com",
+    "carrd.co",
+    "notion.site",
+    "framer.app",
+    "framer.website",
+    "linktr.ee",
 }
 
 
@@ -51,11 +83,20 @@ class LogoDevService:
     async def fetch_logo(self, domain: str) -> tuple[bytes, str] | None:
         """Returns (bytes, content_type), or None if Logo.dev has no logo for this domain."""
         url = self.build_logo_url(domain)
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.get(url)
-        except httpx.HTTPError as exc:
-            raise ExternalServiceError(f"Logo.dev request failed: {exc}") from exc
+
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            for attempt, delay in enumerate((0.0, *_ACCEPTED_RETRY_DELAYS)):
+                if delay:
+                    await asyncio.sleep(delay)
+                try:
+                    resp = await client.get(url)
+                except httpx.HTTPError as exc:
+                    raise ExternalServiceError(f"Logo.dev request failed: {exc}") from exc
+
+                if resp.status_code == 202:
+                    logger.info("Logo.dev still generating logo for %s (attempt %d)", domain, attempt + 1)
+                    continue
+                break
 
         if resp.status_code == 404:
             return None

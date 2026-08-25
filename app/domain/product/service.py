@@ -53,7 +53,7 @@ from app.domain.product.schema import (
 from fastapi import BackgroundTasks, UploadFile
 from app.domain.user.repository import UserRepository
 from app.domain.user.schema import UserOutSchema
-from app.enums.enums import ProductDateFilter, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
+from app.enums.enums import ProductDateFilter, ProductLinkType, ProductMediaType, ProductSortBy, ProductStatus, UserRole, VerificationStatus
 from app.exceptions.exceptions import ConflictError, ExternalServiceError, NotFoundError, ValidationError
 from app.infrastructure.email.service import EmailDeliveryError, EmailService
 from app.infrastructure.logodev.service import LogoDevService, is_logo_skip_domain
@@ -276,8 +276,11 @@ class ProductService:
 
         await db.commit()
         await db.refresh(product)
-        if url and background_tasks is not None and storage is not None:
-            background_tasks.add_task(self._auto_fetch_logo_task, product.id, url, storage)
+        website_url = url or next(
+            (link["url"] for link in links if link.get("link_type") == ProductLinkType.WEBSITE), None
+        )
+        if website_url and background_tasks is not None and storage is not None:
+            background_tasks.add_task(self._auto_fetch_logo_task, product.id, website_url, storage)
         if not is_admin(current_user) and current_user.role != UserRole.SYSTEM:
             try:
                 await self.email_service.send_product_submission_email(
@@ -675,6 +678,12 @@ class ProductService:
             ]
             # Single bulk UPDATE instead of one query per pending sub-category.
             await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
+            pending_members = await self.team_repo.get_by_product_id(
+                db, product_id, status=VerificationStatus.PENDING
+            )
+            await self.team_repo.set_status_by_ids(
+                db, [m.id for m in pending_members], VerificationStatus.APPROVED.value, reviewed_by_id=current_user.id
+            )
         update_data: dict = {"status": data.status}
         if data.status == ProductStatus.APPROVED:
             update_data["approved_at"] = datetime.now(timezone.utc)
@@ -694,10 +703,11 @@ class ProductService:
         if data.status == ProductStatus.APPROVED and product.created_by_id:
             try:
                 submitter = await self.user_repo.get_by_id(db, product.created_by_id)
-                product_url = f"{settings.frontend_url.rstrip('/')}/launch/{product.slug}"
-                asyncio.create_task(self._send_approval_email(
-                    submitter.email, submitter.name, product.name, product_url
-                ))
+                if submitter.role not in (UserRole.SYSTEM, UserRole.ADMIN):
+                    product_url = f"{settings.frontend_url.rstrip('/')}/launch/{product.slug}"
+                    asyncio.create_task(self._send_approval_email(
+                        submitter.email, submitter.name, product.name, product_url
+                    ))
             except NotFoundError:
                 logger.warning("product_approved_email_failed", extra={"product_id": product_id})
         return await self._to_schema(db, product)
@@ -990,6 +1000,18 @@ class ProductService:
         await db.commit()
         await db.refresh(member)
         return TeamMemberOutSchema.model_validate(member, from_attributes=True)
+
+    async def approve_all_pending_team_members(
+        self, db: AsyncSession, product_id: int, current_user: UserOutSchema
+    ) -> list[TeamMemberOutSchema]:
+        await self.repo.assert_exists_by_id(db, product_id)
+        pending_members = await self.team_repo.get_by_product_id(db, product_id, status=VerificationStatus.PENDING)
+        await self.team_repo.set_status_by_ids(
+            db, [m.id for m in pending_members], VerificationStatus.APPROVED.value, reviewed_by_id=current_user.id
+        )
+        await db.commit()
+        members = await self.team_repo.get_by_product_id(db, product_id)
+        return [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in members]
 
     async def delete_team_member(
         self, db: AsyncSession, product_id: int, member_id: int, current_user: UserOutSchema
