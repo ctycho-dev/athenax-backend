@@ -678,6 +678,12 @@ class ProductService:
             ]
             # Single bulk UPDATE instead of one query per pending sub-category.
             await self.category_repo.set_status_by_ids(db, pending_sub_ids, VerificationStatus.APPROVED.value)
+            pending_members = await self.team_repo.get_by_product_id(
+                db, product_id, status=VerificationStatus.PENDING
+            )
+            await self.team_repo.set_status_by_ids(
+                db, [m.id for m in pending_members], VerificationStatus.APPROVED.value, reviewed_by_id=current_user.id
+            )
         update_data: dict = {"status": data.status}
         if data.status == ProductStatus.APPROVED:
             update_data["approved_at"] = datetime.now(timezone.utc)
@@ -994,6 +1000,18 @@ class ProductService:
         await db.commit()
         await db.refresh(member)
         return TeamMemberOutSchema.model_validate(member, from_attributes=True)
+
+    async def approve_all_pending_team_members(
+        self, db: AsyncSession, product_id: int, current_user: UserOutSchema
+    ) -> list[TeamMemberOutSchema]:
+        await self.repo.assert_exists_by_id(db, product_id)
+        pending_members = await self.team_repo.get_by_product_id(db, product_id, status=VerificationStatus.PENDING)
+        await self.team_repo.set_status_by_ids(
+            db, [m.id for m in pending_members], VerificationStatus.APPROVED.value, reviewed_by_id=current_user.id
+        )
+        await db.commit()
+        members = await self.team_repo.get_by_product_id(db, product_id)
+        return [TeamMemberOutSchema.model_validate(m, from_attributes=True) for m in members]
 
     async def delete_team_member(
         self, db: AsyncSession, product_id: int, member_id: int, current_user: UserOutSchema
