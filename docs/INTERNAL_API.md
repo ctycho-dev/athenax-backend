@@ -216,6 +216,64 @@ Team members are created with status `"pending"` and go through the same admin a
 | `bookmarked` | null | Not applicable for internal callers |
 | `interested` | null | Not applicable for internal callers |
 
+### Update product
+
+```
+PATCH /internal/products/{productId}
+X-Internal-Key: <secret>
+Content-Type: application/json
+```
+
+- Partial update — only send the fields you want to change. Same field set as [create product](#create-product) (all optional), plus JSON `null` is not the same as omitting a field: omitted fields are left untouched, arrays sent as `[]` clear that relation (e.g. `"links": []` removes all links).
+- Not restricted to system-created products — the internal caller may update any product regardless of who created it.
+- `links`, `backers`, `grants` are replaced wholesale when included (existing rows not in the payload are deleted).
+- `categoryIds` / `subCategoryIds` re-sync category assignments the same way as on create.
+- Returns `ProductOutSchema` (200), same shape as the create response.
+
+#### Example
+
+```json
+PATCH /internal/products/99
+{ "funding": 6500000, "stage": "Series A" }
+```
+
+### Add media (by storage key)
+
+```
+POST /internal/products/{productId}/media
+X-Internal-Key: <secret>
+Content-Type: application/json
+```
+
+Use when the file has already been uploaded to R2 by another process and you just need to register it against the product.
+
+| Field | JSON type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `mediaType` | string | **yes** | e.g. `"image"` | Media type enum value |
+| `storageKey` | string | **yes** | max 500 chars | R2 object key (not a full URL) |
+| `sortOrder` | integer | no | default `0` | Display order, ascending |
+
+Returns `ProductMediaOutSchema` (201): `{ "id", "mediaType", "sortOrder", "url" }` — `url` is derived from `storageKey` + the CDN base URL.
+
+### Upload media (multipart)
+
+```
+POST /internal/products/{productId}/media/upload
+X-Internal-Key: <secret>
+Content-Type: multipart/form-data
+```
+
+Use when you have the raw file bytes and want the server to upload to R2 for you.
+
+| Field | Form part | Required | Description |
+|---|---|---|---|
+| `file` | file | **yes** | Image file. Rejected with 422 if content type isn't allowed or the file exceeds the max size. |
+| `sortOrder` | text field | no | Defaults to current max `sortOrder` for the product + 10 |
+
+Upload is rejected (no DB write) if the file fails validation or the R2 upload fails. Returns `ProductMediaOutSchema` (201).
+
+Rate limited to **10 requests/minute** per IP (stricter than the other internal endpoints, since it involves a file transfer).
+
 ### Get category by name
 
 ```
@@ -301,7 +359,7 @@ A dedicated database user owns everything created through these endpoints:
 | `password_hash` | `!` (can never match bcrypt) |
 | `verified`      | `false` (cannot log in)    |
 
-Seeded by migration `e2b3c4d5f6a7`. To find everything the system user created:
+Seeded by migration `e2b3c4d5f6a7`. The system user is treated as admin-equivalent for modify permissions, so it can update or add media to any product — not just ones it created itself. To find everything the system user created:
 
 ```sql
 SELECT * FROM products WHERE created_by_id = (
@@ -319,7 +377,9 @@ Users with role `bd` (business development) have admin-equivalent access to **al
 
 ## Rate Limiting
 
-60 requests / minute per IP. There is no logged-in user on internal requests, so the limiter uses the caller's IP address.
+60 requests / minute per IP by default. There is no logged-in user on internal requests, so the limiter uses the caller's IP address.
+
+Exception: `POST /internal/products/{productId}/media/upload` is limited to **10/minute** per IP.
 
 ---
 

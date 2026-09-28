@@ -607,6 +607,18 @@ async def create_team_member(
     return await service.create_team_member(db, product_id=product_id, data=payload, current_user=current_user)
 
 
+@router.patch("/{product_id}/team/approve-all", response_model=list[TeamMemberOutSchema])
+@limiter.limit("30/minute")
+async def approve_all_pending_team_members(
+    request: Request,
+    product_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserOutSchema = Depends(require_admin_user),
+    service: ProductService = Depends(get_product_service),
+):
+    return await service.approve_all_pending_team_members(db, product_id=product_id, current_user=current_user)
+
+
 @router.patch("/{product_id}/team/{member_id}", response_model=TeamMemberOutSchema)
 @limiter.limit("30/minute")
 async def update_team_member(

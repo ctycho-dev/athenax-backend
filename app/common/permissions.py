@@ -21,11 +21,12 @@ def assert_can_modify(entity, current_user: UserOutSchema) -> None:
 
     Allowed if:
       - user is an admin, OR
+      - user is the system user (internal service-to-service endpoints), OR
       - user is the owner — meaning entity.created_by_id (whoever created it) matches current_user.id
 
     Raises ValidationError if neither — nothing is modified.
     """
-    if is_admin(current_user):
+    if is_admin(current_user) or current_user.role == UserRole.SYSTEM:
         return
     if not is_owner(entity, current_user):
         raise ValidationError("You do not have permission to modify this resource")
